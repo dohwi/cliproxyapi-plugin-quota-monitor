@@ -395,9 +395,11 @@ function esc(str) {
   if (typeof document !== 'undefined' && document.createElement) {
     var div = document.createElement('div');
     div.textContent = s;
-    if (typeof div.innerHTML === 'string' && div.innerHTML.length > 0) return div.innerHTML;
+    // DOM serialization escapes text delimiters, but leaves quotes intact.
+    // This helper is also used inside double-quoted HTML attributes.
+    if (typeof div.innerHTML === 'string' && div.innerHTML.length > 0) return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function formatNum(n) {

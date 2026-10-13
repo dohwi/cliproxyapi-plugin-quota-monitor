@@ -5,7 +5,7 @@
   <p>CLIProxyAPI를 위한 공급자 계정 쿼터·크레딧 모니터링 및 반응형 대시보드(한국어/영어) 네이티브 Go 플러그인.</p>
 
   <p>
-    <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.5-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.5" /></a>
+    <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.9-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.9" /></a>
     <a href="https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/actions/workflows/verify.yml" target="_blank" rel="noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/dohwi/cliproxyapi-plugin-quota-monitor/verify.yml?branch=main&style=flat-square&label=verify" alt="Verification workflow" /></a>
     <a href="LICENSE" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue?style=flat-square" alt="PolyForm Noncommercial 1.0.0" /></a>
   </p>
@@ -39,7 +39,7 @@
 
 | Domain | Technology / Specification |
 |---|---|
-| Runtime & ABI | Go 1.26.5, cgo, C shared library (`.so`) |
+| Runtime & ABI | Go 1.26.9, cgo, C shared library (`.so`) |
 | Host Integration | CLIProxyAPI Plugin C ABI (`v0` management/resource routes) |
 | Embedded UI | HTML5, Vanilla JavaScript, CSS Grid/Flexbox |
 | Bundled Typography | SUIT Regular/SemiBold, Manrope Variable (self-hosted WOFF2) |

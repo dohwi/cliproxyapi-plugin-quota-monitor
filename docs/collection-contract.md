@@ -5,9 +5,9 @@ Plugin-local integration note; dashboard, host entry point, quota parser/client,
 ## HTTP/RPC compatibility
 
 - `GET /v0/resource/plugins/quota-monitor/data/accounts` is **snapshot-only**. Empty/expired caches and an in-flight collection never trigger management HTTP, provider probes, or an auth-directory scan. It remains HTTP 200 with `Cache-Control: no-store`.
-- `/v0/resource/plugins/quota-monitor/data/refresh` is no longer registered and returns 404 for GET/POST, including `?confirm=1`. Do not implement startup recovery through this unauthenticated URL.
-- Forced collection remains `POST /v0/management/plugins/quota-monitor/refresh`, using the host's existing management authentication. GET refresh is not registered. The plugin relies on the host separating authenticated management dispatch from resource dispatch; it does not obtain management authorization from query/body fields.
-- Authenticated management GET `/accounts` and `/status` trigger/coalesce the first collection when the cache is empty or expired. A resource dashboard alone does not populate an empty cache: it polls the snapshot only and shows the not-collected/expired state. Explicit `POST /refresh` is the authenticated force path. If reconfigure invalidates a joined flight, management reads retry once against the new generation (within a bounded request deadline) instead of exposing the transient old-generation empty/stale result.
+- `GET /v0/resource/plugins/quota-monitor/data/refresh?confirm=1` is an explicitly registered, unauthenticated refresh action. It requires exactly one confirmation value and enforces a 30-second cooldown; single-account refresh uses an opaque `account_key`. Confirmation is not authentication or CSRF protection. Restrict access to plugin resource routes at the host/reverse proxy; do not expose them to the public Internet.
+- `POST /v0/management/plugins/quota-monitor/refresh` remains the authenticated force path. The plugin relies on the host separating authenticated management dispatch from resource dispatch; it does not obtain management authorization from query/body fields.
+- Background collection fills the snapshot after configuration. Dashboard requests may warm an empty cache asynchronously; `/data/accounts` itself remains read-only. Authenticated management GET `/accounts` and `/status` trigger/coalesce collection when needed. If reconfigure invalidates a joined flight, management reads retry once against the new generation (within a bounded request deadline) instead of exposing the transient old-generation empty/stale result.
 - A force request joins an already-running collection rather than queueing another wave of probes. Otherwise it bypasses probe due times, except for disabled accounts and the 30-second manual-refresh cooldown. A cooldown response retains the previous error/stale result (it cannot turn a failed refresh into a success).
 
 ## Additive DTO fields
@@ -33,7 +33,7 @@ These checks do not make hostile kernel/filesystem operations interruptible and 
 
 ## Validation
 
-Focused regression coverage is in `collection_security_test.go`; resource registration and resolver snapshot tests were updated to the new contract. Use:
+Focused regression coverage is in `collection_security_test.go`, `keyless_refresh_test.go`, and `background_collector_regression_test.go`; these cover the read-only snapshot, bounded explicit resource refresh, and background fill. Use:
 
 ```sh
 go test -race ./internal/plugin
@@ -41,4 +41,4 @@ go vet ./...
 go test -race ./...
 ```
 
-The full-module suite may temporarily reflect concurrent quota/dashboard work; report such failures separately rather than changing other agents' files.
+Run the full-module suite before release; a focused test passing does not replace full verification.
