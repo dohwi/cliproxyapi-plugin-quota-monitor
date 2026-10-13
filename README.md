@@ -1,10 +1,10 @@
 <div align="center">
-  <h1>cliproxyapi-quota-monitor</h1>
+  <h1>cliproxyapi-plugin-quota-monitor</h1>
   <p>CLIProxyAPI를 위한 공급자 계정 쿼터·크레딧 모니터링 및 반응형 대시보드 네이티브 Go 플러그인.</p>
 
   <p>
     <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.5-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.5" /></a>
-    <a href="https://github.com/dohwi/cliproxyapi-quota-monitor/actions/workflows/verify.yml" target="_blank" rel="noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/dohwi/cliproxyapi-quota-monitor/verify.yml?branch=main&style=flat-square&label=verify" alt="Verification workflow" /></a>
+    <a href="https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/actions/workflows/verify.yml" target="_blank" rel="noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/dohwi/cliproxyapi-plugin-quota-monitor/verify.yml?branch=main&style=flat-square&label=verify" alt="Verification workflow" /></a>
     <a href="https://www.docker.com" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Ready" /></a>
   </p>
 
@@ -15,7 +15,7 @@
 
 ## Overview
 
-`cliproxyapi-quota-monitor`는 CLIProxyAPI 호스트에 직접 로드되는 `c-shared` C ABI 기반 네이티브 Go 플러그인입니다. 등록된 AI 공급자 계정들의 잔여 한도, 리셋 주기, 활성/비활성 상태, 사용 가능한 크레딧 잔액을 주기적으로 안전하게 수집하고, 독립적인 임베디드 반응형 대시보드 및 관리 API를 제공합니다.
+`cliproxyapi-plugin-quota-monitor`는 CLIProxyAPI 호스트에 직접 로드되는 `c-shared` C ABI 기반 네이티브 Go 플러그인입니다. 등록된 AI 공급자 계정들의 잔여 한도, 리셋 주기, 활성/비활성 상태, 사용 가능한 크레딧 잔액을 주기적으로 안전하게 수집하고, 독립적인 임베디드 반응형 대시보드 및 관리 API를 제공합니다.
 
 ## Preview
 
@@ -84,7 +84,7 @@ CLIProxyAPI 호스트 로드 후 아래 리소스 경로로 접근할 수 있습
 ## Project Structure
 
 ```text
-cliproxyapi-quota-monitor/
+cliproxyapi-plugin-quota-monitor/
 ├── main.go                 # c-shared C ABI 엔트리포인트 (plugin.register, management routes)
 ├── internal/
 │   ├── quota/              # 공급자별 쿼터 클라이언트, 파서 및 도메인 모델
