@@ -1,0 +1,18 @@
+Self-hosted dashboard fonts; no runtime CDN fetches.
+
+SUIT: https://github.com/sunn-us/SUIT
+Copyright from bundled metadata: Copyright © 2022 Sun.
+License: SIL Open Font License 1.1 (OFL-SUIT.txt).
+
+suit-regular.woff2
+SHA-256: 7a1971b4e54d6d797f105f2d8ad2fc5f5d6fd532195f582d74f4403177e83185
+Size: 167672 bytes
+
+suit-semibold.woff2
+SHA-256: a0ea79e549e2ef42930d16c9c5b40600132a7f3661fe0e26a84a20c2c8d182a0
+Size: 171164 bytes
+
+Manrope: https://github.com/google/fonts/tree/main/ofl/manrope
+Copyright from bundled metadata: Copyright 2019 The Manrope Project Authors.
+License: SIL Open Font License 1.1 (OFL-Manrope.txt).
+Full current asset checksums can be verified with sha256sum *.woff2.

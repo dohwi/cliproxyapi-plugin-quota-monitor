@@ -1,0 +1,15 @@
+[tools]
+go = "1.26.5"
+node = "26.5.0"
+
+[tasks.verify]
+description = "Run tests with race detector and go vet"
+run = "make verify"
+
+[tasks.build]
+description = "Build quota-monitor.so C shared library"
+run = "make build"
+
+[tasks.smoke]
+description = "Build native plugin and validate C ABI"
+run = "make native-smoke"

@@ -1,0 +1,13 @@
+# Binaries and build outputs
+artifacts/
+*.so
+*.h
+*.test
+verification/native_smoke
+
+# OS and editor files
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
