@@ -17,7 +17,7 @@ func TestResourceSnapshotExposesAvailability(t *testing.T) {
 func TestDashboardRendersFleetAvailabilityHeader(t *testing.T) {
 	for _, token := range []string{
 		`id="fleetAvailability"`, "function renderFleetAvailability(entries)",
-		"if (Array.isArray(data.availability)) renderFleetAvailability(data.availability);",
+		"renderFleetAvailability(data.availability);",
 		".fleet-chip-value",
 	} {
 		if !strings.Contains(dashboard.HTML, token) {

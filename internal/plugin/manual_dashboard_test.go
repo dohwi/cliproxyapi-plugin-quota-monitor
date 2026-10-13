@@ -128,7 +128,8 @@ assert(last.url === '/v0/resource/plugins/quota-monitor/data/accounts' && !last.
 assert(calls.filter(c => c.url.includes('/data/refresh')).length === postCount, 'automatic polling never adds force request');
 for (const forbidden of ['manualRefreshKey','manualRefreshDialog','manualRefreshPassword','Authorization','Bearer ','type="password"']) assert(!html.includes(forbidden), 'no credential requirement remains');
 assert(html.indexOf('id="resetFiltersBtn"') < html.indexOf('id="fullRefreshBtn"'), 'full refresh placed beside reset');
-for (const forbidden of ['localStorage','sessionStorage','window.parent','postMessage']) assert(!script.includes(forbidden), 'no credential storage or implicit host bridge');
+for (const forbidden of ['sessionStorage','window.parent','postMessage']) assert(!script.includes(forbidden), 'no credential storage or implicit host bridge');
+assert((script.match(/localStorage/g)||[]).length === (script.match(/localStorage\.(?:getItem\(LANG_KEY\)|setItem\(LANG_KEY, lang\))/g)||[]).length && script.includes("var LANG_KEY = 'cpa_plugin_lang';"), 'localStorage is limited to the language preference key');
 console.log('OK_MANUAL_REFRESH');
 `
 	// Top-level await is wrapped to keep compatibility with Node CommonJS -e.

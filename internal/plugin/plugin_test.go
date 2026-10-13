@@ -335,7 +335,7 @@ func TestDashboardHTMLFeatures(t *testing.T) {
 	// - single accounts fetch only
 	for _, required := range []string{
 		"<title>계정별 남은 쿼터</title>",
-		"<h1>계정 쿼터</h1>",
+		`<h1 data-i18n="page.heading">계정 쿼터</h1>`,
 		"전체",
 		"Active",
 		"providerFilter",
@@ -384,7 +384,6 @@ func TestDashboardHTMLFeatures(t *testing.T) {
 		"badge-current", "--current-badge-", "최근 토큰 사용 계정",
 		"autoRefreshSelect",
 		"qm_auto_refresh_interval",
-		"localStorage",
 		"setInterval",
 		"자동 갱신",
 	} {
@@ -419,7 +418,7 @@ func TestDashboardHTMLFeatures(t *testing.T) {
 		t.Errorf("dashboard.HTML fetch calls = %d, want 2 (snapshot and explicit refresh)", got)
 	}
 
-	for _, forbidden := range []string{"resolveManagementKey()", "enc::v1::", "cli-proxy-api-webui::secure-storage", "localStorage", "sessionStorage", "/management.html", "saveKey()", "logout()", "authActions", "X-MANAGEMENT-KEY", "Authorization", "Bearer ", "manualRefreshKey", "manualRefreshDialog", `type="password"`, "/v0/management/plugins/quota-monitor/"} {
+	for _, forbidden := range []string{"resolveManagementKey()", "enc::v1::", "cli-proxy-api-webui::secure-storage", "sessionStorage", "/management.html", "saveKey()", "logout()", "authActions", "X-MANAGEMENT-KEY", "Authorization", "Bearer ", "manualRefreshKey", "manualRefreshDialog", `type="password"`, "/v0/management/plugins/quota-monitor/"} {
 		if strings.Contains(dashboard.HTML, forbidden) {
 			t.Errorf("dashboard.HTML contains forbidden auth/management element: %q", forbidden)
 		}
@@ -605,7 +604,7 @@ assert(ctx.getAvailabilityState(limitedAccount).key === 'limited', 'limited key'
 assert(ctx.getAvailabilityState(disabledAccount).key === 'disabled', 'disabled key');
 
 assert(html.indexOf('availabilityEl') === -1, 'redundant availability badge is not rendered');
-assert(html.includes("card.setAttribute('aria-label', String(acc.account || acc.alias || '계정') + ' · ' + availability.label +"), 'state remains accessible without relying on color');
+assert(html.includes("card.setAttribute('aria-label', String(acc.account || acc.alias || t('card.account')) + ' · ' + availability.label +"), 'state remains accessible without relying on color');
 
 console.log('OK_ICON_TESTS');
 `
@@ -1011,7 +1010,7 @@ func TestResourceDashboardRequiresNoAuthKey(t *testing.T) {
 	html := string(dashboard.HTML)
 	// Viewing and automatic polling require no key. Manual refresh is a separate
 	// user-authenticated action; credentials must never be recovered from storage.
-	for _, forbidden := range []string{"resolveManagementKey", "localStorage", "sessionStorage", "window.parent", "postMessage"} {
+	for _, forbidden := range []string{"resolveManagementKey", "sessionStorage", "window.parent", "postMessage"} {
 		if strings.Contains(html, forbidden) {
 			t.Fatalf("resource dashboard contains forbidden auth surface %q", forbidden)
 		}
@@ -1882,8 +1881,8 @@ assert(html.indexOf('fullRefreshBtn') !== -1, 'full refresh button present');
 assert(html.indexOf('refreshAllAccounts') !== -1, 'explicit refresh action present');
 // No auto-refresh interval select.
 assert(html.indexOf('autoRefreshSelect') === -1, 'autoRefreshSelect must be absent');
-// No localStorage for interval.
-assert(html.indexOf('localStorage') === -1, 'localStorage forbidden');
+// localStorage is limited to the language preference (see TestDashboardStorageLimitedToLanguagePreference).
+assert((html.match(/localStorage/g)||[]).length === (html.match(/localStorage\.(?:getItem\(LANG_KEY\)|setItem\(LANG_KEY, lang\))/g)||[]).length, 'localStorage only for LANG_KEY');
 // Keep the compact toolbar action label.
 assert(html.indexOf('전체 갱신') !== -1, 'full refresh action label present');
 // Current account uses the border instead of a redundant visible badge.
@@ -1995,7 +1994,7 @@ func TestAGFamilyIconsAndAccessibility(t *testing.T) {
 		// aria-label is built at runtime from JS sectionAria variable;
 		// check that the JS source pattern exists in dashboard.HTML.
 		`esc(sectionAria)`,
-		`sectionAria = familyLabel`,
+		`sectionAria = t('q.familyAria'`,
 		// SVG icons are aria-hidden and carry SVG <title>
 		`aria-hidden="true"`,
 		// agFamilyIcon helper exists
@@ -2009,7 +2008,7 @@ func TestAGFamilyIconsAndAccessibility(t *testing.T) {
 		// Lock padlock class (separate from family icon)
 		`ag-lock-padlock`,
 		// SVG title elements for both families
-		`<title>안티그래비티</title>`,
+		`<title>'+esc(t('ag.name'))+'</title>`,
 		`<title>Claude</title>`,
 	} {
 		if !strings.Contains(dashboard.HTML, want) {

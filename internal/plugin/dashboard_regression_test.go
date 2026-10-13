@@ -69,7 +69,7 @@ func TestDashboardRegressionTokens(t *testing.T) {
 func TestRegressionDashboardHTMLFeatures(t *testing.T) {
 	for _, required := range []string{
 		"<title>계정별 남은 쿼터</title>",
-		"<h1>계정 쿼터</h1>",
+		`<h1 data-i18n="page.heading">계정 쿼터</h1>`,
 		"전체",
 		"Active",
 		"providerFilter",
@@ -112,7 +112,7 @@ func TestRegressionDashboardHTMLFeatures(t *testing.T) {
 	for _, forbiddenUI := range []string{
 		"운영 상태", "op-panel", "quota-ring-arc", "quota-group-badge", "quota-bar-track", "role=\"meter\"",
 		"badge-current", "--current-badge-", "최근 토큰 사용 계정",
-		"autoRefreshSelect", "qm_auto_refresh_interval", "localStorage", "sessionStorage", "setInterval",
+		"autoRefreshSelect", "qm_auto_refresh_interval", "sessionStorage", "setInterval",
 		"자동 갱신",
 		"usage-audit", "Promise.allSettled", "오늘 기록 없음", "오늘 사용량", "오늘 요청",
 	} {
@@ -979,14 +979,14 @@ console.log('OK_CREDIT_SUMMARY_REGRESSION');
 func TestRegressionAGFamilyIconsAndPadlockContract(t *testing.T) {
 	for _, want := range []string{
 		`esc(sectionAria)`,
-		`sectionAria = familyLabel`,
+		`sectionAria = t('q.familyAria'`,
 		`aria-hidden="true"`,
 		`agFamilyIcon`,
 		`M11.04 19.32Q12 21.51`,
 		`M18.7657 62.4437L37.1822 52.1167`,
 		`ag-family-icon`,
 		`ag-lock-padlock`,
-		`<title>안티그래비티</title>`,
+		`<title>'+esc(t('ag.name'))+'</title>`,
 		`<title>Claude</title>`,
 	} {
 		if !strings.Contains(dashboard.HTML, want) {

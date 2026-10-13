@@ -17,7 +17,7 @@ func TestDashboardAccountSummaryRemoved(t *testing.T) {
 func TestDashboardCompactControlAlignment(t *testing.T) {
 	for _, token := range []string{
 		"padding: 0 14px 16px;", "--bg-body: #f7f8fa;", "--accent: #2563eb;",
-		".page-heading { display: grid; grid-template-columns: minmax(0, 1fr); align-items: end;",
+		".page-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end;",
 		"padding: 0 30px 0 10px;", "font-family: inherit; font-size: 0.875rem; font-weight: 500; line-height: 1.2; text-align: left; text-align-last: left;",
 		".toolbar { display: flex; flex-wrap: wrap; justify-content: flex-start;",
 		"#dashboardContent { background: transparent; border: 0; padding: 0; min-width: 0; }",
@@ -49,8 +49,8 @@ func TestDashboardCompactControlAlignment(t *testing.T) {
 func TestDashboardSemanticSurfaceHierarchy(t *testing.T) {
 	for _, token := range []string{
 		"--dashboard-top-offset: 24px;", "--dashboard-top-offset: 16px;", "--border: #e4e7ec;", "--radius: 12px;",
-		`<h1>계정 쿼터</h1>`, "계정별 남은 쿼터와 초기화 시간을 한눈에 확인하세요.",
-		`<label for="providerFilter">프로바이더</label>`, `<label for="endpointFilter">엔드포인트</label>`,
+		`<h1 data-i18n="page.heading">계정 쿼터</h1>`, "계정별 남은 쿼터와 초기화 시간을 한눈에 확인하세요.",
+		`<label for="providerFilter" data-i18n="filter.provider">프로바이더</label>`, `<label for="endpointFilter" data-i18n="filter.endpoint">엔드포인트</label>`,
 		".account-card { background: var(--surface); border: 1px solid var(--account-border);",
 		`.account-card[data-availability="active"] { --card-state-bg: var(--status-active-bg); }`,
 		`.account-card[data-availability="warning"] { --card-state-bg: var(--status-warning-bg); }`,
@@ -70,7 +70,7 @@ func TestDashboardSemanticSurfaceHierarchy(t *testing.T) {
 		`.account-card[data-current="true"] { padding: 8px 9px; }`,
 		`.account-card[data-locked="true"] { --card-state-bg: var(--status-disabled-bg); --reset-primary: #475569; --reset-weekly: #475569; }`,
 		`if (lockedWindowInfo(acc, availability)) card.setAttribute('data-locked', 'true');`,
-		"card.setAttribute('role', 'group');", "card.setAttribute('aria-label', String(acc.account || acc.alias || '계정') + ' · ' + availability.label +", "container-type: inline-size;", "@container (max-width: 300px)", "@container (max-width: 240px)",
+		"card.setAttribute('role', 'group');", "card.setAttribute('aria-label', String(acc.account || acc.alias || t('card.account')) + ' · ' + availability.label +", "container-type: inline-size;", "@container (max-width: 300px)", "@container (max-width: 240px)",
 	} {
 		if !strings.Contains(dashboard.HTML, token) {
 			t.Errorf("missing intuitive semantic dashboard contract %q", token)

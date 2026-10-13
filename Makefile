@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: verify build native-smoke clean verify-layout
+.PHONY: verify-i18n release-check verify build native-smoke clean verify-layout
 
 verify:
 	go test -race -count=1 -timeout=120s ./...
@@ -17,6 +17,13 @@ native-smoke: build
 
 verify-layout:
 	node scripts/test-quota-dashboard-layout.cjs
+
+verify-i18n:
+	node scripts/test-quota-dashboard-language.cjs
+
+# Usage: make release-check TAG=v0.1.0
+release-check:
+	./scripts/check-release-version.sh $(TAG)
 
 clean:
 	rm -rf artifacts

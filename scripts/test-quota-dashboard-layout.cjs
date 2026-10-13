@@ -5,7 +5,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname, '..');
-const source = fs.readFileSync(path.join(root, 'internal/dashboard/dashboard.go'), 'utf8').split('const HTML = `')[1].split('`')[0];
+const source = require('./lib/dashboard-html.cjs').readDashboardHTML(root);
 const now = new Date().toISOString();
 const reset = hours => new Date(Date.now() + hours * 3600000).toISOString();
 const accounts = [
@@ -96,7 +96,7 @@ accounts.forEach((account, i) => {
 (async () => {
   const browser = await chromium.launch({headless: true, executablePath: process.env.BROWSER_EXECUTABLE || undefined, args: ['--no-sandbox']});
   try {
-    const page = await browser.newPage({reducedMotion: 'reduce'});
+    const page = await browser.newPage({reducedMotion: 'reduce', locale: 'ko-KR'});
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', async route => {
