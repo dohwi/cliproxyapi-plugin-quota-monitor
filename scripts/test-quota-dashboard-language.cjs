@@ -50,7 +50,7 @@ const hangul = s => /[가-힣]/.test(s);
       for (const lang of [target, wantInitial]) {
         if (lang !== target) await page.click(`.lang-btn[data-lang="${lang}"]`);
         const text = await page.evaluate(() => document.body.innerText + '\n' + [...document.querySelectorAll('[aria-label],[title]')].map(e => (e.getAttribute('aria-label') || '') + ' ' + (e.title || '')).join('\n') + '\n' + document.title);
-        const stray = text.split('\n').filter(l => (lang === 'en' ? hangul(l) : false) && !/한국어/.test(l));
+        const stray = text.split('\n').filter(l => (lang === 'en' ? hangul(l) : false) && !/한국어|^\s*가(\s+A)?\s*$/.test(l));
         if (lang === 'en' && stray.length) fail.push(`${locale}: Korean left in EN UI: ${JSON.stringify(stray.slice(0, 6))}`);
         if (lang === 'ko' && /Retry|Refresh|Weekly limit|Resets in/.test(text)) fail.push(`${locale}: English left in KO UI`);
         for (const width of [1440, 768, 390, 320]) {

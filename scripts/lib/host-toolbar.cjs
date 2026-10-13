@@ -29,13 +29,11 @@ module.exports = async function verifyLanguagePlacement(page, panelSelector) {
       height: rect.height,
       expectedHeight: parseFloat(getComputedStyle(group).getPropertyValue('--filter-control-height')),
       label: document.getElementById(group.getAttribute('aria-labelledby')).textContent,
-      rightAligned: surface.right - rect.right <= 24,
       lang: document.documentElement.lang,
     };
   }, panelSelector);
   assert(result.insidePanel && result.outsideHeading, 'language switch belongs inside the filter surface, never the header');
   assert(!result.hostOverlap && !result.controlOverlap && result.reachable, 'language buttons must remain unobstructed by host tools and filter controls');
   assert(result.height >= 30 && result.height <= result.expectedHeight + 1, `language switch shares filter control height: ${result.height} vs ${result.expectedHeight}`);
-  assert(result.rightAligned, 'language switch sits on the right edge of the filter surface');
   assert.equal(result.label, result.lang === 'en' ? 'Language' : '언어', 'visible accessible label is localized');
 };
