@@ -1,36 +1,39 @@
+<p align="center"><b>English</b> · <a href="README.ko.md">한국어</a></p>
+
 <div align="center">
   <h1>cliproxyapi-plugin-quota-monitor</h1>
-  <p>CLIProxyAPI를 위한 공급자 계정 쿼터·크레딧 모니터링 및 반응형 대시보드 네이티브 Go 플러그인.</p>
+  <p>A native Go plugin for CLIProxyAPI that monitors provider account quotas and credits, with a responsive bilingual (English/Korean) dashboard.</p>
 
   <p>
     <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.5-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.5" /></a>
-    <a href="https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/actions/workflows/verify.yml" target="_blank" rel="noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/dohwi/cliproxyapi-plugin-quota-monitor/verify.yml?branch=main&style=flat-square&label=verify" alt="Verification workflow" /></a>
-    <a href="https://www.docker.com" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Ready" /></a>
+    <a href="https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/actions/workflows/verify.yml" target="_blank" rel="noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/dohwi/cliproxyapi-plugin-quota-monitor/verify.yml?branch=main&style=flat-square&label=verify" alt="Verify workflow status" /></a>
+    <a href="LICENSE" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue?style=flat-square" alt="PolyForm Noncommercial 1.0.0" /></a>
   </p>
 
-  <p><a href="#preview">Preview</a> · <a href="#features">Features</a> · <a href="#getting-started">Getting Started</a> · <a href="#routes">Routes</a> · <a href="docs/contract.md">Contract</a></p>
+  <p><a href="#preview">Preview</a> · <a href="#features">Features</a> · <a href="#getting-started">Getting Started</a> · <a href="#routes">Routes</a> · <a href="#language">Language</a> · <a href="docs/contract.md">Contract</a></p>
 </div>
 
 ---
 
 ## Overview
 
-`cliproxyapi-plugin-quota-monitor`는 CLIProxyAPI 호스트에 직접 로드되는 `c-shared` C ABI 기반 네이티브 Go 플러그인입니다. 등록된 AI 공급자 계정들의 잔여 한도, 리셋 주기, 활성/비활성 상태, 사용 가능한 크레딧 잔액을 주기적으로 안전하게 수집하고, 독립적인 임베디드 반응형 대시보드 및 관리 API를 제공합니다.
+`cliproxyapi-plugin-quota-monitor` is a `c-shared` C ABI native Go plugin that the CLIProxyAPI host loads directly. It periodically and safely collects the remaining quota, reset schedule, active/disabled state and available credit balance of your registered AI provider accounts, and serves them through a self-contained responsive dashboard and a management API.
 
 ## Preview
 
 | Desktop Dashboard | Mobile View |
 | :---: | :---: |
-| <img src="docs/assets/quota-desktop.png" alt="계정 쿼터: 상태 요약, 계정별 한도와 초기화 시각" width="100%" /> | <img src="docs/assets/quota-mobile.png" alt="모바일 계정 쿼터와 터치용 필터" width="280" /> |
+| <img src="docs/assets/quota-desktop.en.png" alt="Account quota dashboard: status summary, per-account limits and reset times" width="100%" /> | <img src="docs/assets/quota-mobile.en.png" alt="Account quota dashboard on mobile" width="100%" /> |
 
 ## Features
 
-- **계정별 쿼터 및 크레딧 추적**: Claude, Codex, Antigravity 등 주요 공급자 계정의 윈도우별 잔여 퍼센트, 리셋 예정 시각, 크레딧 잔액 모니터링.
-- **최근 사용 계정 강조**: 프록시를 통해 최근 실제로 트래픽을 처리한 계정을 시각적으로 구분 표시.
-- **제약적 수집기 (Bounded Collection)**: 계정별 조회 일정, 단일 백그라운드 수집 워커, 타임아웃 및 동시성 제어로 공급자 API 과부하 방지.
-- **갱신 일관성 보호 (Refresh Consistency)**: 오래된 비동기 조회가 최신 갱신 데이터를 덮어쓰지 않도록 세대 기반 캐시 관리.
-- **자립형 반응형 대시보드**: 외부 CDN이나 무거운 차트 라이브러리 없이 순수 HTML/CSS/JS 및 자체 호스팅 WOFF2 글꼴(SUIT, Manrope)로 렌더링.
-- **안전한 엔드포인트 분리**: 읽기 전용 스냅샷 조회와 명시적 갱신 엔드포인트를 분리하고, 30초 전역 쿨다운 및 속도 제한 적용.
+- **Per-account quota and credit tracking**: remaining percentage per window, reset time and credit balance for Claude, Codex, Antigravity and other providers.
+- **Recently used account highlight**: visually marks the account that most recently handled traffic through the proxy.
+- **Bounded collection**: per-account probe schedule, a single background worker, timeouts and concurrency limits keep provider APIs from being overloaded.
+- **Refresh consistency**: generation-based cache management stops a stale asynchronous probe from overwriting newer data.
+- **Self-contained responsive dashboard**: plain HTML/CSS/JS with self-hosted WOFF2 fonts (SUIT, Manrope). No CDN and no chart library.
+- **Bilingual UI**: English and Korean, switchable from the dashboard header (see [Language](#language)).
+- **Safe endpoint separation**: read-only snapshot endpoints are separate from the explicit refresh endpoint, which has a 30-second global cooldown and rate limiting.
 
 ## Tech Stack
 
@@ -40,13 +43,13 @@
 | Host Integration | CLIProxyAPI Plugin C ABI (`v0` management/resource routes) |
 | Embedded UI | HTML5, Vanilla JavaScript, CSS Grid/Flexbox |
 | Bundled Typography | SUIT Regular/SemiBold, Manrope Variable (self-hosted WOFF2) |
-| Verification | Go race/vet, Node layout contract test, Native C smoke test (`dlopen`) |
+| Verification | Go race/vet, Node layout and i18n contract tests, native C smoke test (`dlopen`) |
 
 ## Getting Started
 
-호스트 프로세스와 동일한 OS·아키텍처·C 런타임 환경(Linux amd64 glibc)에서 빌드해야 합니다.
+Build on the same OS, architecture and C runtime as the host process (Linux amd64, glibc).
 
-[mise](https://mise.jdx.dev)를 통해 로컬 런타임을 간편하게 부트스트랩할 수 있습니다:
+Bootstrap the local runtimes with [mise](https://mise.jdx.dev):
 
 ```bash
 # Managed runtimes
@@ -56,7 +59,7 @@ mise install
 # Ubuntu/Debian native build tools
 sudo apt-get update && sudo apt-get install -y build-essential
 
-# Run tests and native ABI smoke test
+# Run tests and the native ABI smoke test
 make verify
 make native-smoke
 ```
@@ -67,47 +70,62 @@ make native-smoke
 make build
 ```
 
-빌드 결과물은 `artifacts/quota-monitor.so` 및 헤더 파일 `artifacts/quota-monitor.h`로 생성됩니다.
+The build writes `artifacts/quota-monitor.so` and the header `artifacts/quota-monitor.h`.
+
+## Language
+
+The dashboard ships in English and Korean. A `한국어 | English` switch sits in the page header.
+
+- **Selection order**: saved choice, then browser language (Korean selects Korean, anything else selects English), then Korean.
+- **Shared setting**: the choice is stored in the browser under `cpa_plugin_lang`, the same key used by the [usage-audit](https://github.com/dohwi/cliproxyapi-plugin-usage-audit) dashboard. Changing it in one open dashboard updates the other. This only applies when both dashboards are served from the same origin.
+- **Privacy**: this key is the only thing the page writes to browser storage. Credentials are never stored.
+- **Not translated**: the plugin name shown in the host menu is registered once at load time, so it stays Korean ("계정 쿼터").
 
 ## Routes
 
-CLIProxyAPI 호스트 로드 후 아래 리소스 경로로 접근할 수 있습니다:
+Once the CLIProxyAPI host has loaded the plugin, these routes are available:
 
 | Method | Route | Description |
 |---|---|---|
-| `GET` | `/v0/resource/plugins/quota-monitor/dashboard` | 계정 쿼터 반응형 웹 대시보드 |
-| `GET` | `/v0/resource/plugins/quota-monitor/data/accounts` | 캐시된 계정 쿼터 스냅샷 (조회 유발 없음) |
-| `GET` | `/v0/resource/plugins/quota-monitor/data/refresh?confirm=1` | 전체 계정 명시적 갱신 (30초 쿨다운 적용) |
-| `POST` | `/v0/management/plugins/quota-monitor/refresh` | 관리자 인증 기반 강제 갱신 |
-| `GET` | `/v0/management/plugins/quota-monitor/status` | 수집기 상태 및 통계 |
+| `GET` | `/v0/resource/plugins/quota-monitor/dashboard` | Responsive account quota dashboard |
+| `GET` | `/v0/resource/plugins/quota-monitor/data/accounts` | Cached account quota snapshot (never triggers a probe) |
+| `GET` | `/v0/resource/plugins/quota-monitor/data/refresh?confirm=1` | Explicit refresh of all accounts (30-second cooldown) |
+| `POST` | `/v0/management/plugins/quota-monitor/refresh` | Forced refresh with management authentication |
+| `GET` | `/v0/management/plugins/quota-monitor/status` | Collector status and statistics |
 
 ## Project Structure
 
 ```text
 cliproxyapi-plugin-quota-monitor/
-├── main.go                 # c-shared C ABI 엔트리포인트 (plugin.register, management routes)
+├── main.go                 # c-shared C ABI entry point (plugin.register, management routes)
 ├── internal/
-│   ├── quota/              # 공급자별 쿼터 클라이언트, 파서 및 도메인 모델
-│   ├── plugin/             # 플러그인 수명주기, 수집 스케줄러, 스냅샷, 핸들러
-│   ├── authdir/            # CLIProxyAPI auth-dir 파서
-│   ├── availability/       # 공급자 패밀리별 가용성 평가
-│   ├── overview/           # 공급자별 보수적 쿼터 요약
-│   └── dashboard/          # 내장 대시보드 HTML/JS 및 폰트 에셋
-├── docs/                   # 프로토콜 계약, 관리 명세 및 이미지
-├── scripts/                # 대시보드 레이아웃 검증 스크립트
-├── verification/           # dlopen 기반 네이티브 C ABI 스모크 테스트
-├── Makefile                # 빌드, 검증, 스모크 테스트 타겟
-└── THIRD_PARTY_NOTICES.md  # 번들 폰트 라이선스 고지
+│   ├── quota/              # Per-provider quota clients, parsers and domain models
+│   ├── plugin/             # Plugin lifecycle, collection scheduler, snapshots, handlers
+│   ├── authdir/            # CLIProxyAPI auth-dir parser
+│   ├── availability/       # Per-provider-family availability evaluation
+│   ├── overview/           # Conservative per-provider quota summary
+│   └── dashboard/          # Embedded dashboard: dashboard.html, style.css, app.js, font assets
+├── docs/                   # Protocol contract, management spec and images
+├── scripts/                # Dashboard layout verification scripts
+├── verification/           # dlopen-based native C ABI smoke test
+├── Makefile                # Build, verify and smoke-test targets
+└── THIRD_PARTY_NOTICES.md  # Bundled font license notices
 ```
+
+The dashboard source is three plain files in `internal/dashboard/`. They are embedded with `go:embed` and assembled into one self-contained page at start-up.
 
 ## Documentation
 
-- [Plugin Contract](docs/contract.md): C ABI, 리소스 및 릴리스 계약
-- [Management Contract](docs/management.md): 설정 및 관리 라우트 상세
-- [Remaining API](docs/remaining-api.md): 스냅샷 및 갱신 API 명세
-- [Collection Contract](docs/collection-contract.md): 백그라운드 수집 및 보안 정책
+- [Plugin Contract](docs/contract.md): C ABI, resource and release contract
+- [Management Contract](docs/management.md): configuration and management route details
+- [Remaining API](docs/remaining-api.md): snapshot and refresh API specification
+- [Collection Contract](docs/collection-contract.md): background collection and security policy
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE). You may use, modify and distribute this software for noncommercial purposes such as personal use, research and education. Commercial use is not permitted.
 
 ## Security & Attribution
 
-- 키, OAuth 토큰, 실제 계정 자격증명은 저장소에 커밋하지 않습니다.
-- 내장 대시보드 번들 폰트 출처 및 라이선스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
+- Keys, OAuth tokens and real account credentials are never committed to this repository.
+- Bundled dashboard fonts and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

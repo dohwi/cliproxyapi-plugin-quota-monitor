@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.5.0'
+      - name: Tag matches source version
+        run: scripts/check-release-version.sh "${GITHUB_REF_NAME}"
+      - name: Verify
+        run: make verify
+      - name: Build and smoke-test the native plugin
+        run: make native-smoke
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp artifacts/quota-monitor.so dist/quota-monitor-${GITHUB_REF_NAME}-linux-amd64.so
+          cd dist && sha256sum quota-monitor-*.so > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* --title "${GITHUB_REF_NAME}" --generate-notes
