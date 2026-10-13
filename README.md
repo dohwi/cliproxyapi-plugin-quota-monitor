@@ -72,9 +72,15 @@ make build
 
 The build writes `artifacts/quota-monitor.so` and the header `artifacts/quota-monitor.h`.
 
+## Install
+
+Once listed in the [CLIProxyAPI Plugins Store](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store), install `quota-monitor` from the host's plugin page. To install manually, download `quota-monitor_<version>_linux_amd64.zip` and `checksums.txt` from the [latest release](https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/releases/latest), run `sha256sum -c checksums.txt`, and unzip `quota-monitor.so` into the host's plugin directory.
+
+The Linux build targets glibc 2.36 or older (the official Debian bookworm image). Only `linux/amd64` is published; other platforms must build from source.
+
 ## Language
 
-The dashboard ships in English and Korean. A `한국어 | English` switch sits in the page header.
+The dashboard ships in English and Korean. A single translate icon button in the filter area switches between Korean and English; its tooltip names the language it switches to.
 
 - **Selection order**: saved choice, then browser language (Korean selects Korean, anything else selects English), then Korean.
 - **Shared setting**: the choice is stored in the browser under `cpa_plugin_lang`, the same key used by the [usage-audit](https://github.com/dohwi/cliproxyapi-plugin-usage-audit) dashboard. Changing it in one open dashboard updates the other. This only applies when both dashboards are served from the same origin.

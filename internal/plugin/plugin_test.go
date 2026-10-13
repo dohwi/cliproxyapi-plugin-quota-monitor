@@ -259,7 +259,7 @@ func TestRoutesAndMetadata(t *testing.T) {
 	reset(t)
 	raw, _ := HandleMethod("plugin.register", []byte(`{"schema_version":6}`))
 	s := string(raw)
-	for _, want := range []string{"quota-monitor", "0.1.0", "homelab/dohwi", "https://github.com/router-for-me/CLIProxyAPI", "management_api", `"schema_version":6`} {
+	for _, want := range []string{"quota-monitor", "0.1.0", "dohwi", "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor", "management_api", `"schema_version":6`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q: %s", want, s)
 		}

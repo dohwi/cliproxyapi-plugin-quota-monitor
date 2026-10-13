@@ -25,8 +25,8 @@ import (
 const (
 	pluginName                = "quota-monitor"
 	pluginVersion             = "0.1.0"
-	pluginAuthor              = "homelab/dohwi"
-	pluginRepo                = "https://github.com/router-for-me/CLIProxyAPI"
+	pluginAuthor              = "dohwi"
+	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
 	mgmtBase                  = "/v0/management/plugins/quota-monitor"
 	cacheTTL                  = 120 * time.Second

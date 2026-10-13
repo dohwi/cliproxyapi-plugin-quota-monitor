@@ -72,9 +72,15 @@ make build
 
 빌드 결과물은 `artifacts/quota-monitor.so` 및 헤더 파일 `artifacts/quota-monitor.h`로 생성됩니다.
 
+## Install
+
+[CLIProxyAPI Plugins Store](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store)에 등록되면 호스트의 플러그인 페이지에서 `quota-monitor`를 설치할 수 있습니다. 수동 설치는 [최신 릴리스](https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/releases/latest)에서 `quota-monitor_<version>_linux_amd64.zip`과 `checksums.txt`를 받아 `sha256sum -c checksums.txt`로 확인한 뒤, `quota-monitor.so`를 호스트의 플러그인 디렉터리에 풉니다.
+
+Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)를 대상으로 하며 `linux/amd64`만 배포합니다. 다른 플랫폼은 소스에서 빌드해야 합니다.
+
 ## Language
 
-대시보드는 한국어와 영어를 지원하며, 페이지 헤더의 `한국어 | English` 스위치로 전환합니다.
+대시보드는 한국어와 영어를 지원하며, 필터 영역의 번역 아이콘 버튼 하나를 누를 때마다 한국어와 영어가 전환되며, 툴팁에 전환될 언어가 표시됩니다.
 
 - **선택 순서**: 저장된 선택 → 브라우저 언어(한국어면 한국어, 그 외는 영어) → 한국어.
 - **공유 설정**: 선택값은 브라우저의 `cpa_plugin_lang` 키에 저장되며, [usage-audit](https://github.com/dohwi/cliproxyapi-plugin-usage-audit) 대시보드와 같은 키를 씁니다. 한쪽에서 바꾸면 열려 있는 다른 쪽도 따라갑니다. 두 대시보드가 같은 origin에서 제공될 때만 적용됩니다.

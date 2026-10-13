@@ -26,13 +26,10 @@ jobs:
         run: make verify
       - name: Build and smoke-test the native plugin
         run: make native-smoke
-      - name: Package
-        run: |
-          mkdir -p dist
-          cp artifacts/quota-monitor.so dist/quota-monitor-${GITHUB_REF_NAME}-linux-amd64.so
-          cd dist && sha256sum quota-monitor-*.so > SHA256SUMS
+      - name: Package for the CLIProxyAPI plugin store
+        run: scripts/package-release.sh "${GITHUB_REF_NAME}"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* --title "${GITHUB_REF_NAME}" --generate-notes
+          gh release create "${GITHUB_REF_NAME}" dist/quota-monitor_*_linux_amd64.zip dist/checksums.txt --title "${GITHUB_REF_NAME}" --generate-notes
