@@ -105,7 +105,7 @@
     .page-heading h1 { font-size: 1.3rem; }
   }
   /* Keep language controls in normal filter flow, below the host's floating tools. */
-  .filter-language-field { flex: 0 0 auto; margin-inline-start: auto; min-width: 0; display: grid; gap: 6px; }
+  .filter-language-field { flex: 0 0 auto; margin-inline-start: auto; min-width: 0; }
   .lang-switch { display: inline-flex; align-items: stretch; gap: 2px; padding: 2px; height: var(--filter-control-height); border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); background: var(--filter-control-bg); }
   .lang-btn { min-height: 0; height: 100%; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-family: inherit; font-size: 0.8125rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
   .lang-btn:hover { background: var(--filter-control-hover-bg); }
@@ -374,7 +374,7 @@
     .filter-reset-button { min-height: 44px; }
     .compact-select-wrap, .compact-select { width: 100%; min-width: 0; }
     .filter-status-field { width: 100%; }
-    .filter-language-field { grid-column: 1 / -1; margin-inline-start: 0; justify-self: start; }
+    .filter-language-field { grid-column: 1 / -1; margin-inline-start: 0; justify-self: end; }
     .filter-actions .filter-reset-button { flex: 0 1 auto; width: auto; justify-content: center; }
     .cards-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: 1fr; gap: 8px; }
     .account-card { min-height: 226px; height: 100%; padding: 9px 10px; }
