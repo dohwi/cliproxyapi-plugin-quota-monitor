@@ -7,7 +7,7 @@
   <p>
     <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.9-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.9" /></a>
     <a href="https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/actions/workflows/verify.yml" target="_blank" rel="noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/dohwi/cliproxyapi-plugin-quota-monitor/verify.yml?branch=main&style=flat-square&label=verify" alt="Verification workflow" /></a>
-    <a href="LICENSE" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue?style=flat-square" alt="PolyForm Noncommercial 1.0.0" /></a>
+    <a href="LICENSE" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="MIT License" /></a>
   </p>
 
   <p><a href="#preview">Preview</a> · <a href="#features">Features</a> · <a href="#getting-started">Getting Started</a> · <a href="#routes">Routes</a> · <a href="#language">Language</a> · <a href="docs/contract.md">Contract</a></p>
@@ -129,7 +129,7 @@ cliproxyapi-plugin-quota-monitor/
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE) — 개인·연구·교육 등 비상업적 용도로 사용·수정·배포할 수 있으며, 상업적 이용은 허용되지 않습니다.
+[MIT](LICENSE) — 저작권 및 라이선스 고지를 유지하면 상업적 이용을 포함해 자유롭게 사용·수정·배포할 수 있습니다.
 
 ## Security & Attribution
 

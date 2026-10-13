@@ -370,12 +370,12 @@ func TestEndpointResolverTopologyMapping(t *testing.T) {
 
 	// Write mock auth files matching the post-change topology:
 	files := map[string]string{
-		"antigravity-direct@example.invalid.json":                   `{"type":"antigravity","proxy_url":"direct"}`,
-		"codex-11111111-direct@example.invalid-plus.json":           `{"type":"codex","proxy_url":""}`,
-		"codex-22222222-proxy-plus@example.invalid-plus.json":   `{"type":"codex","proxy_url":"socks5://warp1:1080"}`,
-		"codex-33333333-proxy-team@example.invalid-team.json":             `{"type":"codex","proxy_url":"http://warp1:8080"}`,
+		"antigravity-direct@example.invalid.json":             `{"type":"antigravity","proxy_url":"direct"}`,
+		"codex-11111111-direct@example.invalid-plus.json":     `{"type":"codex","proxy_url":""}`,
+		"codex-22222222-proxy-plus@example.invalid-plus.json": `{"type":"codex","proxy_url":"socks5://warp1:1080"}`,
+		"codex-33333333-proxy-team@example.invalid-team.json": `{"type":"codex","proxy_url":"http://warp1:8080"}`,
 		"codex-44444444-school-a@example.invalid-k12.json":    `{"type":"codex","proxy_url":"socks5://warp2:1080"}`,
-		"codex-55555555-school-b@example.invalid-k12.json": `{"type":"codex","proxy_url":"socks5://warp2:1080"}`,
+		"codex-55555555-school-b@example.invalid-k12.json":    `{"type":"codex","proxy_url":"socks5://warp2:1080"}`,
 	}
 
 	for name, content := range files {

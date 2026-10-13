@@ -11,4 +11,4 @@ The embedded dashboard serves local WOFF2 assets. Copyright information below is
 
 [SUIT upstream](https://github.com/sunn-us/SUIT) · [Manrope family](https://github.com/google/fonts/tree/main/ofl/manrope) · [Asset provenance](internal/dashboard/assets/PROVENANCE.txt).
 
-The repository's own source code is licensed under the PolyForm Noncommercial License 1.0.0 (see [LICENSE](LICENSE)). The bundled fonts above keep their own licenses.
+The repository's own source code is licensed under the MIT License (see [LICENSE](LICENSE)). The bundled fonts above keep their own licenses.
