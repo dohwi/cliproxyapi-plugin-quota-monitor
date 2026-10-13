@@ -1396,7 +1396,7 @@ function renderFleetAvailability(entries) {
     var count = Number(e.accounts) || 0;
     if (e.key === 'antigravity_gemini' || e.key === 'antigravity_claude') {
       if (!agy) {
-        agy = { label: 'AGY', title: '', values: [], accounts: 0 };
+        agy = { label: 'AGY', provider: 'antigravity', title: '', values: [], accounts: 0 };
         chips.push(agy);
       }
       agy.values.push(rem);
@@ -1404,7 +1404,7 @@ function renderFleetAvailability(entries) {
       agy.title += (agy.title ? ' / ' : '') + fleetLabel(e) + ' ' + (Math.round(rem * 10) / 10) + '%';
       continue;
     }
-    chips.push({ label: fleetLabel(e), title: fleetLabel(e) + ' · ' + tn('fleet.count', count), values: [rem], accounts: count });
+    chips.push({ label: fleetLabel(e), provider: String(e.key || ''), title: fleetLabel(e) + ' · ' + tn('fleet.count', count), values: [rem], accounts: count });
   }
   var html = '';
   for (var k = 0; k < chips.length; k++) {
@@ -1414,7 +1414,7 @@ function renderFleetAvailability(entries) {
       if (v > 0) vals += '<span class="fleet-chip-sep" aria-hidden="true">·</span>';
       vals += '<span style="color:' + remainingTone(c.values[v]) + '">' + esc(String(Math.round(c.values[v] * 10) / 10)) + '%</span>';
     }
-    html += '<li class="fleet-chip" title="' + esc(c.title + (c.values.length > 1 ? ' · ' + tn('fleet.count', c.accounts) : '')) + '"><span class="fleet-chip-label">' + esc(c.label) + '</span>' +
+    html += '<li class="fleet-chip" title="' + esc(c.title + (c.values.length > 1 ? ' · ' + tn('fleet.count', c.accounts) : '')) + '"><span class="fleet-chip-label"><span class="fleet-chip-icon" aria-hidden="true">' + providerIcon(c.provider, 16) + '</span><span class="fleet-chip-name">' + esc(c.label) + '</span></span>' +
       '<span class="fleet-chip-value">' + vals + '</span>' +
       '<span class="fleet-chip-count">' + esc(t('fleet.chipCount', { n: c.accounts })) + '</span></li>';
   }
