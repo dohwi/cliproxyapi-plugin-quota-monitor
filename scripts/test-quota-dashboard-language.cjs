@@ -6,6 +6,7 @@ const fs = require('fs'), path = require('path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname, '..');
 const source = require('./lib/dashboard-html.cjs').readDashboardHTML(root);
+const verifyLanguagePlacement = require('./lib/host-toolbar.cjs');
 const now = new Date().toISOString();
 const reset = h => new Date(Date.now() + h * 3600000).toISOString();
 const accounts = [
@@ -63,6 +64,7 @@ const hangul = s => /[가-힣]/.test(s);
             });
             return out;
           });
+          await verifyLanguagePlacement(page, '.dashboard-control-panel');
           if (over.length) fail.push(`${locale}/${lang}/${width}px overflow: ${over.slice(0, 5).join(' | ')}`);
         }
         await page.setViewportSize({ width: 1280, height: 900 });
