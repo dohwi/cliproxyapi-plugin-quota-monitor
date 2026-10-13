@@ -40,6 +40,8 @@ var I18N = {
     'page.heading': '계정 쿼터',
     'page.subheading': '계정별 남은 쿼터와 초기화 시간을 한눈에 확인하세요.',
     'lang.label': '언어',
+    'lang.toEn': 'English로 전환',
+    'lang.toKo': '한국어로 전환',
     'unconfigured': '환경변수 미설정 (QUOTA_MONITOR_MGMT_URL, QUOTA_MONITOR_MGMT_KEY)',
     'unconfigured.reason': '환경변수 미설정 (QUOTA_MONITOR_MGMT_URL, QUOTA_MONITOR_MGMT_KEY): {r}',
     'retry': '다시 시도',
@@ -164,6 +166,8 @@ var I18N = {
     'page.heading': 'Account Quota',
     'page.subheading': 'See each account\u2019s remaining quota and reset time at a glance.',
     'lang.label': 'Language',
+    'lang.toEn': 'Switch to English',
+    'lang.toKo': 'Switch to Korean',
     'unconfigured': 'Environment variables not set (QUOTA_MONITOR_MGMT_URL, QUOTA_MONITOR_MGMT_KEY)',
     'unconfigured.reason': 'Environment variables not set (QUOTA_MONITOR_MGMT_URL, QUOTA_MONITOR_MGMT_KEY): {r}',
     'retry': 'Retry',
@@ -354,8 +358,12 @@ function applyStaticI18n() {
     var el = document.getElementById(id);
     if (el && el._i18n) el.textContent = t(el._i18n.key, el._i18n.params);
   });
-  eachNode('[data-lang]', function(btn) {
-    btn.setAttribute('aria-pressed', btn.getAttribute('data-lang') === currentLang ? 'true' : 'false');
+  // One toggle button: label/tooltip name the language a click switches to.
+  eachNode('.lang-toggle', function(btn) {
+    var label = t(currentLang === 'ko' ? 'lang.toEn' : 'lang.toKo');
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+    btn.setAttribute('data-current-lang', currentLang);
   });
 }
 function setLanguage(lang, fromStorage) {
@@ -375,8 +383,8 @@ function setLanguage(lang, fromStorage) {
 // Translate the static markup as soon as it is parsed to avoid a flash of Korean.
 try { applyStaticI18n(); } catch (e) {}
 function initLanguageControls() {
-  eachNode('[data-lang]', function(btn) {
-    btn.addEventListener('click', function() { setLanguage(btn.getAttribute('data-lang')); });
+  eachNode('.lang-toggle', function(btn) {
+    btn.addEventListener('click', function() { setLanguage(currentLang === 'ko' ? 'en' : 'ko'); });
   });
   // Another plugin dashboard (or tab) changed the shared language: follow it.
   if (typeof window !== 'undefined' && window.addEventListener) {

@@ -12,14 +12,15 @@ module.exports = async function verifyLanguagePlacement(page, panelSelector) {
       host.style.cssText = 'position:fixed;top:16px;right:12px;width:176px;height:52px;z-index:2147483647;background:#fff;border-radius:16px;box-shadow:0 8px 24px #0002';
       document.body.appendChild(host);
     }
-    const group = document.querySelector('.lang-switch');
+    const group = document.querySelector('.lang-toggle');
     const panel = document.querySelector(panelSelector);
     const rect = group.getBoundingClientRect(), surface = panel.getBoundingClientRect();
     const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-    const buttons = [...group.querySelectorAll('button')];
+    const buttons = [group];
     return {
       insidePanel: panel.contains(group) && rect.left >= surface.left && rect.right <= surface.right + 1 && rect.top >= surface.top && rect.bottom <= surface.bottom + 1,
       outsideHeading: !group.closest('.page-heading'),
+      square: Math.abs(rect.width - rect.height) <= 1,
       hostOverlap: intersects(rect, host.getBoundingClientRect()),
       reachable: buttons.every(button => {
         const r = button.getBoundingClientRect();
@@ -28,12 +29,18 @@ module.exports = async function verifyLanguagePlacement(page, panelSelector) {
       controlOverlap: [...panel.querySelectorAll('.ui-select-trigger, #resetFiltersBtn, #fullRefreshBtn')].some(control => intersects(rect, control.getBoundingClientRect())),
       height: rect.height,
       expectedHeight: parseFloat(getComputedStyle(group).getPropertyValue('--filter-control-height')),
-      label: document.getElementById(group.getAttribute('aria-labelledby')).textContent,
+      label: group.getAttribute('aria-label'),
       lang: document.documentElement.lang,
     };
   }, panelSelector);
   assert(result.insidePanel && result.outsideHeading, 'language switch belongs inside the filter surface, never the header');
   assert(!result.hostOverlap && !result.controlOverlap && result.reachable, 'language buttons must remain unobstructed by host tools and filter controls');
   assert(result.height >= 30 && result.height <= result.expectedHeight + 1, `language switch shares filter control height: ${result.height} vs ${result.expectedHeight}`);
-  assert.equal(result.label, result.lang === 'en' ? 'Language' : '언어', 'visible accessible label is localized');
+  assert(result.square, 'language toggle is a single square icon button');
+  assert.equal(result.label, result.lang === 'en' ? 'Switch to Korean' : 'English로 전환', 'toggle label names its target language');
+};
+
+module.exports.switchTo = async (page, lang) => {
+  if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('.lang-toggle');
+  await page.waitForFunction(l => document.documentElement.lang === l, lang);
 };

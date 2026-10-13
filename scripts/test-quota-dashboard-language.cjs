@@ -3,6 +3,7 @@
 // persistence and overflow at 1440/768/390/320px. Install Playwright or set PLAYWRIGHT_MODULE;
 // BROWSER_EXECUTABLE selects a system browser; SCREENSHOT_DIR captures pages.
 const fs = require('fs'), path = require('path');
+const switchLang = (async (page, lang) => { if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('.lang-toggle'); await page.waitForFunction(l => document.documentElement.lang === l, lang); });
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname, '..');
 const source = require('./lib/dashboard-html.cjs').readDashboardHTML(root);
@@ -43,12 +44,12 @@ const hangul = s => /[가-힣]/.test(s);
 
       // switch to the opposite language
       const target = wantInitial === 'en' ? 'ko' : 'en';
-      await page.click(`.lang-btn[data-lang="${target}"]`);
-      const pressed = await page.locator('.lang-btn[aria-pressed="true"]').getAttribute('data-lang');
+      await switchLang(page, target);
+      const pressed = await page.locator('.lang-toggle').getAttribute('data-current-lang');
       if (pressed !== target) fail.push(`${locale}: aria-pressed ${pressed} != ${target}`);
 
       for (const lang of [target, wantInitial]) {
-        if (lang !== target) await page.click(`.lang-btn[data-lang="${lang}"]`);
+        if (lang !== target) await switchLang(page, lang);
         const text = await page.evaluate(() => document.body.innerText + '\n' + [...document.querySelectorAll('[aria-label],[title]')].map(e => (e.getAttribute('aria-label') || '') + ' ' + (e.title || '')).join('\n') + '\n' + document.title);
         const stray = text.split('\n').filter(l => (lang === 'en' ? hangul(l) : false) && !/한국어|^\s*가(\s+A)?\s*$/.test(l));
         if (lang === 'en' && stray.length) fail.push(`${locale}: Korean left in EN UI: ${JSON.stringify(stray.slice(0, 6))}`);
@@ -59,7 +60,7 @@ const hangul = s => /[가-힣]/.test(s);
           const over = await page.evaluate(() => {
             const out = [];
             if (document.documentElement.scrollWidth > innerWidth + 1) out.push('page-h-scroll');
-            document.querySelectorAll('.account-card, .toolbar, .page-heading, .lang-switch, .fleet-chip, .quota-lock-state, .ag-family-section, .quota-value-row').forEach(e => {
+            document.querySelectorAll('.account-card, .toolbar, .page-heading, .lang-toggle, .fleet-chip, .quota-lock-state, .ag-family-section, .quota-value-row').forEach(e => {
               if (e.scrollWidth > e.clientWidth + 1) out.push(e.className.toString().slice(0, 40) + ' ' + e.scrollWidth + '>' + e.clientWidth + ' text=' + JSON.stringify(e.textContent.trim().replace(/\s+/g,' ').slice(0,40)) + ' fonts=' + document.fonts.status + ' suit=' + document.fonts.check('600 12px SUIT') + ' lang=' + document.documentElement.lang);
             });
             return out;
@@ -71,7 +72,7 @@ const hangul = s => /[가-힣]/.test(s);
         if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, `lang-${locale}-${lang}.png`), fullPage: true });
       }
       // reload keeps the explicit choice
-      await page.click('.lang-btn[data-lang="en"]');
+      await switchLang(page, 'en');
       await page.reload();
       await page.waitForSelector('.account-card');
       const after = await page.evaluate(() => [document.documentElement.lang, localStorage.getItem('cpa_plugin_lang')]);

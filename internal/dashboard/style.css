@@ -106,11 +106,10 @@
   }
   /* Keep language controls in normal filter flow, below the host's floating tools. */
   .filter-language-field { flex: 0 0 auto; min-width: 0; }
-  .lang-switch { display: inline-flex; align-items: stretch; gap: 2px; padding: 2px; height: var(--filter-control-height); border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); background: var(--filter-control-bg); }
-  .lang-btn { min-height: 0; height: 100%; min-width: 30px; padding: 0 8px; text-align: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-family: inherit; font-size: 0.8125rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
-  .lang-btn:hover { background: var(--filter-control-hover-bg); }
-  .lang-btn[aria-pressed="true"] { background: var(--accent-bg); color: var(--accent-hover); }
-  .lang-btn:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 1px; }
+  .lang-toggle { display: inline-flex; align-items: center; justify-content: center; width: var(--filter-control-height); height: var(--filter-control-height); padding: 0; border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); background: var(--filter-control-bg); color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+  .lang-toggle:hover { background: var(--filter-control-hover-bg); color: var(--accent-hover); }
+  .lang-toggle:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 1px; }
+  .lang-toggle svg { display: block; pointer-events: none; }
   /* Specificity beats .ui-ripple-host { position: relative } so the icon stays pinned to the card corner. */
   .account-card > .card-heading .card-refresh, .account-card .card-refresh.ui-ripple-host { position: absolute; top: 7px; right: 7px; z-index: 1; width: 28px; height: 28px; min-height: 28px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); }
   .card-refresh svg { width: 15px; height: 15px; flex-shrink: 0; }
