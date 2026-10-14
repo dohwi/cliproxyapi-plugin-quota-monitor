@@ -4,10 +4,11 @@ Plugin-local integration note; dashboard, host entry point, quota parser/client,
 
 ## HTTP/RPC compatibility
 
-- `GET /v0/resource/plugins/quota-monitor/data/accounts` is **snapshot-only**. Empty/expired caches and an in-flight collection never trigger management HTTP, provider probes, or an auth-directory scan. It remains HTTP 200 with `Cache-Control: no-store`.
-- `GET /v0/resource/plugins/quota-monitor/data/refresh?confirm=1` is an explicitly registered, unauthenticated refresh action. It requires exactly one confirmation value and enforces a 30-second cooldown; single-account refresh uses an opaque `account_key`. Confirmation is not authentication or CSRF protection. Restrict access to plugin resource routes at the host/reverse proxy; do not expose them to the public Internet.
-- `POST /v0/management/plugins/quota-monitor/refresh` remains the authenticated force path. The plugin relies on the host separating authenticated management dispatch from resource dispatch; it does not obtain management authorization from query/body fields.
-- Background collection fills the snapshot after configuration. Dashboard requests may warm an empty cache asynchronously; `/data/accounts` itself remains read-only. Authenticated management GET `/accounts` and `/status` trigger/coalesce collection when needed. If reconfigure invalidates a joined flight, management reads retry once against the new generation (within a bounded request deadline) instead of exposing the transient old-generation empty/stale result.
+- `/v0/resource/plugins/quota-monitor/...` is unauthenticated and serves **only** the static dashboard shell and fonts. There is no `data/accounts` or `data/refresh` resource route (HTTP 404 for every method), and serving the shell there never starts collection.
+- `GET /v0/management/plugins/quota-monitor/data/accounts` is **snapshot-only** and management-authenticated. Empty/expired caches and an in-flight collection never trigger management HTTP, provider probes, or an auth-directory scan. It remains HTTP 200 with `Cache-Control: no-store`, and its DTOs omit auth indexes.
+- `POST /v0/management/plugins/quota-monitor/data/refresh?confirm=1` is the dashboard's explicit, management-authenticated refresh action. It requires exactly one confirmation value and enforces a 30-second cooldown; single-account refresh uses an opaque `account_key`. `confirm=1` guards against stray calls; authentication is the host's management key. Other methods return 404.
+- `POST /v0/management/plugins/quota-monitor/refresh` remains the management force path. The plugin relies on the host enforcing management authentication before dispatch; it does not obtain management authorization from query/body fields.
+- Background collection fills the snapshot after configuration. Only the management-path dashboard request may warm an empty cache asynchronously (the unauthenticated resource shell never does); `/data/accounts` itself remains read-only. Authenticated management GET `/accounts` and `/status` trigger/coalesce collection when needed. If reconfigure invalidates a joined flight, management reads retry once against the new generation (within a bounded request deadline) instead of exposing the transient old-generation empty/stale result.
 - A force request joins an already-running collection rather than queueing another wave of probes. Otherwise it bypasses probe due times, except for disabled accounts and the 30-second manual-refresh cooldown. A cooldown response retains the previous error/stale result (it cannot turn a failed refresh into a success).
 
 ## Additive DTO fields
@@ -33,7 +34,7 @@ These checks do not make hostile kernel/filesystem operations interruptible and 
 
 ## Validation
 
-Focused regression coverage is in `collection_security_test.go`, `keyless_refresh_test.go`, and `background_collector_regression_test.go`; these cover the read-only snapshot, bounded explicit resource refresh, and background fill. Use:
+Focused regression coverage is in `collection_security_test.go`, `data_refresh_test.go`, and `background_collector_regression_test.go`; these cover the read-only snapshot, bounded explicit resource refresh, and background fill. Use:
 
 ```sh
 go test -race ./internal/plugin

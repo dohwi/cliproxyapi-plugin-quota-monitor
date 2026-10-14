@@ -74,7 +74,7 @@ func TestBackgroundCollectorImmediateFillAndResourceRepetitionNoProbes(t *testin
 
 	// Repeated passive resource queries
 	for i := 0; i < 20; i++ {
-		req, _ := json.Marshal(managementRequest{Method: http.MethodGet, Path: resourceBase + "/data/accounts"})
+		req, _ := json.Marshal(managementRequest{Method: http.MethodGet, Path: mgmtBase + "/data/accounts"})
 		code, res := decodeMgmt(t, handleManagementHandle(req))
 		if code != http.StatusOK {
 			t.Fatalf("resource call %d failed with code %d", i, code)
@@ -288,6 +288,7 @@ const ctx = {
 
 vm.createContext(ctx);
 vm.runInContext(script, ctx);
+ctx.mgmtKey="test-key";ctx.keyVerified=true;
 
 function assert(ok, msg) {
   if (!ok) throw new Error('FAIL: ' + msg);

@@ -337,6 +337,7 @@ const sandbox = {
 
 vm.createContext(sandbox);
 vm.runInContext(script, sandbox);
+sandbox.mgmtKey="test-key";sandbox.keyVerified=true;
 
 (async () => {
   // Test 1: snapshot_complete = false (in-flight collection)

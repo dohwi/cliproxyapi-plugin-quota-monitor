@@ -1,14 +1,18 @@
 name: Release
 
+# Push a vX.Y.Z tag to publish. The plugin is a CGO c-shared library, so every platform is
+# built and smoke-tested on its own native runner; the release is created once, only after
+# all five store platforms succeeded, so a partial release can never be published.
 on:
   push:
     tags: ['v*.*.*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  verify:
+    name: Verify (tag, tests, vulnerabilities)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -24,12 +28,76 @@ jobs:
         run: scripts/check-release-version.sh "${GITHUB_REF_NAME}"
       - name: Verify
         run: make verify
+      - name: Check reachable Go vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck ./...
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64, runner: ubuntu-24.04 }
+          - { goos: linux,   goarch: arm64, runner: ubuntu-24.04-arm }
+          - { goos: darwin,  goarch: amd64, runner: macos-15-intel }
+          - { goos: darwin,  goarch: arm64, runner: macos-15 }
+          - { goos: windows, goarch: amd64, runner: windows-2025 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.9'
+          cache-dependency-path: go.mod
+      - name: Windows toolchain (mingw-w64 gcc, 64-bit)
+        if: matrix.goos == 'windows'
+        run: |
+          # The runner's default gcc must be the 64-bit mingw one Go's cgo links with.
+          command -v gcc && gcc --version | head -1
+          gcc -dumpmachine | grep -q x86_64 || { echo "gcc is not x86_64 mingw" >&2; exit 1; }
+      - name: Confirm runner platform
+        run: |
+          echo "GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) CGO_ENABLED=$(go env CGO_ENABLED)"
+          [ "$(go env GOOS)" = "${{ matrix.goos }}" ] && [ "$(go env GOARCH)" = "${{ matrix.goarch }}" ]
       - name: Build and smoke-test the native plugin
-        run: make native-smoke
+        run: scripts/build-native.sh
       - name: Package for the CLIProxyAPI plugin store
-        run: scripts/package-release.sh "${GITHUB_REF_NAME}"
+        run: |
+          case "${{ matrix.goos }}" in linux) ext=so;; darwin) ext=dylib;; windows) ext=dll;; esac
+          scripts/package-release.sh "${GITHUB_REF_NAME}" "${{ matrix.goos }}" "${{ matrix.goarch }}" "artifacts/quota-monitor.${ext}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quota-monitor-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: quota-monitor-*
+          path: release
+          merge-multiple: true
+      - name: Verify all five platforms and write checksums.txt
+        run: scripts/make-checksums.sh "${GITHUB_REF_NAME}" release
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/quota-monitor_*_linux_amd64.zip dist/checksums.txt --title "${GITHUB_REF_NAME}" --generate-notes
+          gh release create "${GITHUB_REF_NAME}" release/*.zip release/checksums.txt \
+            --title "${GITHUB_REF_NAME}" --generate-notes --verify-tag

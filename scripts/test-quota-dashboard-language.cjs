@@ -5,6 +5,7 @@
 const fs = require('fs'), path = require('path');
 const switchLang = (async (page, lang) => { if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('.lang-toggle'); await page.waitForFunction(l => document.documentElement.lang === l, lang); });
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { seedKey } = require('./lib/seed-key.cjs');
 const root = path.resolve(__dirname, '..');
 const source = require('./lib/dashboard-html.cjs').readDashboardHTML(root);
 const verifyLanguagePlacement = require('./lib/host-toolbar.cjs');
@@ -24,6 +25,7 @@ const hangul = s => /[가-힣]/.test(s);
   try {
     for (const locale of ['en-US', 'ko-KR']) {
       const ctx = await browser.newContext({ locale, reducedMotion: 'reduce' });
+      await seedKey(ctx);
       const page = await ctx.newPage();
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));

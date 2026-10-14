@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	quotamonitor "quota-monitor/internal/quota"
@@ -276,13 +275,18 @@ func (r *Resolver) RefreshContext(ctx context.Context) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	// Open the directory and each child without following symlinks. openat binds
-	// children to this FD even if the configured directory is renamed mid-scan.
-	fd, err := syscall.Open(dir, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	// Open the directory as an os.Root and every child through it without following
+	// symlinks (see open.go). Children stay bound to this handle even if the
+	// configured directory is renamed or replaced mid-scan, on Linux, macOS and Windows.
+	root, err := openAuthRoot(dir)
 	if err != nil {
 		return false, errors.New("auth directory not accessible")
 	}
-	directory := os.NewFile(uintptr(fd), "auth-directory")
+	defer root.Close()
+	directory, err := root.Open(".")
+	if err != nil {
+		return false, errors.New("auth directory not accessible")
+	}
 	defer directory.Close()
 	entries, err := directory.ReadDir(maxAuthDirEntries + 1)
 	if err != nil && err != io.EOF {
@@ -332,7 +336,7 @@ func (r *Resolver) RefreshContext(ctx context.Context) (bool, error) {
 		if !strings.HasSuffix(name, ".json") {
 			continue
 		}
-		kind, immutableID, diskType := readAuthFileEndpointAt(fd, name)
+		kind, immutableID, diskType := readAuthFileEndpointAt(root, name)
 		newByName[name] = kind
 		plan := ""
 		if isCodexType(diskType) {
@@ -430,23 +434,22 @@ func codexPlanBase(name, plan string) (string, bool) {
 // type. All transient raw values are discarded before return; type is used
 // solely for the normalized Codex alias allowlist.
 func readAuthFileEndpointData(path string) (quotamonitor.EndpointKind, string, string) {
-	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	file, err := openAuthFileNoFollow(path)
 	if err != nil {
 		return quotamonitor.EndpointUnknown, "", ""
 	}
-	return readAuthEndpointFD(fd)
+	return readAuthEndpointFile(file)
 }
 
-func readAuthFileEndpointAt(dirFD int, name string) (quotamonitor.EndpointKind, string, string) {
-	fd, err := syscall.Openat(dirFD, name, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+func readAuthFileEndpointAt(root *os.Root, name string) (quotamonitor.EndpointKind, string, string) {
+	file, err := openChildNoFollow(root, name)
 	if err != nil {
 		return quotamonitor.EndpointUnknown, "", ""
 	}
-	return readAuthEndpointFD(fd)
+	return readAuthEndpointFile(file)
 }
 
-func readAuthEndpointFD(fd int) (quotamonitor.EndpointKind, string, string) {
-	file := os.NewFile(uintptr(fd), "auth-file")
+func readAuthEndpointFile(file *os.File) (quotamonitor.EndpointKind, string, string) {
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() > maxAuthFileSize {

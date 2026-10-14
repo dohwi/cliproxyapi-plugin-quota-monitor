@@ -1,40 +1,53 @@
 #!/usr/bin/env bash
-# Builds the CLIProxyAPI plugin-store release assets for linux/amd64:
-#   dist/<id>_<version>_linux_amd64.zip   (contains only <id>.so at the zip root)
-#   dist/checksums.txt                    (sha256sum format)
-# Usage: scripts/package-release.sh v0.1.0   (defaults to $GITHUB_REF_NAME)
-# Expects artifacts/<id>.so to be built already (make build).
+# Packages one platform's plugin library for the CLIProxyAPI plugin store:
+#   dist/quota-monitor_<version>_<goos>_<goarch>.zip   (only the library, at the zip root)
+# Usage: scripts/package-release.sh v0.2.0 <goos> <goarch> <library-path>
+#   e.g. scripts/package-release.sh v0.2.0 linux amd64 artifacts/quota-monitor.so
+# The library file name inside the zip is quota-monitor.so | quota-monitor.dylib | quota-monitor.dll by GOOS.
+# Merge the per-platform zips into one release with scripts/make-checksums.sh.
 set -euo pipefail
 
 id="quota-monitor"
-tag="${1:-${GITHUB_REF_NAME:-}}"
-[[ "$tag" =~ ^v[0-9]+(\.[0-9]+)+$ ]] || { echo "tag '$tag' must look like v0.1.0 (store requires dotted numeric versions)" >&2; exit 1; }
+tag="${1:-}"; goos="${2:-}"; goarch="${3:-}"; lib="${4:-}"
+[[ -n "$tag" && -n "$goos" && -n "$goarch" && -n "$lib" ]] || { echo "usage: $0 <tag> <goos> <goarch> <library>" >&2; exit 2; }
+[[ "$tag" =~ ^v[0-9]+(\.[0-9]+)+$ ]] || { echo "tag '$tag' must look like v0.2.0 (store requires dotted numeric versions)" >&2; exit 1; }
+case "$goos/$goarch" in
+  linux/amd64|linux/arm64|darwin/amd64|darwin/arm64|windows/amd64) ;;
+  *) echo "unsupported platform $goos/$goarch" >&2; exit 1 ;;
+esac
+case "$goos" in linux) ext=so ;; darwin) ext=dylib ;; windows) ext=dll ;; esac
 version="${tag#v}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-lib="$root/artifacts/$id.so"
-[[ -f "$lib" ]] || { echo "missing $lib; run make build first" >&2; exit 1; }
+[[ -f "$lib" ]] || { echo "missing $lib; build it first" >&2; exit 1; }
 
-# The official image is Debian bookworm (glibc 2.36). Refuse libraries that need newer symbols.
-max="$(objdump -T "$lib" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sed 's/GLIBC_//' | sort -V | tail -n1)"
-if [[ -n "$max" && "$(printf '%s\n2.36\n' "$max" | sort -V | tail -n1)" != "2.36" ]]; then
-  echo "library requires glibc $max, newer than the Debian bookworm 2.36 host image" >&2
-  exit 1
+# The official Linux image is Debian bookworm (glibc 2.36): refuse libraries needing newer symbols.
+if [[ "$goos" == linux ]]; then
+  max="$(objdump -T "$lib" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sed 's/GLIBC_//' | sort -V | tail -n1 || true)"
+  if [[ -n "$max" && "$(printf '%s\n2.36\n' "$max" | sort -V | tail -n1)" != "2.36" ]]; then
+    echo "library requires glibc $max, newer than the Debian bookworm 2.36 host image" >&2
+    exit 1
+  fi
 fi
 
-rm -rf "$root/dist"; mkdir -p "$root/dist"
-zip_name="${id}_${version}_linux_amd64.zip"
+mkdir -p "$root/dist"
+zip_name="${id}_${version}_${goos}_${goarch}.zip"
+rm -f "$root/dist/$zip_name"
 stage="$(mktemp -d)"; trap 'rm -rf "$stage"' EXIT
-install -m 755 "$lib" "$stage/$id.so"
-(cd "$stage" && python3 - "$root/dist/$zip_name" "$id.so" <<'PY'
+install -m 755 "$lib" "$stage/$id.$ext"
+python3 - "$root/dist/$zip_name" "$stage/$id.$ext" "$id.$ext" <<'PY'
 import sys, zipfile
-out, name = sys.argv[1:3]
+out, src, name = sys.argv[1:4]
+info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
+info.external_attr = 0o755 << 16
+info.compress_type = zipfile.ZIP_DEFLATED
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
-    info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
-    info.external_attr = 0o755 << 16
-    info.compress_type = zipfile.ZIP_DEFLATED
-    z.writestr(info, open(name, 'rb').read())
+    with open(src, 'rb') as f:
+        z.writestr(info, f.read())
 PY
-)
-(cd "$root/dist" && sha256sum "$zip_name" > checksums.txt && sha256sum -c checksums.txt)
-[[ "$(unzip -Z1 "$root/dist/$zip_name")" == "$id.so" ]] || { echo "zip must contain exactly $id.so at its root" >&2; exit 1; }
-echo "packaged $zip_name (glibc max ${max:-none})"
+python3 - "$root/dist/$zip_name" "$id.$ext" <<'PY'
+import sys, zipfile
+names = zipfile.ZipFile(sys.argv[1]).namelist()
+if names != [sys.argv[2]]:
+    sys.exit("zip must contain exactly %s at its root, got %r" % (sys.argv[2], names))
+PY
+echo "packaged $zip_name"

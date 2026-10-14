@@ -1,11 +1,11 @@
 #define _GNU_SOURCE
-#include <dlfcn.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+
+#include "loader.h"
 
 /* Keep this ABI declaration in lockstep with main.go. */
 typedef struct { void *ptr; size_t len; } buffer;
@@ -28,11 +28,22 @@ typedef struct {
 } plugin_api;
 typedef int (*plugin_init_fn)(host_api *, plugin_api *);
 
+#ifdef _WIN32
+#define strdup _strdup
+static DWORD WINAPI watchdog(LPVOID arg) {
+    (void)arg;
+    Sleep(20000);
+    fprintf(stderr, "quota native smoke timed out\n");
+    ExitProcess(124);
+    return 0;
+}
+#else
 static void timed_out(int signo) {
     (void)signo;
     fprintf(stderr, "quota native smoke timed out\n");
     _exit(124);
 }
+#endif
 
 static int contains(buffer out, const char *needle) {
     size_t n = strlen(needle);
@@ -62,40 +73,47 @@ static int call_and_check(plugin_api *p, const char *method, const char *json,
     return 0;
 }
 
-static int call_management(plugin_api *p, const char *path, const char *needle) {
+static int call_management_as(plugin_api *p, const char *method, const char *path, const char *needle) {
     char request[1024];
     int n = snprintf(request, sizeof(request),
-        "{\"Method\":\"GET\",\"Path\":\"%s\",\"Query\":{}}", path);
+        "{\"Method\":\"%s\",\"Path\":\"%s\",\"Query\":{}}", method, path);
     if (n < 0 || (size_t)n >= sizeof(request)) return 1;
     return call_and_check(p, "management.handle", request, (size_t)n, needle, 0);
 }
+static int call_management(plugin_api *p, const char *path, const char *needle) {
+    return call_management_as(p, "GET", path, needle);
+}
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    CreateThread(NULL, 0, watchdog, NULL, 0, NULL);
+#else
     signal(SIGALRM, timed_out);
-    alarm(10);
+    alarm(20);
+#endif
     if (argc != 2) {
-        fprintf(stderr, "usage: %s plugin.so\n", argv[0]);
+        fprintf(stderr, "usage: %s plugin-library\n", argv[0]);
         return 2;
     }
 
-    void *handle = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
+    lib_handle handle = lib_open(argv[1]);
     if (!handle) {
-        fprintf(stderr, "dlopen: %s\n", dlerror());
+        fprintf(stderr, "load library: %s\n", lib_error());
         return 3;
     }
-    plugin_init_fn init = (plugin_init_fn)dlsym(handle, "cliproxy_plugin_init");
-    plugin_free_fn exported_free = (plugin_free_fn)dlsym(handle, "cliproxyPluginFree");
-    plugin_shutdown_fn exported_shutdown = (plugin_shutdown_fn)dlsym(handle, "cliproxyPluginShutdown");
+    plugin_init_fn init = (plugin_init_fn)lib_sym(handle, "cliproxy_plugin_init");
+    plugin_free_fn exported_free = (plugin_free_fn)lib_sym(handle, "cliproxyPluginFree");
+    plugin_shutdown_fn exported_shutdown = (plugin_shutdown_fn)lib_sym(handle, "cliproxyPluginShutdown");
     if (!init || !exported_free || !exported_shutdown) {
-        fprintf(stderr, "dlsym required export: %s\n", dlerror());
-        dlclose(handle);
+        fprintf(stderr, "missing required export: %s\n", lib_error());
+        lib_close(handle);
         return 4;
     }
     plugin_api p = {0};
 
     if (init(NULL, NULL) == 0) {
         fprintf(stderr, "NULL plugin output was accepted\n");
-        dlclose(handle);
+        lib_close(handle);
         return 5;
     }
 
@@ -103,7 +121,7 @@ int main(int argc, char **argv) {
     host_api bad_host = {.abi_version = 99};
     if (init(&bad_host, &p) == 0) {
         fprintf(stderr, "incompatible host ABI was accepted\n");
-        dlclose(handle);
+        lib_close(handle);
         return 5;
     }
 
@@ -111,13 +129,13 @@ int main(int argc, char **argv) {
     if (init(NULL, &p) != 0 || p.abi_version != 1 || !p.call ||
         !p.free_buffer || !p.shutdown) {
         fprintf(stderr, "init failed or returned an incomplete API\n");
-        dlclose(handle);
+        lib_close(handle);
         return 6;
     }
     printf("INIT abi_version=%u\n", p.abi_version);
     if (p.call(NULL, NULL, 0, NULL) == 0) {
         fprintf(stderr, "NULL response was accepted\n");
-        dlclose(handle);
+        lib_close(handle);
         return 7;
     }
 
@@ -127,10 +145,20 @@ int main(int argc, char **argv) {
                        "/v0/management/plugins/quota-monitor/accounts", 0)) return 8;
     if (call_and_check(&p, "management.register", "{}", 2,
                        "\"Path\":\"/dashboard\"", 0)) return 9;
+    /* Dynamic data and the state-changing refresh are authenticated management routes. */
+    if (call_and_check(&p, "management.register", "{}", 2,
+                       "/v0/management/plugins/quota-monitor/data/accounts", 0)) return 18;
+    if (call_and_check(&p, "management.register", "{}", 2,
+                       "/v0/management/plugins/quota-monitor/data/refresh", 0)) return 18;
 
     if (call_management(&p, "/v0/management/plugins/quota-monitor/dashboard", "text/html")) return 10;
     if (call_management(&p, "/v0/management/plugins/quota-monitor/accounts", "\"StatusCode\":200")) return 11;
     if (call_management(&p, "/v0/management/plugins/quota-monitor/status", "\"StatusCode\":200")) return 12;
+    if (call_management(&p, "/v0/management/plugins/quota-monitor/data/accounts", "\"StatusCode\":200")) return 19;
+    /* The unauthenticated resource prefix must not serve data or run the refresh. */
+    if (call_management(&p, "/v0/resource/plugins/quota-monitor/data/accounts", "\"StatusCode\":404")) return 20;
+    if (call_management_as(&p, "GET", "/v0/resource/plugins/quota-monitor/data/refresh", "\"StatusCode\":404")) return 20;
+    if (call_management_as(&p, "POST", "/v0/resource/plugins/quota-monitor/data/refresh", "\"StatusCode\":404")) return 20;
 
     /* This must return an envelope, not abort the host or dereference NULL. */
     if (call_and_check(&p, "management.register", NULL, 0, "\"ok\":true", 0)) return 13;
@@ -148,11 +176,13 @@ int main(int argc, char **argv) {
     /* Exercise the independently resolved lifecycle export too. */
     exported_shutdown();
     printf("SHUTDOWN ok\n");
-    if (dlclose(handle) != 0) {
-        fprintf(stderr, "dlclose: %s\n", dlerror());
+    if (lib_close(handle) != 0) {
+        fprintf(stderr, "unload library: %s\n", lib_error());
         return 17;
     }
+#ifndef _WIN32
     alarm(0);
+#endif
     printf("NATIVE_SMOKE_PASS\n");
     return 0;
 }

@@ -55,6 +55,8 @@ func TestManagementFullRefreshIgnoresProbeDueAndRetainsCooldown(t *testing.T) {
 	}
 	for _, req := range []managementRequest{
 		{Method: http.MethodGet, Path: mgmtBase + "/refresh"},
+		{Method: http.MethodGet, Path: mgmtBase + "/data/refresh"},
+		{Method: http.MethodGet, Path: resourceBase + "/data/refresh"},
 		{Method: http.MethodPost, Path: resourceBase + "/data/refresh"},
 	} {
 		b, _ := json.Marshal(req)

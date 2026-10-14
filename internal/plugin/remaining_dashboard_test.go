@@ -17,7 +17,7 @@ const statuses=buttons.map(b=>{const n=node();n.attrs['data-refresh-status']=b.a
 const document={hidden:false,getElementById(id){if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)},createElement:node,createDocumentFragment:node,addEventListener(){},querySelectorAll(selector){return selector==='[data-refresh-account]'?buttons:selector==='[data-refresh-status]'?statuses:[]}};
 let calls=[],respond=async()=>({ok:true,status:200,json:async()=>({refreshed:true})});
 const ctx={console,document,Date:FakeDate,AbortController,setTimeout(fn,ms){const n=++id;timers.set(n,{fn,ms});return n},clearTimeout(id){timers.delete(id)},fetch(url,opts){calls.push({url,opts});return respond(url,opts)}};
-vm.createContext(ctx);vm.runInContext(script,ctx);ctx.loadDashboard=()=>{};
+vm.createContext(ctx);vm.runInContext(script,ctx);ctx.mgmtKey="test-key";ctx.keyVerified=true;ctx.loadDashboard=()=>{};
 assert(typeof ctx.renderQuotaOverview==='undefined'&&!html.includes('id="quotaOverview"'),'top overview removed');
 let resolve;respond=()=>new Promise(r=>resolve=r);
 const pending=ctx.refreshAccount('a&b');
@@ -35,7 +35,7 @@ respond=async()=>({ok:true,status:200,json:async()=>({refreshed:false,error:'ups
 assert(statuses[1].textContent.includes('이전 데이터')&&!statuses[1].textContent.includes('upstream-secret')&&buttons[1].disabled,'failed probe retained/sanitized/cooldown');
 clock+=31000;ctx.updateAccountRefreshButtons();assert(!buttons[0].disabled&&!buttons[1].disabled,'cooldowns expire');
 respond=async()=>({ok:false,status:404});await ctx.refreshAccount('sibling');assert(statuses[1].textContent.includes('전체 갱신'),'removed key guidance');
-assert(calls.every(c=>c.opts.credentials==='omit'&&c.opts.cache==='no-store'&&!c.opts.headers),'no credential leakage');
+assert(calls.every(c=>c.opts.credentials==='omit'&&c.opts.cache==='no-store'&&c.opts.headers.Authorization==='Bearer test-key'&&!c.url.includes('test-key')),'key only in the Authorization header, no cookies');
 assert((html.match(/fetch\(/g)||[]).length===2,'only snapshot and explicit refresh fetch');
 console.log('OK_REMAINING');
 `

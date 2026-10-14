@@ -2,7 +2,10 @@
 artifacts/
 dist/
 *.so
+*.dylib
+*.dll
 *.h
+!verification/loader.h
 *.test
 verification/native_smoke
 

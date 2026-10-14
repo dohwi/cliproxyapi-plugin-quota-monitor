@@ -42,7 +42,7 @@ const ctx = { console, document:doc, Date:FakeDate, AbortController,
   setTimeout(fn,ms) { const id = ++timerID; timers.set(id,{fn,ms}); return id; },
   clearTimeout(id) { timers.delete(id); }, fetch(url,options) { calls.push({url,options}); return fetchImpl(url,options); }
 };
-vm.createContext(ctx); vm.runInContext(script,ctx);
+vm.createContext(ctx); vm.runInContext(script,ctx); ctx.mgmtKey="test-key"; ctx.keyVerified=true;
 const el = id => doc.getElementById(id), btn = el('fullRefreshBtn');
 let snapshots = 0, filterRenders = 0;
 const realLoad = ctx.loadDashboard;
@@ -51,7 +51,7 @@ ctx.initLoadingState = () => {}; ctx.startResetCountdownTick = () => {};
 ctx.applyFilters = () => { filterRenders++; };
 ctx.selectedProvider = 'Codex'; ctx.selectedEndpoint = 'warp1'; el('statusFilter').value = 'limited';
 const cached = [{account_key:'retained',provider:'codex', windows:[]}]; ctx.cachedAccounts = cached;
-documentEvents.DOMContentLoaded();
+documentEvents.DOMContentLoaded(); ctx.mgmtKey = 'test-key'; ctx.keyVerified = true;
 assert(calls.length === 0, 'init must not POST');
 documentEvents.visibilitychange();
 ctx.scheduleNextPoll(1000); timers.get(ctx.pollTimer).fn();
@@ -63,8 +63,8 @@ const firstRefreshPromise = btn.onclick();
 assert(el('manualRefreshStatus').textContent === '', 'busy state uses button only and clears previous notices');
 assert(calls.length === 1 && btn.disabled && btn.textContent === '갱신 중…' && btn.attrs['aria-busy'] === 'true', 'busy action and accessibility');
 const first = calls[0];
-assert(first.url === '/v0/resource/plugins/quota-monitor/data/refresh?confirm=1' && first.options.method === 'GET', 'keyless refresh resource');
-assert(!first.options.headers, 'no authorization header');
+assert(first.url === '/v0/management/plugins/quota-monitor/data/refresh?confirm=1' && first.options.method === 'POST', 'authenticated management refresh');
+assert(first.options.headers && first.options.headers.Authorization === 'Bearer test-key', 'Bearer header carries the management key');
 assert(first.options.credentials === 'omit' && first.options.redirect === 'error' && first.options.cache === 'no-store', 'no cookies, redirects, or caching');
 assert(!first.options.body && first.url.endsWith('?confirm=1'), 'no filter/account parameters');
 assert(Array.from(timers.values()).some(t => t.ms === 60000), 'POST uses bounded 60s timeout');
@@ -101,7 +101,7 @@ for (const failure of [
   async()=>({ok:false,status:500,json:async()=>({error:failSecret})}),
   async()=>({ok:true,status:200,json:async()=>{throw new Error(failSecret)}}),
   async()=>({ok:true,status:200,json:async()=>({refreshed:false,error:failSecret})}),
-  async()=>({ok:false,status:403,json:async()=>({error:failSecret})})
+  async()=>({ok:false,status:502,json:async()=>({error:failSecret})})
 ]) {
   fetchImpl = failure;
   await ctx.refreshAllAccounts();
@@ -124,11 +124,11 @@ fetchImpl = async()=>({ok:true,status:200,json:async()=>({configured:true,snapsh
 ctx.populateProviderSegmented = () => {}; ctx.renderAccounts = () => {}; ctx.clearError = () => {};
 realLoad(false); await new Promise(setImmediate);
 const last = calls[calls.length-1];
-assert(last.url === '/v0/resource/plugins/quota-monitor/data/accounts' && !last.options.headers && !last.options.method, 'automatic GET never carries manual credential');
+assert(last.url === '/v0/management/plugins/quota-monitor/data/accounts' && !last.options.method && last.options.headers.Authorization === 'Bearer test-key', 'automatic GET reads the authenticated snapshot');
 assert(calls.filter(c => c.url.includes('/data/refresh')).length === postCount, 'automatic polling never adds force request');
-for (const forbidden of ['manualRefreshKey','manualRefreshDialog','manualRefreshPassword','Authorization','Bearer ','type="password"']) assert(!html.includes(forbidden), 'no credential requirement remains');
+for (const forbidden of ['manualRefreshKey','manualRefreshDialog','manualRefreshPassword']) assert(!html.includes(forbidden), 'no per-refresh credential dialog remains');
 assert(html.indexOf('id="resetFiltersBtn"') < html.indexOf('id="fullRefreshBtn"'), 'full refresh placed beside reset');
-for (const forbidden of ['sessionStorage','window.parent','postMessage']) assert(!script.includes(forbidden), 'no credential storage or implicit host bridge');
+for (const forbidden of ['window.parent','postMessage','localStorage.setItem(KEY']) assert(!script.includes(forbidden), 'no implicit host bridge or persistent key storage');
 assert((script.match(/localStorage/g)||[]).length === (script.match(/localStorage\.(?:getItem\(LANG_KEY\)|setItem\(LANG_KEY, lang\))/g)||[]).length && script.includes("var LANG_KEY = 'cpa_plugin_lang';"), 'localStorage is limited to the language preference key');
 console.log('OK_MANUAL_REFRESH');
 `
@@ -137,5 +137,41 @@ console.log('OK_MANUAL_REFRESH');
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "OK_MANUAL_REFRESH") {
 		t.Fatalf("manual refresh contract: %v\n%s", err, out)
+	}
+}
+
+// A 401/403 from the host means the management key is wrong or revoked: the dashboard
+// must drop it, stop polling and ask again instead of retrying (the host bans an IP after
+// five rejected attempts), and must never treat it as a generic refresh failure.
+func TestDashboardAuthRejectionDropsKeyAndStopsPolling(t *testing.T) {
+	script := `
+const vm=require('vm'),assert=(x,m)=>{if(!x)throw Error(m)};
+const js=process.argv[1].match(/<script>([\s\S]*?)<\/script>/)[1];
+const nodes=new Map(), timers=new Map(), store={};let tid=0, calls=0;
+const mk=()=>({style:{},textContent:'',value:'',setAttribute(){},getAttribute(){return null},classList:{add(){},remove(){}},focus(){},appendChild(){},addEventListener(){}});
+const doc={hidden:false,addEventListener(){},getElementById(id){if(!nodes.has(id))nodes.set(id,mk());return nodes.get(id)},createElement:mk,createDocumentFragment:mk};
+const ctx={console,document:doc,AbortController,Date,
+  sessionStorage:{getItem:k=>k in store?store[k]:null,setItem:(k,v)=>{store[k]=v},removeItem:k=>{delete store[k]}},
+  setTimeout(fn,ms){const n=++tid;timers.set(n,{fn,ms});return n},clearTimeout(n){timers.delete(n)},
+  fetch(){calls++;return Promise.resolve({ok:false,status:401,json:async()=>({error:'invalid management key'})})}};
+vm.createContext(ctx);vm.runInContext(js,ctx);
+ctx.mgmtKey='stale-key';ctx.keyVerified=true;store.cpa_quota_monitor_mgmt_key='stale-key';
+ctx.loadDashboard(true);await new Promise(setImmediate);
+assert(calls===1,'exactly one rejected request');
+assert(ctx.mgmtKey===''&&!store.cpa_quota_monitor_mgmt_key,'rejected key dropped from memory and storage');
+assert(doc.getElementById('authGate').style.display==='block'&&doc.getElementById('dashboardContent').style.display==='none','auth gate shown');
+assert(timers.size===0,'no poll scheduled after a rejection');
+ctx.loadDashboard(false);ctx.loadDashboard(true);await new Promise(setImmediate);
+assert(calls===1,'without a key no further request is sent');
+ctx.mgmtKey='another';ctx.keyVerified=false;
+ctx.fetch=()=>{calls++;return Promise.resolve({ok:false,status:403,json:async()=>({})})};
+ctx.loadDashboard(true);await new Promise(setImmediate);
+assert(calls===2&&ctx.mgmtKey===''&&!store.cpa_quota_monitor_mgmt_key,'403 handled like 401, key never stored');
+console.log('AUTH_REJECT_PASS');
+`
+	cmd := nodeDashboardCmd(t, "node", "(async()=>{"+script+"})().catch(e=>{console.error(e);process.exitCode=1})")
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "AUTH_REJECT_PASS") {
+		t.Fatalf("auth rejection contract: %v\n%s", err, out)
 	}
 }

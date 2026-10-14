@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const switchLang = (async (page, lang) => { if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('.lang-toggle'); await page.waitForFunction(l => document.documentElement.lang === l, lang); });
 const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { seedKey } = require('./lib/seed-key.cjs');
 const root = path.resolve(__dirname, '..');
 const source = require('./lib/dashboard-html.cjs').readDashboardHTML(root);
 const out = path.join(root, 'docs/assets');
@@ -41,6 +42,7 @@ const availability = [
 async function capture(browser, lang, kind) {
   const mobile = kind === 'mobile';
   const ctx = await browser.newContext({ locale: lang === 'en' ? 'en-US' : 'ko-KR', reducedMotion: 'reduce', viewport: mobile ? { width: 390, height: 900 } : { width: 1440, height: 1080 } });
+  await seedKey(ctx);
   const page = await ctx.newPage();
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());

@@ -9,20 +9,30 @@ import (
 	"quota-monitor/internal/dashboard"
 )
 
-// The dashboard must never persist credentials. The single permitted use of
-// browser storage is the language preference stored under LANG_KEY.
-func TestDashboardStorageLimitedToLanguagePreference(t *testing.T) {
+// The dashboard persists the language preference (localStorage, LANG_KEY) and, for the
+// current tab only, the management key (sessionStorage, KEY_STORAGE). The key must never
+// reach localStorage, which outlives the tab and is shared across tabs.
+func TestDashboardStorageContract(t *testing.T) {
 	html := dashboard.HTML
-	if strings.Contains(html, "sessionStorage") {
-		t.Fatal("dashboard must not use sessionStorage")
-	}
 	if !strings.Contains(html, "var LANG_KEY = 'cpa_plugin_lang';") {
 		t.Fatal("language preference key is missing or renamed")
+	}
+	if !strings.Contains(html, "var KEY_STORAGE = 'cpa_quota_monitor_mgmt_key';") {
+		t.Fatal("session key storage name is missing or renamed")
 	}
 	total := strings.Count(html, "localStorage")
 	allowed := regexp.MustCompile(`localStorage\.(?:getItem\(LANG_KEY\)|setItem\(LANG_KEY, lang\))`).FindAllString(html, -1)
 	if total != len(allowed) || total != 2 {
 		t.Fatalf("localStorage references = %d (allowed LANG_KEY accessors = %d, want exactly 2)", total, len(allowed))
+	}
+	sessionTotal := strings.Count(html, "sessionStorage")
+	sessionAllowed := regexp.MustCompile(`sessionStorage\.(?:getItem\(KEY_STORAGE\)|setItem\(KEY_STORAGE, key\)|removeItem\(KEY_STORAGE\))`).FindAllString(html, -1)
+	if sessionTotal != len(sessionAllowed) || sessionTotal != 3 {
+		t.Fatalf("sessionStorage references = %d (allowed KEY_STORAGE accessors = %d, want exactly 3)", sessionTotal, len(sessionAllowed))
+	}
+	// The key travels only in the Authorization header: never concatenated into a URL.
+	if n := len(regexp.MustCompile(`\+\s*mgmtKey`).FindAllString(html, -1)); n != 2 {
+		t.Errorf("mgmtKey concatenations = %d, want exactly 2 (the two Authorization headers)", n)
 	}
 }
 

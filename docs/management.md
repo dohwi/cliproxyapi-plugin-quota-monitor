@@ -24,9 +24,10 @@ supported provider endpoints. Authenticated management `GET /accounts` and
 `GET /status` own first cache fill; authenticated `POST /refresh` is the
 explicit force path. Automatic dashboard resource polling is snapshot-only and
 never requests a refresh/probe cycle. The toolbar's **전체 갱신** action explicitly
-calls keyless `GET /v0/resource/plugins/quota-monitor/data/refresh?confirm=1`.
-The deployed host supports only resource GET dispatch. This separate explicit
-action requires `confirm=1` (HTTP 400 otherwise); snapshot GETs remain read-only. See the root contract for the C ABI and
+calls the management-authenticated
+`POST /v0/management/plugins/quota-monitor/data/refresh?confirm=1`.
+This separate explicit action requires `confirm=1` (HTTP 400 otherwise);
+snapshot GETs remain read-only. See the root contract for the C ABI and
 resource boundary guarantees.
 
 Registered routes (host-required `/v0/management/` prefix):
@@ -34,6 +35,8 @@ Registered routes (host-required `/v0/management/` prefix):
 - `GET /v0/management/plugins/quota-monitor/status`
 - `GET /v0/management/plugins/quota-monitor/accounts`
 - `POST /v0/management/plugins/quota-monitor/refresh`
+- `GET /v0/management/plugins/quota-monitor/data/accounts` (sanitized dashboard snapshot)
+- `POST /v0/management/plugins/quota-monitor/data/refresh` (dashboard refresh action)
 
 A management read that races with `plugin.reconfigure` retries against the new
 configuration generation within a bounded request deadline, so the transient
@@ -112,7 +115,7 @@ The optional detail request shares the normal loopback `/management/api-call`, a
 - Each account card shows its own **last checked** time as plain secondary text from the newest valid account/window `observed_at` (falling back to `last_success`), including an exact Korean timestamp tooltip. Missing timestamps are explicit, observations at least 15 minutes old are visually aged, and observations at least 45 minutes old are labeled as old information.
 - When a card receives a newer provider observation, the card briefly flashes with a neutral blue market-ticker-style cue. Material quota, lock, availability, or credit changes retain their semantic green/amber/red cue and take precedence over the neutral synchronization cue. Reduced-motion preference disables the animation.
 - Management behavior: authenticated `GET /status` and `GET /accounts` collect when the cache is empty, at least **120 seconds** old, or an eligible account probe is due; authenticated `POST /refresh` forces collection, with a **30-second** force cooldown. Plugin startup/reconfigure launches the immediate background collection. The dashboard `/data/accounts` endpoint itself never refreshes upstream.
-- Manual browser refresh: **전체 갱신**, beside filter **초기화**, ignores the current Provider/Endpoint/status filters and explicitly calls keyless `GET /v0/resource/plugins/quota-monitor/data/refresh?confirm=1` (resource POST is unsupported by the deployed host). No browser credential or password dialog is used. Automatic polling, filter changes, and visibility events never call this action. The request rejects redirects, omits cookies, bypasses cache, and has a **60-second** browser timeout. The server globally reserves a **30-second** cooldown before collection, including failed and concurrent requests; additional requests return **HTTP 429** without upstream work. The UI disables the button during collection and for 30 seconds on success or HTTP 429. Anyone able to reach the resource route can request this bounded collection; the resource should therefore be protected by the deployment's network/access policy where needed. Host management authentication and the server-side loopback management key remain unchanged. Failures preserve the last displayed snapshot and show generic retry feedback. Disabled/unsupported accounts are not actively probed, at most **128** eligible accounts are probed per collection, and per-account failures or truncation do not imply fresh quota for every account.
+- Manual browser refresh: **전체 갱신**, beside filter **초기화**, ignores the current Provider/Endpoint/status filters and explicitly calls the management-authenticated `POST /v0/management/plugins/quota-monitor/data/refresh?confirm=1`, sending the management key entered in the dashboard's own key gate as an `Authorization: Bearer` header (HTTP 401/403 drops the key and re-opens the gate). Automatic polling, filter changes, and visibility events never call this action. The request rejects redirects, omits cookies, bypasses cache, and has a **60-second** browser timeout. The server globally reserves a **30-second** cooldown before collection, including failed and concurrent requests; additional requests return **HTTP 429** without upstream work. The UI disables the button during collection and for 30 seconds on success or HTTP 429. Only holders of the management key can request this bounded collection; the unauthenticated resource prefix cannot. The server-side loopback management key used for upstream calls is unchanged. Failures preserve the last displayed snapshot and show generic retry feedback. Disabled/unsupported accounts are not actively probed, at most **128** eligible accounts are probed per collection, and per-account failures or truncation do not imply fresh quota for every account.
 - Reset-credit UI is provider-independent: any account with a validated `reset_credits` DTO uses the same summary. Only confirmed provider reset-right APIs may populate it; quota reset timestamps, additional-usage money balances, and AI credits are not reset rights. Missing unsupported data is omitted, never invented as zero.
 - Reset-credit UI intentionally shows only the owned `available_count` (`리셋권 N장 보유`) and optional nearest expiry. `applicable_available_count` remains available in the data contract and snapshot diffing but is not displayed, because upstream does not provide enough reason context for a clear user-facing explanation.
 - API credits disambiguation: `has_credits: false` / `balance: 0` is safely displayed as `잔액 0`, distinct from uncollected/null state.

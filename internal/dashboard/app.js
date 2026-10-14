@@ -11,6 +11,58 @@ var manualRefreshCooldownUntil = 0;
 var manualRefreshButtonTimer = null;
 var manualRefreshSnapshotPending = false;
 var MANUAL_REFRESH_TIMEOUT_MS = 60000;
+// ── Management authentication ───────────────────────────────────────────────
+// Quota data and the refresh action live under /v0/management/..., which the host
+// protects with the management key. The page itself is an unauthenticated static
+// shell, so the operator types the key once; it is kept only in this tab's session
+// storage and sent as a Bearer header (never in a URL). The host counts every
+// rejected request toward a 5-strike IP ban, so a key is stored only after the host
+// accepted it and, without a key, no data request is sent at all.
+var MGMT_BASE = '/v0/management/plugins/quota-monitor';
+var KEY_STORAGE = 'cpa_quota_monitor_mgmt_key';
+var mgmtKey = '';
+var keyVerified = false;
+function readStoredKey() { try { return sessionStorage.getItem(KEY_STORAGE) || ''; } catch (e) { return ''; } }
+function writeStoredKey(key) { try { if (key) sessionStorage.setItem(KEY_STORAGE, key); else sessionStorage.removeItem(KEY_STORAGE); } catch (e) {} }
+function authError() { var err = new Error('auth'); err.authRequired = true; return err; }
+function noteKeyAccepted() { if (!keyVerified) { keyVerified = true; writeStoredKey(mgmtKey); } }
+function showAuthGate(messageKey) {
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  snapshotEpoch++;
+  isFetching = false;
+  isManualRefreshing = false;
+  var gate = document.getElementById('authGate'), content = document.getElementById('dashboardContent');
+  var message = document.getElementById('authMessage'), input = document.getElementById('authKeyInput');
+  var errorBox = document.getElementById('errorBox'), staleBox = document.getElementById('staleNoticeBox');
+  if (errorBox) { errorBox.style.display = 'none'; errorBox.textContent = ''; }
+  if (staleBox) staleBox.style.display = 'none';
+  if (content) content.style.display = 'none';
+  if (gate) gate.style.display = 'block';
+  if (message) { message.textContent = messageKey ? t(messageKey) : ''; message.style.display = messageKey ? 'block' : 'none'; }
+  if (input) { input.value = ''; try { input.focus(); } catch (e) {} }
+}
+function hideAuthGate() {
+  var gate = document.getElementById('authGate');
+  if (gate) gate.style.display = 'none';
+}
+function dropKeyAndPrompt() { mgmtKey = ''; keyVerified = false; writeStoredKey(''); showAuthGate('auth.invalid'); }
+function authGateOpen() { var gate = document.getElementById('authGate'); return !!gate && gate.style.display !== 'none'; }
+function initAuthGate() {
+  mgmtKey = readStoredKey();
+  keyVerified = !!mgmtKey; // only keys the host already accepted are ever stored
+  var form = document.getElementById('authForm');
+  if (!form) return;
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var input = document.getElementById('authKeyInput'), value = input ? String(input.value || '').trim() : '';
+    if (!value) { showAuthGate('auth.empty'); return; }
+    mgmtKey = value; keyVerified = false;
+    if (input) input.value = '';
+    hideAuthGate();
+    cachedAccounts = [];
+    loadDashboard(true);
+  });
+}
 var isDisplayingStale = false;
 var prevHealthFailures = null;
 var resetCountdownTimer = null;
@@ -79,6 +131,12 @@ var I18N = {
     'av.unavailable': '사용 불가',
     'av.unknown': '상태 미확인',
     'err.noData': '데이터 사용 불가',
+    'auth.title': '관리 키가 필요합니다',
+    'auth.desc': '쿼터 데이터는 관리 인증이 필요합니다. 관리 키는 이 탭의 세션에만 보관되며 주소나 서버에 기록되지 않습니다.',
+    'auth.label': '관리 키',
+    'auth.submit': '확인',
+    'auth.empty': '관리 키를 입력하세요.',
+    'auth.invalid': '관리 키가 올바르지 않거나 접근이 거부되었습니다. 다시 입력하세요.',
     'err.load': '데이터 로드 실패: {e}',
     'err.api': 'API 호출 실패 ({s})',
     'err.empty': '데이터 없음',
@@ -206,6 +264,12 @@ var I18N = {
     'av.unavailable': 'Unavailable',
     'av.unknown': 'Status unknown',
     'err.noData': 'Data unavailable',
+    'auth.title': 'Management key required',
+    'auth.desc': 'Quota data requires management authentication. The key is kept only in this tab\'s session and is never written to the address or the server.',
+    'auth.label': 'Management key',
+    'auth.submit': 'Continue',
+    'auth.empty': 'Enter the management key.',
+    'auth.invalid': 'The management key is invalid or access was denied. Enter it again.',
     'err.load': 'Failed to load data: {e}',
     'err.api': 'API request failed ({s})',
     'err.empty': 'No data',
@@ -908,6 +972,7 @@ async function refreshAccounts(accountKey) {
     return;
   }
 
+  var authRejected = false;
   isManualRefreshing = true;
   refreshingAccountKey = accountKey;
   updateManualRefreshButton();
@@ -921,14 +986,18 @@ async function refreshAccounts(accountKey) {
     controller.abort();
   }, MANUAL_REFRESH_TIMEOUT_MS);
   try {
-    // Host resources support GET only; this confirmed action is never polled.
-    var response = await fetch('/v0/resource/plugins/quota-monitor/data/refresh?confirm=1' + (accountKey ? '&account_key=' + encodeURIComponent(accountKey) : ''), {
-      method: 'GET',
+    // Authenticated management POST; this confirmed action is never polled.
+    if (!mgmtKey) throw authError();
+    var response = await fetch(MGMT_BASE + '/data/refresh?confirm=1' + (accountKey ? '&account_key=' + encodeURIComponent(accountKey) : ''), {
+      method: 'POST',
       redirect: 'error',
       cache: 'no-store',
       credentials: 'omit',
+      headers: { 'Authorization': 'Bearer ' + mgmtKey },
       signal: controller.signal
     });
+    if (response.status === 401 || response.status === 403) throw authError();
+    noteKeyAccepted();
     if (response.status === 429) {
       cooldown();
       report(t('refresh.rate'));
@@ -959,13 +1028,15 @@ async function refreshAccounts(accountKey) {
     if (data.stale === true) message += t('refresh.staleSuffix');
     report(message, data.truncated === true || data.stale === true ? 0 : 3000);
   } catch (err) {
-    report(timedOut
+    if (err && err.authRequired) { authRejected = true; }
+    else report(timedOut
       ? t('refresh.timeout')
       : t('refresh.failed'));
   } finally {
     clearTimeout(timer);
     isManualRefreshing = false;
     refreshingAccountKey = null;
+    if (authRejected) { dropKeyAndPrompt(); return; }
     updateManualRefreshButton();
     snapshotEpoch++;
     manualRefreshSnapshotPending = true;
@@ -1120,6 +1191,11 @@ function acceptSnapshotVersion(data) {
 
 function loadDashboard(isInitial) {
   if (isFetching) return;
+  if (!mgmtKey) {
+    // Keep what the operator is typing if the gate is already open (e.g. tab refocus).
+    if (!authGateOpen()) showAuthGate('');
+    return;
+  }
   var requestEpoch = snapshotEpoch;
   manualRefreshSnapshotPending = false;
   isFetching = true;
@@ -1144,7 +1220,8 @@ function loadDashboard(isInitial) {
     clearFetchTimer();
     isFetching = false;
     var c = document.getElementById('dashboardContent');
-    if (c) {
+    // A rejected key opened the auth gate; the dashboard must stay hidden behind it.
+    if (c && !authGateOpen()) {
       c.style.display = 'block';
       c.setAttribute('aria-busy', 'false');
     }
@@ -1167,11 +1244,12 @@ function loadDashboard(isInitial) {
     scheduleNextPoll(POLL_FALLBACK_STALE_MS);
   }
 
-  fetch('/v0/resource/plugins/quota-monitor/data/accounts', { cache: 'no-store', signal: controller ? controller.signal : undefined })
+  fetch(MGMT_BASE + '/data/accounts', { cache: 'no-store', credentials: 'omit', redirect: 'error', headers: { 'Authorization': 'Bearer ' + mgmtKey }, signal: controller ? controller.signal : undefined })
     .then(function(res) {
       clearFetchTimer();
+      if (res.status === 401 || res.status === 403) throw authError();
       if (!res.ok) throw new Error(t('err.api', { s: res.status }));
-      return res.json();
+      return res.json().then(function(data) { noteKeyAccepted(); return data; });
     })
     .then(function(data) {
       if (!data) {
@@ -1289,6 +1367,7 @@ function loadDashboard(isInitial) {
     })
     .catch(function(err) {
       clearFetchTimer();
+      if (err && err.authRequired) { dropKeyAndPrompt(); return; }
       if (requestEpoch !== snapshotEpoch) { scheduleNextPoll(POLL_IN_PROGRESS_MS); return; }
       var msg = err && err.message ? err.message : (err && err.name === 'AbortError' ? t('err.timeout') : 'unknown');
       handleFailure(msg);
@@ -1949,5 +2028,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  initAuthGate();
   loadDashboard(true);
 });

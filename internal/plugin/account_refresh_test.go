@@ -14,7 +14,7 @@ import (
 )
 
 func cardRefreshRequest(key string) []byte {
-	raw, _ := json.Marshal(managementRequest{Method: "GET", Path: resourceBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}, "account_key": {key}}})
+	raw, _ := json.Marshal(managementRequest{Method: "POST", Path: mgmtBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}, "account_key": {key}}})
 	return raw
 }
 
@@ -82,7 +82,7 @@ func TestCardRefreshOnlyProbesTargetAndPreservesSnapshot(t *testing.T) {
 			if !fails && (got[0].ObservedAt == nil || *got[0].Windows[0].RemainingPercent != 80) {
 				t.Fatalf("target not refreshed %#v", got[0])
 			}
-			if strings.Contains(string(handleManagementHandle(request(resourceBase+"/data/accounts"))), "upstream-secret") {
+			if strings.Contains(string(handleManagementHandle(request(mgmtBase+"/data/accounts"))), "upstream-secret") {
 				t.Fatal("upstream secret leaked")
 			}
 			code, _ = decodeMgmt(t, handleManagementHandle(cardRefreshRequest(accounts[0].AccountKey)))
@@ -103,7 +103,7 @@ func TestCardRefreshOnlyProbesTargetAndPreservesSnapshot(t *testing.T) {
 
 func TestCardRefreshConfirmationAndBusy(t *testing.T) {
 	reset(t)
-	raw, _ := json.Marshal(managementRequest{Method: "GET", Path: resourceBase + "/data/refresh", Query: map[string][]string{"account_key": {"a"}}})
+	raw, _ := json.Marshal(managementRequest{Method: "POST", Path: mgmtBase + "/data/refresh", Query: map[string][]string{"account_key": {"a"}}})
 	if code, _ := decodeMgmt(t, handleManagementHandle(raw)); code != 400 {
 		t.Fatal("unconfirmed accepted")
 	}
@@ -121,7 +121,7 @@ func TestCardRefreshConfirmationAndBusy(t *testing.T) {
 	if code, _ := decodeMgmt(t, handleManagementHandle(cardRefreshRequest("native"))); code != 422 {
 		t.Fatal("unsupported provider accepted")
 	}
-	raw, _ = json.Marshal(managementRequest{Method: "GET", Path: resourceBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}, "account_key": {"a", "native"}}})
+	raw, _ = json.Marshal(managementRequest{Method: "POST", Path: mgmtBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}, "account_key": {"a", "native"}}})
 	if code, _ := decodeMgmt(t, handleManagementHandle(raw)); code != 400 {
 		t.Fatal("ambiguous target accepted")
 	}

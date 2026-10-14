@@ -25,31 +25,33 @@ Antigravity, and official Claude OAuth). Active probes are:
 - optional enrichment: probe failure does not discard a successful passive
   snapshot.
 
-The resource/dashboard data route is a read-only view of the retained safe
-snapshot. It never triggers collection, provider probes, or auth-directory
-scans. Authenticated management `GET /accounts` and `GET /status` own cache
-fill; authenticated `POST /refresh` is the explicit force path. Resource
-responses contain only sanitized account DTOs and enum-valued endpoint metadata.
-The dashboard toolbar's **전체 갱신** button explicitly uses keyless
-`GET /v0/resource/plugins/quota-monitor/data/refresh?confirm=1`, independent of
-filters. The deployed host only dispatches resource GETs; this separate action
-requires explicit `confirm=1` (HTTP 400 otherwise). No password dialog or browser
-credentials are involved. Automatic snapshot polling never calls this action. The server globally reserves the 30-second
-cooldown before collection, including failed and concurrent requests; additional
-requests return HTTP 429 without upstream work. Existing eligibility, deadlines,
-and probe caps remain. Anyone able to reach this resource can trigger a bounded
-refresh; deployment-level network/access restrictions should be used where
-needed. Host management authentication and the server-side loopback key remain.
+The dashboard data route, `GET /v0/management/plugins/quota-monitor/data/accounts`,
+is a read-only view of the retained safe snapshot and requires the management key.
+It never triggers collection, provider probes, or auth-directory scans.
+Authenticated management `GET /accounts` and `GET /status` own cache fill;
+authenticated `POST /refresh` is the explicit force path. Dashboard responses
+contain only sanitized account DTOs and enum-valued endpoint metadata.
+The dashboard toolbar's **전체 갱신** button explicitly uses the authenticated
+`POST /v0/management/plugins/quota-monitor/data/refresh?confirm=1`, independent of
+filters, and requires explicit `confirm=1` (HTTP 400 otherwise). The browser sends
+the management key typed into the dashboard's own gate as an `Authorization:
+Bearer` header (never in a URL), keeps it in the tab's `sessionStorage` once the
+host accepted it, and drops it on HTTP 401/403. Automatic snapshot polling never
+calls this action. The server globally reserves the 30-second cooldown before
+collection, including failed and concurrent requests; additional requests return
+HTTP 429 without upstream work. Existing eligibility, deadlines, and probe caps
+remain. The unauthenticated `/v0/resource/...` prefix carries no data and cannot
+trigger a refresh.
 
 ### Atomic Initial Snapshot Contract (v8.2.1)
 
 To prevent empty UI rendering or partial flicker where plan badges, quotas, or
 credits update piece-by-piece:
-- The resource snapshot exposes `snapshot_complete: true` only after an
+- The dashboard snapshot exposes `snapshot_complete: true` only after an
   authenticated collection successfully commits a complete generation containing
   auth-files scanning, plan resolution, active provider quota, and Codex usage
   enrichment.
-- During in-flight collection or before initial collection completes, the resource
+- During in-flight collection or before initial collection completes, the snapshot
   returns `snapshot_complete: false` and the dashboard holds its skeleton view
   without committing partial data into `cachedAccounts`.
 - If an update fails or times out, the dashboard retains the previous complete
@@ -165,11 +167,14 @@ The host registers these management routes:
 - `GET /v0/management/plugins/quota-monitor/accounts`
 - `POST /v0/management/plugins/quota-monitor/refresh`
 - `GET /v0/management/plugins/quota-monitor/dashboard`
+- `GET /v0/management/plugins/quota-monitor/data/accounts`
+- `POST /v0/management/plugins/quota-monitor/data/refresh`
 
-The browser-navigable resource registration includes `/dashboard`; its
-internal read-only data/assets routes are dispatched through the same plugin
-management handler. Host management authentication remains the trust boundary.
-The plugin does not implement a second client-authentication layer.
+The browser-navigable resource registration includes `/dashboard` and the font
+assets only (static, unauthenticated). The data routes `GET /data/accounts` and
+`POST /data/refresh` are registered as management routes and so sit behind host
+management authentication, which remains the trust boundary. The plugin does not
+implement a second client-authentication layer.
 
 ## 3. RPC envelopes and response safety
 

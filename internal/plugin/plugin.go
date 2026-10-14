@@ -24,7 +24,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.1.1"
+	pluginVersion             = "0.2.0"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -682,9 +682,9 @@ var resourceDashboard = resourceRoute{
 	Description: "OAuth 계정별 남은 쿼터 및 상태 모니터",
 }
 
+// /v0/resource/... is unauthenticated, so it only serves the static page shell and
+// fonts. Quota data and the refresh action live under /v0/management/....
 var hiddenResourceRoutes = []resourceRoute{
-	{Path: "/data/accounts", Menu: "", Description: "", Method: "GET"},
-	{Path: "/data/refresh", Menu: "", Description: "", Method: "GET"},
 	{Path: "/assets/manrope-variable.woff2", Menu: "", Description: "", Method: "GET"},
 	{Path: "/assets/suit-regular.woff2", Menu: "", Description: "", Method: "GET"},
 	{Path: "/assets/suit-semibold.woff2", Menu: "", Description: "", Method: "GET"},
@@ -975,7 +975,7 @@ func opaqueRunID(generation, runID uint64) string {
 
 func handleManagementRegister() []byte {
 	resources := append([]resourceRoute{resourceDashboard}, hiddenResourceRoutes...)
-	return OKEnvelope(map[string]any{"routes": []mgmtRoute{{"GET", mgmtBase + "/status"}, {"GET", mgmtBase + "/accounts"}, {"POST", mgmtBase + "/refresh"}, {"GET", mgmtBase + "/dashboard"}}, "resources": resources})
+	return OKEnvelope(map[string]any{"routes": []mgmtRoute{{"GET", mgmtBase + "/status"}, {"GET", mgmtBase + "/accounts"}, {"POST", mgmtBase + "/refresh"}, {"GET", mgmtBase + "/dashboard"}, {"GET", mgmtBase + "/data/accounts"}, {"POST", mgmtBase + "/data/refresh"}}, "resources": resources})
 }
 
 type managementRequest struct {
@@ -996,15 +996,16 @@ func handleManagementHandle(raw []byte) []byte {
 		return mgmtResponse(400, map[string]string{"error": "bad request"})
 	}
 	method, path := strings.ToUpper(strings.TrimSpace(req.Method)), strings.TrimRight(strings.TrimSpace(req.Path), "/")
-	if method == "GET" && path == resourceBase+"/data/accounts" {
-		// Resource routes have no management authentication: snapshot only, even
-		// when empty, expired, forced, or another collection is in flight.
+	if method == "GET" && path == mgmtBase+"/data/accounts" {
+		// Dashboard data: sanitized (no auth_index), snapshot only, even when empty,
+		// expired, forced, or another collection is in flight. Management-authenticated.
 		return addNoStore(mgmtResponse(200, resourceSnapshot()))
 	}
 
-	if method == "GET" && path == resourceBase+"/data/refresh" {
-		// The current host only dispatches resource GETs. This separate explicit
-		// action requires a confirmation query; snapshot GETs remain read-only.
+	if method == "POST" && path == mgmtBase+"/data/refresh" {
+		// Explicit dashboard refresh (management-authenticated) with a global
+		// cooldown; it requires a confirmation query so a stray call never fans out
+		// upstream work. Snapshot GETs remain read-only.
 		if values := req.Query["confirm"]; len(values) != 1 || values[0] != "1" {
 			return addNoStore(mgmtResponse(400, map[string]string{"error": "explicit confirmation required"}))
 		}
@@ -1063,14 +1064,18 @@ func handleManagementHandle(raw []byte) []byte {
 	case resourceBase + "/assets/suit-semibold.woff2":
 		return OKEnvelope(managementResponse{StatusCode: 200, Headers: map[string][]string{"Content-Type": {"font/woff2"}, "Cache-Control": {"public, max-age=31536000, immutable"}}, Body: dashboard.SUITSemibold})
 	case mgmtBase + "/dashboard", resourceBase + "/dashboard", "/dashboard":
-		st := state
-		st.mu.Lock()
-		shouldWarm := st.configured && len(st.last) == 0 && st.flight == nil
-		st.mu.Unlock()
-		if shouldWarm {
-			go func() {
-				_ = collectManagement(false)
-			}()
+		// The resource form is unauthenticated, so it must never start upstream
+		// work. Only the authenticated management form may warm an empty cache.
+		if path != resourceBase+"/dashboard" {
+			st := state
+			st.mu.Lock()
+			shouldWarm := st.configured && len(st.last) == 0 && st.flight == nil
+			st.mu.Unlock()
+			if shouldWarm {
+				go func() {
+					_ = collectManagement(false)
+				}()
+			}
 		}
 		return OKEnvelope(managementResponse{
 			StatusCode: 200,

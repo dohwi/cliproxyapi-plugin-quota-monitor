@@ -112,7 +112,7 @@ func TestRegressionDashboardHTMLFeatures(t *testing.T) {
 	for _, forbiddenUI := range []string{
 		"운영 상태", "op-panel", "quota-ring-arc", "quota-group-badge", "quota-bar-track", "role=\"meter\"",
 		"badge-current", "--current-badge-", "최근 토큰 사용 계정",
-		"autoRefreshSelect", "qm_auto_refresh_interval", "sessionStorage", "setInterval",
+		"autoRefreshSelect", "qm_auto_refresh_interval", "setInterval",
 		"자동 갱신",
 		"usage-audit", "Promise.allSettled", "오늘 기록 없음", "오늘 사용량", "오늘 요청",
 	} {
@@ -125,8 +125,11 @@ func TestRegressionDashboardHTMLFeatures(t *testing.T) {
 		t.Errorf("dashboard.HTML fetch calls = %d, want 2 (snapshot and explicit authenticated refresh)", got)
 	}
 
-	if !strings.Contains(dashboard.HTML, "/v0/resource/plugins/quota-monitor/data/accounts") {
-		t.Errorf("dashboard.HTML missing resource URL: /v0/resource/plugins/quota-monitor/data/accounts")
+	if !strings.Contains(dashboard.HTML, "MGMT_BASE + '/data/accounts'") {
+		t.Errorf("dashboard.HTML must read the snapshot from the authenticated management route")
+	}
+	if strings.Contains(dashboard.HTML, "/v0/resource/plugins/quota-monitor/data") {
+		t.Errorf("dashboard.HTML must not call the unauthenticated /v0/resource prefix for data")
 	}
 }
 

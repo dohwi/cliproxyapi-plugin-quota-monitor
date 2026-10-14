@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestResourceRefreshKeylessGlobalCooldown(t *testing.T) {
+func TestDataRefreshGlobalCooldownIsManagementPOST(t *testing.T) {
 	for _, upstreamFails := range []bool{false, true} {
 		t.Run(map[bool]string{false: "success", true: "failure"}[upstreamFails], func(t *testing.T) {
 			reset(t)
@@ -34,7 +34,7 @@ func TestResourceRefreshKeylessGlobalCooldown(t *testing.T) {
 					_, _ = w.Write([]byte(`[]`))
 				}
 			})
-			raw, _ := json.Marshal(managementRequest{Method: "GET", Path: resourceBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}}})
+			raw, _ := json.Marshal(managementRequest{Method: "POST", Path: mgmtBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}}})
 			var wg sync.WaitGroup
 			codes := make(chan int, 12)
 			for i := 0; i < cap(codes); i++ {
@@ -71,7 +71,7 @@ func TestResourceRefreshKeylessGlobalCooldown(t *testing.T) {
 			if accepted != 1 || limited != 11 || lists.Load() != 1 {
 				t.Fatalf("global reservation failed: accepted=%d limited=%d lists=%d", accepted, limited, lists.Load())
 			}
-			missing, _ := json.Marshal(managementRequest{Method: "GET", Path: resourceBase + "/data/refresh"})
+			missing, _ := json.Marshal(managementRequest{Method: "POST", Path: mgmtBase + "/data/refresh"})
 			if code, _ := decodeMgmt(t, handleManagementHandle(missing)); code != 400 {
 				t.Fatalf("unconfirmed refresh accepted: %d", code)
 			}
@@ -83,8 +83,8 @@ func TestResourceRefreshKeylessGlobalCooldown(t *testing.T) {
 			if !upstreamFails && probes.Load() != 2 {
 				t.Fatalf("force refresh must probe: %d", probes.Load())
 			}
-			for _, method := range []string{"POST", "HEAD", "PUT", "DELETE"} {
-				b, _ := json.Marshal(managementRequest{Method: method, Path: resourceBase + "/data/refresh"})
+			for _, method := range []string{"GET", "HEAD", "PUT", "DELETE"} {
+				b, _ := json.Marshal(managementRequest{Method: method, Path: mgmtBase + "/data/refresh"})
 				if code, _ := decodeMgmt(t, handleManagementHandle(b)); code != 404 {
 					t.Fatalf("refresh accepts %s", method)
 				}

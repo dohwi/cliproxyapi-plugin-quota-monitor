@@ -1,11 +1,12 @@
 # Quota remaining overview and account refresh
 
-The quota-monitor plugin exposes its cached quota data to the dashboard without
-requiring a management key in the browser. Snapshot reads remain read-only.
+The quota-monitor plugin serves its cached quota data to the dashboard through
+management-authenticated routes (the dashboard asks the operator for the
+management key). Snapshot reads remain read-only.
 
 ## Snapshot
 
-`GET /v0/resource/plugins/quota-monitor/data/accounts`
+`GET /v0/management/plugins/quota-monitor/data/accounts`
 
 In addition to the existing account windows, the response includes a server-side
 `overview` grouped by provider and model family. It covers all non-disabled
@@ -18,13 +19,13 @@ This is quota utilization, not an estimate of remaining tokens or money.
 
 ## Explicit refresh
 
-- All accounts: `GET /v0/resource/plugins/quota-monitor/data/refresh?confirm=1`
-- One account: `GET /v0/resource/plugins/quota-monitor/data/refresh?confirm=1&account_key=<URL-encoded snapshot key>`
-- Authenticated management equivalent: `POST /v0/management/plugins/quota-monitor/refresh?account_key=<key>`
+- All accounts: `POST /v0/management/plugins/quota-monitor/data/refresh?confirm=1`
+- One account: `POST /v0/management/plugins/quota-monitor/data/refresh?confirm=1&account_key=<URL-encoded snapshot key>`
+- Management force path: `POST /v0/management/plugins/quota-monitor/refresh?account_key=<key>`
 
-The resource host currently supports GET dispatch only, so the confirmed resource
-refresh is an explicit action and must never be automatically polled. The key is
-an existing opaque snapshot identity, not an auth index, token or upstream URL.
+The confirmed refresh is an explicit action and must never be automatically
+polled. The key is an existing opaque snapshot identity, not an auth index, token
+or upstream URL.
 
 An individual refresh probes only that account and retains every other account's
 data. It does not scan the auth directory, refresh account inventory or renew the
@@ -36,7 +37,7 @@ Individual refreshes have a 30-second per-account cooldown, including failures.
 They share the collection flight with background/full refresh work to prevent
 older batches overwriting the account patch. A busy collection returns `409`;
 unknown keys return `404`, unsupported/disabled accounts `422`, cooldown `429`,
-and an unconfigured plugin `503`. Malformed or unconfirmed resource requests
+and an unconfigured plugin `503`. Malformed or unconfirmed requests
 return `400`. A completed attempt returns `200` with `refreshed: true|false`;
 clients must inspect this field, not just HTTP success. Upstream error details
 are not returned.

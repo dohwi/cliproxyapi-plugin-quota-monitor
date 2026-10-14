@@ -259,7 +259,7 @@ func TestRoutesAndMetadata(t *testing.T) {
 	reset(t)
 	raw, _ := HandleMethod("plugin.register", []byte(`{"schema_version":6}`))
 	s := string(raw)
-	for _, want := range []string{"quota-monitor", "0.1.1", "dohwi", "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor", "management_api", `"schema_version":6`} {
+	for _, want := range []string{"quota-monitor", "0.2.0", "dohwi", "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor", "management_api", `"schema_version":6`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q: %s", want, s)
 		}
@@ -279,14 +279,14 @@ func TestRoutesAndMetadata(t *testing.T) {
 	if err := json.Unmarshal(raw, &menuEnv); err != nil {
 		t.Fatal(err)
 	}
-	if len(menuEnv.Result.Resources) != 6 {
-		t.Fatalf("expected dashboard plus five hidden resources, got %d: %s", len(menuEnv.Result.Resources), s)
+	if len(menuEnv.Result.Resources) != 4 {
+		t.Fatalf("expected dashboard plus three hidden font resources, got %d: %s", len(menuEnv.Result.Resources), s)
 	}
 	res := menuEnv.Result.Resources[0]
 	if res.Path != "/dashboard" || res.Menu != "계정 쿼터" || res.Description != "OAuth 계정별 남은 쿼터 및 상태 모니터" {
 		t.Fatalf("unexpected dashboard resource: %#v", res)
 	}
-	for _, want := range []string{"/data/accounts", "/assets/manrope-variable.woff2", "/assets/suit-regular.woff2", "/assets/suit-semibold.woff2"} {
+	for _, want := range []string{"/assets/manrope-variable.woff2", "/assets/suit-regular.woff2", "/assets/suit-semibold.woff2"} {
 		var found *resourceRoute
 		for i := range menuEnv.Result.Resources {
 			if menuEnv.Result.Resources[i].Path == want {
@@ -418,13 +418,17 @@ func TestDashboardHTMLFeatures(t *testing.T) {
 		t.Errorf("dashboard.HTML fetch calls = %d, want 2 (snapshot and explicit refresh)", got)
 	}
 
-	for _, forbidden := range []string{"resolveManagementKey()", "enc::v1::", "cli-proxy-api-webui::secure-storage", "sessionStorage", "/management.html", "saveKey()", "logout()", "authActions", "X-MANAGEMENT-KEY", "Authorization", "Bearer ", "manualRefreshKey", "manualRefreshDialog", `type="password"`, "/v0/management/plugins/quota-monitor/"} {
+	// The key is typed by the operator into the page's own gate; it must never be
+	// recovered from the host panel's storage or leave through another channel.
+	for _, forbidden := range []string{"resolveManagementKey()", "enc::v1::", "cli-proxy-api-webui::secure-storage", "/management.html", "saveKey()", "logout()", "authActions", "X-MANAGEMENT-KEY", "manualRefreshKey", "manualRefreshDialog", "/v0/resource/plugins/quota-monitor/data"} {
 		if strings.Contains(dashboard.HTML, forbidden) {
 			t.Errorf("dashboard.HTML contains forbidden auth/management element: %q", forbidden)
 		}
 	}
-	if !strings.Contains(dashboard.HTML, "/v0/resource/plugins/quota-monitor/data/accounts") {
-		t.Errorf("dashboard.HTML missing resource URL: /v0/resource/plugins/quota-monitor/data/accounts")
+	for _, want := range []string{"var MGMT_BASE = '/v0/management/plugins/quota-monitor';", "MGMT_BASE + '/data/accounts'", "MGMT_BASE + '/data/refresh?confirm=1'", "'Authorization': 'Bearer ' + mgmtKey", `type="password"`} {
+		if !strings.Contains(dashboard.HTML, want) {
+			t.Errorf("dashboard.HTML missing management contract %q", want)
+		}
 	}
 }
 
@@ -1005,18 +1009,26 @@ func assertTenAccountsInvariant(t *testing.T, accs []quotamonitor.AccountQuota, 
 	}
 }
 
-func TestResourceDashboardRequiresNoAuthKey(t *testing.T) {
+func TestResourceDashboardShellIsStaticAndNeverScrapesCredentials(t *testing.T) {
 	reset(t)
 	html := string(dashboard.HTML)
-	// Viewing and automatic polling require no key. Manual refresh is a separate
-	// user-authenticated action; credentials must never be recovered from storage.
-	for _, forbidden := range []string{"resolveManagementKey", "sessionStorage", "window.parent", "postMessage"} {
+	// The unauthenticated shell asks the operator for the key itself; credentials must
+	// never be recovered from the host panel's storage or another window.
+	for _, forbidden := range []string{"resolveManagementKey", "window.parent", "postMessage", "X-Management-Key"} {
 		if strings.Contains(html, forbidden) {
 			t.Fatalf("resource dashboard contains forbidden auth surface %q", forbidden)
 		}
 	}
-	if !strings.Contains(html, "/v0/resource/plugins/quota-monitor/data/accounts") {
-		t.Fatalf("resource dashboard missing /v0/resource/plugins/quota-monitor/data/accounts")
+	if strings.Contains(html, "/v0/resource/plugins/quota-monitor/data") {
+		t.Fatal("resource dashboard must not read data from the unauthenticated resource prefix")
+	}
+	// Serving the shell never starts upstream work or exposes data.
+	raw, _ := json.Marshal(managementRequest{Method: "GET", Path: resourceBase + "/dashboard"})
+	var shell struct {
+		Result managementResponse `json:"result"`
+	}
+	if err := json.Unmarshal(handleManagementHandle(raw), &shell); err != nil || shell.Result.StatusCode != 200 {
+		t.Fatalf("resource dashboard shell: err=%v code=%d", err, shell.Result.StatusCode)
 	}
 }
 
@@ -1211,7 +1223,7 @@ func TestEndpointDTOPresentOnResource(t *testing.T) {
 	}
 
 	raw := handleManagementHandle(func() []byte {
-		b, _ := json.Marshal(managementRequest{Method: "GET", Path: resourceBase + "/data/accounts"})
+		b, _ := json.Marshal(managementRequest{Method: "GET", Path: mgmtBase + "/data/accounts"})
 		return b
 	}())
 	var e struct {
@@ -1813,7 +1825,7 @@ func TestNextPollHintInResourceResponse(t *testing.T) {
 	configureFromEnv(nil)
 
 	raw := handleManagementHandle(func() []byte {
-		b, _ := json.Marshal(managementRequest{Method: "GET", Path: resourceBase + "/data/accounts"})
+		b, _ := json.Marshal(managementRequest{Method: "GET", Path: mgmtBase + "/data/accounts"})
 		return b
 	}())
 	var e struct {

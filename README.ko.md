@@ -33,21 +33,21 @@
 - **갱신 일관성 보호 (Refresh Consistency)**: 오래된 비동기 조회가 최신 갱신 데이터를 덮어쓰지 않도록 세대 기반 캐시 관리.
 - **자립형 반응형 대시보드**: 외부 CDN이나 무거운 차트 라이브러리 없이 순수 HTML/CSS/JS 및 자체 호스팅 WOFF2 글꼴(SUIT, Manrope)로 렌더링.
 - **한국어/영어 UI**: 대시보드 헤더에서 언어를 전환합니다([Language](#language) 참고).
-- **안전한 엔드포인트 분리**: 읽기 전용 스냅샷 조회와 명시적 갱신 엔드포인트를 분리하고, 30초 전역 쿨다운 및 속도 제한 적용.
+- **인증된 데이터, 정적 셸**: 인증 없는 `/v0/resource` 경로에는 페이지와 글꼴만 두고, 쿼터 데이터와 명시적 갱신(30초 전역 쿨다운)은 관리 키가 있어야 합니다([보안](SECURITY.md) 참고).
 
 ## Tech Stack
 
 | Domain | Technology / Specification |
 |---|---|
-| Runtime & ABI | Go 1.26.9, cgo, C shared library (`.so`) |
+| Runtime & ABI | Go 1.26.9, cgo, C shared library (`.so` / `.dylib` / `.dll`) |
 | Host Integration | CLIProxyAPI Plugin C ABI (`v0` management/resource routes) |
 | Embedded UI | HTML5, Vanilla JavaScript, CSS Grid/Flexbox |
 | Bundled Typography | SUIT Regular/SemiBold, Manrope Variable (self-hosted WOFF2) |
-| Verification | Go race/vet, Node 레이아웃·i18n 계약 테스트, Native C smoke test (`dlopen`) |
+| Verification | Go race/vet, Node 레이아웃·i18n·인증 게이트 테스트, 모든 플랫폼의 Native C smoke test (`dlopen` / `LoadLibrary`) |
 
 ## Getting Started
 
-호스트 프로세스와 동일한 OS·아키텍처·C 런타임 환경(Linux amd64 glibc)에서 빌드해야 합니다.
+플러그인은 CGO `c-shared` 라이브러리이므로 대상 플랫폼(Linux, macOS, Windows · amd64/arm64)에서 C 컴파일러(gcc 또는 clang)로 직접 빌드해야 합니다.
 
 [mise](https://mise.jdx.dev)를 통해 로컬 런타임을 간편하게 부트스트랩할 수 있습니다:
 
@@ -56,12 +56,13 @@
 mise trust
 mise install
 
-# Ubuntu/Debian native build tools
+# 네이티브 빌드 도구: Ubuntu/Debian
 sudo apt-get update && sudo apt-get install -y build-essential
+# macOS: xcode-select --install      Windows: 64비트 mingw-w64 gcc(예: MSYS2 UCRT64)와 Git Bash
 
-# Run tests and native ABI smoke test
+# 테스트와 네이티브 ABI 스모크 테스트 (make가 없는 환경에서도 스크립트로 실행 가능)
 make verify
-make native-smoke
+scripts/build-native.sh
 ```
 
 ### Build
@@ -70,13 +71,33 @@ make native-smoke
 make build
 ```
 
-빌드 결과물은 `artifacts/quota-monitor.so` 및 헤더 파일 `artifacts/quota-monitor.h`로 생성됩니다.
+빌드 결과물은 `artifacts/quota-monitor.so`(macOS는 `.dylib`, Windows는 `.dll`)와 해당 헤더 파일로 생성됩니다.
 
 ## Install
 
-[CLIProxyAPI Plugins Store](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store)에 등록되면 호스트의 플러그인 페이지에서 `quota-monitor`를 설치할 수 있습니다. 수동 설치는 [최신 릴리스](https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/releases/latest)에서 `quota-monitor_<version>_linux_amd64.zip`과 `checksums.txt`를 받아 `sha256sum -c checksums.txt`로 확인한 뒤, `quota-monitor.so`를 호스트의 플러그인 디렉터리에 풉니다.
+[CLIProxyAPI Plugins Store](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store)에 등록되면 호스트의 플러그인 페이지에서 `quota-monitor`를 설치할 수 있습니다. 수동 설치는 [최신 릴리스](https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/releases/latest)에서 `quota-monitor_<version>_<os>_<arch>.zip`과 `checksums.txt`를 받아 `sha256sum -c checksums.txt`(macOS는 `shasum -a 256 -c`)로 확인한 뒤, 라이브러리를 호스트의 플러그인 디렉터리에 풉니다.
 
-Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)를 대상으로 하며 `linux/amd64`만 배포합니다. 다른 플랫폼은 소스에서 빌드해야 합니다.
+모든 릴리스는 스토어가 요구하는 5개 플랫폼을 함께 게시합니다. Release 워크플로는 5개가 모두 빌드되고 네이티브 스모크 테스트를 통과해야만 게시합니다.
+
+| 플랫폼 | 에셋 | 라이브러리 |
+|---|---|---|
+| Linux x64 | `quota-monitor_<version>_linux_amd64.zip` | `quota-monitor.so` |
+| Linux arm64 | `quota-monitor_<version>_linux_arm64.zip` | `quota-monitor.so` |
+| macOS Intel | `quota-monitor_<version>_darwin_amd64.zip` | `quota-monitor.dylib` |
+| macOS Apple silicon | `quota-monitor_<version>_darwin_arm64.zip` | `quota-monitor.dylib` |
+| Windows x64 | `quota-monitor_<version>_windows_amd64.zip` | `quota-monitor.dll` |
+
+Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)가 필요합니다.
+
+### 릴리스
+
+`internal/plugin/plugin.go`의 `pluginVersion`을 올려 병합한 뒤 같은 버전의 태그를 푸시합니다.
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+태그는 `pluginVersion`과 일치하는 점 구분 숫자 버전(`vX.Y.Z`)이어야 합니다. 워크플로가 플랫폼별 네이티브 러너에서 빌드해 `<id>_<version>_<os>_<arch>.zip`으로 패키징하고, `checksums.txt`를 만들어 GitHub 릴리스를 생성합니다.
 
 ## Language
 
@@ -84,20 +105,22 @@ Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)를 대상으
 
 - **선택 순서**: 저장된 선택 → 브라우저 언어(한국어면 한국어, 그 외는 영어) → 한국어.
 - **공유 설정**: 선택값은 브라우저의 `cpa_plugin_lang` 키에 저장되며, [usage-audit](https://github.com/dohwi/cliproxyapi-plugin-usage-audit) 대시보드와 같은 키를 씁니다. 한쪽에서 바꾸면 열려 있는 다른 쪽도 따라갑니다. 두 대시보드가 같은 origin에서 제공될 때만 적용됩니다.
-- **개인정보**: 이 키가 페이지가 브라우저 저장소에 쓰는 유일한 값입니다.
+- **개인정보**: 언어 키가 페이지가 `localStorage`에 쓰는 유일한 값입니다. 관리 키는 현재 탭의 `sessionStorage`에만 보관되며 `localStorage`, 쿠키, URL에는 쓰이지 않습니다.
 - **번역되지 않는 항목**: 호스트 메뉴에 표시되는 플러그인 이름은 로드 시 한 번 등록되므로 한국어("계정 쿼터")로 유지됩니다.
 
 ## Routes
 
-CLIProxyAPI 호스트 로드 후 아래 리소스 경로로 접근할 수 있습니다:
+CLIProxyAPI 호스트 로드 후 아래 경로로 접근할 수 있습니다. 인증 없이 열리는 것은 정적 셸뿐이며 모든 데이터는 관리 키가 필요합니다:
 
 | Method | Route | Description |
 |---|---|---|
-| `GET` | `/v0/resource/plugins/quota-monitor/dashboard` | 계정 쿼터 반응형 웹 대시보드 |
-| `GET` | `/v0/resource/plugins/quota-monitor/data/accounts` | 캐시된 계정 쿼터 스냅샷 (조회 유발 없음) |
-| `GET` | `/v0/resource/plugins/quota-monitor/data/refresh?confirm=1` | 전체 계정 명시적 갱신 (30초 쿨다운 적용) |
-| `POST` | `/v0/management/plugins/quota-monitor/refresh` | 관리자 인증 기반 강제 갱신 |
+| `GET` | `/v0/resource/plugins/quota-monitor/dashboard` | 반응형 대시보드 페이지 (정적 셸, 데이터 없음) |
+| `GET` | `/v0/management/plugins/quota-monitor/data/accounts` | 대시보드용 계정 쿼터 스냅샷 (조회 유발 없음) |
+| `POST` | `/v0/management/plugins/quota-monitor/data/refresh?confirm=1` | 전체 또는 `account_key` 하나의 명시적 갱신 (30초 쿨다운) |
+| `GET` | `/v0/management/plugins/quota-monitor/accounts` | 전체 계정 스냅샷 (관리 API) |
+| `POST` | `/v0/management/plugins/quota-monitor/refresh` | 강제 갱신 |
 | `GET` | `/v0/management/plugins/quota-monitor/status` | 수집기 상태 및 통계 |
+| `GET` | `/v0/management/plugins/quota-monitor/dashboard` | 관리 경로의 동일 대시보드 페이지 |
 
 ## Project Structure
 
@@ -112,8 +135,8 @@ cliproxyapi-plugin-quota-monitor/
 │   ├── overview/           # 공급자별 보수적 쿼터 요약
 │   └── dashboard/          # 내장 대시보드: dashboard.html, style.css, app.js, 폰트 에셋
 ├── docs/                   # 프로토콜 계약, 관리 명세 및 이미지
-├── scripts/                # 대시보드 레이아웃 검증 스크립트
-├── verification/           # dlopen 기반 네이티브 C ABI 스모크 테스트
+├── scripts/                # 릴리스 패키징, 네이티브 빌드, 대시보드 검증 스크립트
+├── verification/           # 크로스 플랫폼 네이티브 C ABI 스모크 테스트 (dlopen / LoadLibrary)
 ├── Makefile                # 빌드, 검증, 스모크 테스트 타겟
 └── THIRD_PARTY_NOTICES.md  # 번들 폰트 라이선스 고지
 ```

@@ -19,7 +19,7 @@ func TestResourceOverviewReadOnlySafeAndUnknown(t *testing.T) {
 	state.cachedAt = now()
 	state.last = []quotamonitor.AccountQuota{account, {Provider: "codex"}}
 	state.mu.Unlock()
-	code, body := decodeMgmt(t, handleManagementHandle(request(resourceBase+"/data/accounts")))
+	code, body := decodeMgmt(t, handleManagementHandle(request(mgmtBase+"/data/accounts")))
 	if code != 200 {
 		t.Fatal(code)
 	}
@@ -46,7 +46,7 @@ func TestResourceOverviewReadOnlySafeAndUnknown(t *testing.T) {
 	state.mu.Lock()
 	state.cachedAt = now().Add(-time.Hour)
 	state.mu.Unlock()
-	code, body = decodeMgmt(t, handleManagementHandle(request(resourceBase+"/data/accounts")))
+	code, body = decodeMgmt(t, handleManagementHandle(request(mgmtBase+"/data/accounts")))
 	for _, raw := range body["overview"].([]any) {
 		if row := raw.(map[string]any); row["provider"] == "codex" && row["stale"] != true {
 			t.Fatal("overview lost snapshot staleness")

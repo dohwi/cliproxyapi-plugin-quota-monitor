@@ -78,7 +78,7 @@ func TestLifecycleConfigYAMLAndManagementFirstFill(t *testing.T) {
 		t.Fatalf("first fill calls: auth-files=%d api-call=%d", authFiles.Load(), apiCalls.Load())
 	}
 
-	resourceRequest, _ := json.Marshal(managementRequest{Method: http.MethodGet, Path: resourceBase + "/data/accounts"})
+	resourceRequest, _ := json.Marshal(managementRequest{Method: http.MethodGet, Path: mgmtBase + "/data/accounts"})
 	resourceCode, resource := decodeMgmt(t, handleManagementHandle(resourceRequest))
 	if resourceCode != http.StatusOK || resource["count"] != float64(1) || resource["stale"] != false {
 		t.Fatalf("resource snapshot=%#v", resource)
@@ -195,7 +195,7 @@ func TestManagementInitialCollectionAfterRegisterSequence(t *testing.T) {
 	}
 
 	// 2b. Resource accounts before first management fill must be passive-only (count=0, collections=0, stale=true)
-	preResourceRequest, _ := json.Marshal(managementRequest{Method: http.MethodGet, Path: resourceBase + "/data/accounts"})
+	preResourceRequest, _ := json.Marshal(managementRequest{Method: http.MethodGet, Path: mgmtBase + "/data/accounts"})
 	preCode, preResource := decodeMgmt(t, handleManagementHandle(preResourceRequest))
 	if preCode != http.StatusOK || preResource["count"] != float64(0) || preResource["stale"] != true {
 		t.Fatalf("pre-fill resource snapshot unexpected: code=%d body=%#v", preCode, preResource)
@@ -249,7 +249,7 @@ func TestManagementInitialCollectionAfterRegisterSequence(t *testing.T) {
 	}
 
 	// 5. resource accounts snapshot must remain passive-only and reflect committed accounts
-	resourceRequest, _ := json.Marshal(managementRequest{Method: http.MethodGet, Path: resourceBase + "/data/accounts"})
+	resourceRequest, _ := json.Marshal(managementRequest{Method: http.MethodGet, Path: mgmtBase + "/data/accounts"})
 	resourceCode, resource := decodeMgmt(t, handleManagementHandle(resourceRequest))
 	if resourceCode != http.StatusOK || resource["count"] != float64(1) || resource["stale"] != false {
 		t.Fatalf("resource snapshot=%#v", resource)

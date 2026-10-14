@@ -79,15 +79,15 @@ func TestResourceSnapshotNeverFetches(t *testing.T) {
 			state.lastSuccessAt = state.cachedAt
 		}
 		state.mu.Unlock()
-		code, body := decodeMgmt(t, handleManagementHandle(request(resourceBase+"/data/accounts")))
+		code, body := decodeMgmt(t, handleManagementHandle(request(mgmtBase+"/data/accounts")))
 		if code != 200 || body["configured"] != true || body["stale"] != true || body["reason"] == "" {
 			t.Fatalf("snapshot: %#v", body)
 		}
 		if cached && (body["cached_at"] == nil || body["last_success_at"] == nil) {
 			t.Fatal("cache timestamps missing")
 		}
-		for _, method := range []string{"POST", "HEAD", "PUT"} {
-			raw, _ := json.Marshal(managementRequest{Method: method, Path: resourceBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}}})
+		for _, method := range []string{"GET", "HEAD", "PUT"} {
+			raw, _ := json.Marshal(managementRequest{Method: method, Path: mgmtBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}}})
 			code, _ := decodeMgmt(t, handleManagementHandle(raw))
 			if code != 404 {
 				t.Fatalf("refresh %s = %d", method, code)
@@ -106,14 +106,36 @@ func TestResourceSnapshotNeverFetches(t *testing.T) {
 	if err := json.Unmarshal(handleManagementRegister(), &registered); err != nil {
 		t.Fatal(err)
 	}
+	// /v0/resource/... is unauthenticated: it may carry only the static shell. Data and
+	// the state-changing refresh must be management routes (authenticated by the host).
 	for _, r := range registered.Result.Resources {
-		if r.Path == "/data/refresh" && (r.Method != "GET" || r.Menu != "") {
-			t.Fatal("refresh resource must be hidden and host-compatible")
+		if strings.Contains(r.Path, "/data") {
+			t.Fatalf("unauthenticated resource route %q must not serve data", r.Path)
 		}
 	}
+	wantRoutes := map[string]bool{"GET " + mgmtBase + "/data/accounts": false, "POST " + mgmtBase + "/data/refresh": false}
 	for _, r := range registered.Result.Routes {
 		if strings.HasSuffix(r.Path, "/refresh") && r.Method != "POST" {
 			t.Fatal("refresh is not POST-only")
+		}
+		if _, ok := wantRoutes[r.Method+" "+r.Path]; ok {
+			wantRoutes[r.Method+" "+r.Path] = true
+		}
+	}
+	for key, seen := range wantRoutes {
+		if !seen {
+			t.Fatalf("missing management route %s", key)
+		}
+	}
+	// The unauthenticated forms of both data endpoints must not exist at all.
+	for _, req := range []managementRequest{
+		{Method: "GET", Path: resourceBase + "/data/accounts"},
+		{Method: "GET", Path: resourceBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}}},
+		{Method: "POST", Path: resourceBase + "/data/refresh", Query: map[string][]string{"confirm": {"1"}}},
+	} {
+		b, _ := json.Marshal(req)
+		if code, _ := decodeMgmt(t, handleManagementHandle(b)); code != 404 {
+			t.Fatalf("unauthenticated %s %s must be 404, got %d", req.Method, req.Path, code)
 		}
 	}
 }
@@ -295,7 +317,7 @@ func TestSingleflightWaitersShareFailureAndRetainedSnapshot(t *testing.T) {
 	}
 	waiter := joinCollection(t)
 	// A passive resource returns immediately while a privileged flight is blocked.
-	if code, _ := decodeMgmt(t, handleManagementHandle(request(resourceBase+"/data/accounts"))); code != 200 {
+	if code, _ := decodeMgmt(t, handleManagementHandle(request(mgmtBase+"/data/accounts"))); code != 200 {
 		t.Fatal(code)
 	}
 	close(release)

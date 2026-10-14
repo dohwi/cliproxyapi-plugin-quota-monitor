@@ -13,7 +13,7 @@ const nodes=new Map(), timers=new Map();let tid=0;
 const doc={hidden:false,addEventListener(){},getElementById(id){if(!nodes.has(id))nodes.set(id,{style:{},textContent:'',value:'all',setAttribute(){},getAttribute(){return null},classList:{add(){},remove(){}}});return nodes.get(id)}};
 let resolver, rejecter, fetched=0;
 const ctx={console,document:doc,AbortController,Date,setTimeout(fn,ms){const n=++tid;timers.set(n,{fn,ms});return n},clearTimeout(n){timers.delete(n)},fetch(url){fetched++;if(url.includes('/data/refresh'))return Promise.resolve({ok:true,status:200,json:async()=>({refreshed:true})});return new Promise((resolve,reject)=>{resolver=resolve;rejecter=reject})}};
-vm.createContext(ctx);vm.runInContext(js,ctx);
+vm.createContext(ctx);vm.runInContext(js,ctx);ctx.mgmtKey="test-key";ctx.keyVerified=true;
 ctx.clearError=()=>{};ctx.populateProviderSegmented=()=>{};ctx.applyFilters=()=>{};ctx.captureRenderState=()=>({});ctx.restoreRenderState=()=>{};
 const snapshot=(n,time='2026-10-01T12:00:00Z',gen=3)=>({configured:true,snapshot_complete:true,generation:gen,collected_at:time,health:{collections:n,last_category:'success',failures:0},accounts:[{account_key:'fixture',windows:[{name:'primary',remaining_percent:n}]}]});
 assert(ctx.acceptSnapshotVersion(snapshot(20)),'initial');assert(!ctx.acceptSnapshotVersion(snapshot(19)),'older counter must reject');assert(!ctx.acceptSnapshotVersion(snapshot(21,'2026-10-01T11:00:00Z')),'older observation must reject');

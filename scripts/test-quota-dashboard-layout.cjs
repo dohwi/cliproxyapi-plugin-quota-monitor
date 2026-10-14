@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { seedKey } = require('./lib/seed-key.cjs');
 const root = path.resolve(__dirname, '..');
 const source = require('./lib/dashboard-html.cjs').readDashboardHTML(root);
 const now = new Date().toISOString();
@@ -97,6 +98,7 @@ accounts.forEach((account, i) => {
   const browser = await chromium.launch({headless: true, executablePath: process.env.BROWSER_EXECUTABLE || undefined, args: ['--no-sandbox']});
   try {
     const page = await browser.newPage({reducedMotion: 'reduce', locale: 'ko-KR'});
+    await seedKey(page);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', async route => {
