@@ -12,7 +12,7 @@ module.exports = async function verifyLanguagePlacement(page, panelSelector) {
       host.style.cssText = 'position:fixed;top:16px;right:12px;width:176px;height:52px;z-index:2147483647;background:#fff;border-radius:16px;box-shadow:0 8px 24px #0002';
       document.body.appendChild(host);
     }
-    const group = document.querySelector('.lang-toggle');
+    const group = document.getElementById('languageToggle');
     const panel = document.querySelector(panelSelector);
     const rect = group.getBoundingClientRect(), surface = panel.getBoundingClientRect();
     const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
@@ -41,6 +41,6 @@ module.exports = async function verifyLanguagePlacement(page, panelSelector) {
 };
 
 module.exports.switchTo = async (page, lang) => {
-  if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('.lang-toggle');
+  if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('#languageToggle');
   await page.waitForFunction(l => document.documentElement.lang === l, lang);
 };

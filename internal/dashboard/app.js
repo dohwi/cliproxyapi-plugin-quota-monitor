@@ -36,14 +36,18 @@ function showAuthGate(messageKey) {
   var errorBox = document.getElementById('errorBox'), staleBox = document.getElementById('staleNoticeBox');
   if (errorBox) { errorBox.style.display = 'none'; errorBox.textContent = ''; }
   if (staleBox) staleBox.style.display = 'none';
+  var heading = document.getElementById('pageHeading');
   if (content) content.style.display = 'none';
+  // The dashboard title and subtitle have nothing to describe until a key is accepted.
+  if (heading) heading.style.display = 'none';
   if (gate) gate.style.display = 'block';
   if (message) { message.textContent = messageKey ? t(messageKey) : ''; message.style.display = messageKey ? 'block' : 'none'; }
   if (input) { input.value = ''; try { input.focus(); } catch (e) {} }
 }
 function hideAuthGate() {
-  var gate = document.getElementById('authGate');
+  var gate = document.getElementById('authGate'), heading = document.getElementById('pageHeading');
   if (gate) gate.style.display = 'none';
+  if (heading) heading.style.display = '';
 }
 function dropKeyAndPrompt() { mgmtKey = ''; keyVerified = false; writeStoredKey(''); showAuthGate('auth.invalid'); }
 function authGateOpen() { var gate = document.getElementById('authGate'); return !!gate && gate.style.display !== 'none'; }

@@ -3,7 +3,7 @@
 // persistence and overflow at 1440/768/390/320px. Install Playwright or set PLAYWRIGHT_MODULE;
 // BROWSER_EXECUTABLE selects a system browser; SCREENSHOT_DIR captures pages.
 const fs = require('fs'), path = require('path');
-const switchLang = (async (page, lang) => { if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('.lang-toggle'); await page.waitForFunction(l => document.documentElement.lang === l, lang); });
+const switchLang = (async (page, lang) => { if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('#languageToggle'); await page.waitForFunction(l => document.documentElement.lang === l, lang); });
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { seedKey } = require('./lib/seed-key.cjs');
 const root = path.resolve(__dirname, '..');
@@ -47,7 +47,7 @@ const hangul = s => /[가-힣]/.test(s);
       // switch to the opposite language
       const target = wantInitial === 'en' ? 'ko' : 'en';
       await switchLang(page, target);
-      const pressed = await page.locator('.lang-toggle').getAttribute('data-current-lang');
+      const pressed = await page.locator('#languageToggle').getAttribute('data-current-lang');
       if (pressed !== target) fail.push(`${locale}: aria-pressed ${pressed} != ${target}`);
 
       for (const lang of [target, wantInitial]) {
