@@ -260,14 +260,15 @@ func TestAuthDirResolverGuardsAndStableFilenameJoin(t *testing.T) {
 
 func TestResolveAuthDirPrecedence(t *testing.T) {
 	t.Setenv("QUOTA_MONITOR_AUTH_DIR", "/from-env")
-	if got := ResolveDir([]byte(`auth_dir: /from-yaml`)); got != "/from-yaml" {
-		t.Fatalf("YAML auth_dir = %q, want /from-yaml", got)
+	// ResolveDir cleans with the platform separator (\from-yaml on Windows).
+	if got, want := ResolveDir([]byte(`auth_dir: /from-yaml`)), filepath.Clean("/from-yaml"); got != want {
+		t.Fatalf("YAML auth_dir = %q, want %q", got, want)
 	}
-	if got := ResolveDir([]byte(`{"auth_dir":"/from-json"}`)); got != "/from-json" {
-		t.Fatalf("JSON auth_dir = %q, want /from-json", got)
+	if got, want := ResolveDir([]byte(`{"auth_dir":"/from-json"}`)), filepath.Clean("/from-json"); got != want {
+		t.Fatalf("JSON auth_dir = %q, want %q", got, want)
 	}
-	if got := ResolveDir(nil); got != "/from-env" {
-		t.Fatalf("env auth_dir = %q, want /from-env", got)
+	if got, want := ResolveDir(nil), filepath.Clean("/from-env"); got != want {
+		t.Fatalf("env auth_dir = %q, want %q", got, want)
 	}
 }
 

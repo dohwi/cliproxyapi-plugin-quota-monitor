@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -242,8 +243,15 @@ func canonicalAuthFilename(name string) (string, bool) {
 		return "", false
 	}
 	// Relative FileName values may include provider directories, but never may
-	// escape auth_dir. Treat backslash as a literal Linux filename character.
-	if filepath.IsAbs(name) || name == ".." || strings.HasPrefix(name, "../") || strings.Contains(name, "/../") {
+	// escape auth_dir. Backslash is a literal Linux filename character but a path
+	// separator on Windows, where drive letters also make a name absolute.
+	if runtime.GOOS == "windows" {
+		if filepath.VolumeName(name) != "" {
+			return "", false
+		}
+		name = strings.ReplaceAll(name, `\`, "/")
+	}
+	if filepath.IsAbs(name) || strings.HasPrefix(name, "/") || name == ".." || strings.HasPrefix(name, "../") || strings.Contains(name, "/../") || strings.HasSuffix(name, "/..") {
 		return "", false
 	}
 	base := filepath.Base(name)

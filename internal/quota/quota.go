@@ -1714,7 +1714,9 @@ func ParseAntigravityQuota(data []byte) ([]QuotaWindow, error) {
 			// percentage. Do not infer units from the Go value type.
 			if v := objectValue(b, "remainingFraction", "remaining_fraction"); v != nil {
 				if n, ok := quotaNumber(v); ok && n >= 0 && n <= 1 {
-					r := n * 100
+					// float64() forbids fusing n*100 into 100-r (FMA on arm64), which
+					// would turn a fraction of 0.8 into used=19.999999999999996.
+					r := float64(n * 100)
 					u := 100 - r
 					w.RemainingPercent, w.UsedPercent = &r, &u
 				}
