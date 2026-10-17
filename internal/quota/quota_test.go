@@ -1453,10 +1453,11 @@ type antigravityFallbackServer struct {
 	order     []string
 	headers   map[string]string
 	data      string
-	script    map[string]int // url -> upstream status code to return
-	fixture   string         // body for status 200
-	slowEvery int            // if >0, sleep 150ms on the nth call (1-based)
-	slowAll   time.Duration  // if >0, sleep this long on every call
+	script    map[string]int    // url -> upstream status code to return
+	fixture   string            // body for status 200
+	fixtures  map[string]string // optional per-URL body for status 200
+	slowEvery int               // if >0, sleep 150ms on the nth call (1-based)
+	slowAll   time.Duration     // if >0, sleep this long on every call
 	calls     int
 }
 
@@ -1479,6 +1480,9 @@ func (s *antigravityFallbackServer) handler() http.Handler {
 			script[k] = v
 		}
 		fixture := s.fixture
+		if f, ok := s.fixtures[payload.URL]; ok {
+			fixture = f
+		}
 		slow := s.slowEvery > 0 && n == s.slowEvery
 		slowAll := s.slowAll
 		s.mu.Unlock()
@@ -1993,4 +1997,81 @@ func TestPersistentManagementTransportAndCloseIdleConnections(t *testing.T) {
 		}
 	}
 	client.CloseIdleConnections()
+}
+
+const antigravityClaudeOnlyFixture = `{"groups":[{"displayName":"Claude and GPT models","buckets":[
+ {"bucketId":"3p-weekly","displayName":"Weekly Limit Remaining","window":"weekly","resetTime":"2026-10-24T11:05:37Z","remainingFraction":1},
+ {"bucketId":"3p-5h","displayName":"Five Hour Limit Remaining","window":"5h","resetTime":"2026-10-17T16:05:37Z","remainingFraction":1}]}]}`
+
+const antigravityFullFixture = `{"groups":[{"displayName":"Gemini Models","buckets":[
+ {"bucketId":"gemini-weekly","displayName":"Weekly Limit Remaining","window":"weekly","resetTime":"2026-10-17T20:13:11Z","remainingFraction":0.9237176},
+ {"bucketId":"gemini-5h","displayName":"Five Hour Limit Remaining","window":"5h","resetTime":"2026-10-17T16:05:37Z","remainingFraction":1}]},
+ {"displayName":"Claude and GPT models","buckets":[
+ {"bucketId":"3p-weekly","displayName":"Weekly Limit Remaining","window":"weekly","resetTime":"2026-10-24T11:05:37Z","remainingFraction":1},
+ {"bucketId":"3p-5h","displayName":"Five Hour Limit Remaining","window":"5h","resetTime":"2026-10-17T16:05:37Z","remainingFraction":1}]}]}`
+
+// TestAntigravityMergesGeminiFromLaterEndpoint: daily and sandbox return only
+// the Claude/GPT family while prod also returns Gemini. All four windows must
+// survive and the third endpoint is the last call.
+func TestAntigravityMergesGeminiFromLaterEndpoint(t *testing.T) {
+	srv := &antigravityFallbackServer{fixtures: map[string]string{
+		antigravityDailyURL:   antigravityClaudeOnlyFixture,
+		antigravitySandboxURL: antigravityClaudeOnlyFixture,
+		antigravityProdURL:    antigravityFullFixture,
+	}}
+	ts := httptest.NewServer(srv.handler())
+	defer ts.Close()
+
+	windows, err := NewClient(ts.URL, "mgmt-key").FetchActiveQuota(context.Background(), newAntigravityAccount())
+	if err != nil {
+		t.Fatalf("FetchActiveQuota: %v", err)
+	}
+	if got := srv.sequence(); len(got) != 3 {
+		t.Fatalf("calls = %v, want 3", got)
+	}
+	names := map[string]bool{}
+	for _, w := range windows {
+		names[w.Name] = true
+	}
+	for _, want := range []string{
+		"Gemini Models / Weekly Limit Remaining", "Gemini Models / Five Hour Limit Remaining",
+		"Claude and GPT models / Weekly Limit Remaining", "Claude and GPT models / Five Hour Limit Remaining",
+	} {
+		if !names[want] {
+			t.Errorf("missing window %q; got %v", want, names)
+		}
+	}
+	if len(windows) != 4 {
+		t.Errorf("windows = %d, want 4 (no duplicates)", len(windows))
+	}
+}
+
+// TestAntigravityClaudeOnlyEverywhereKeepsPartial: no endpoint returns Gemini;
+// the Claude windows must still be returned after trying all endpoints.
+func TestAntigravityClaudeOnlyEverywhereKeepsPartial(t *testing.T) {
+	srv := &antigravityFallbackServer{fixture: antigravityClaudeOnlyFixture}
+	ts := httptest.NewServer(srv.handler())
+	defer ts.Close()
+	windows, err := NewClient(ts.URL, "mgmt-key").FetchActiveQuota(context.Background(), newAntigravityAccount())
+	if err != nil || len(windows) != 2 {
+		t.Fatalf("windows=%d err=%v, want 2 windows", len(windows), err)
+	}
+	if got := srv.sequence(); len(got) != 3 {
+		t.Fatalf("calls = %v, want 3", got)
+	}
+}
+
+// TestAntigravityFullFirstResponseStopsEarly: a complete first response must
+// not trigger extra upstream calls.
+func TestAntigravityFullFirstResponseStopsEarly(t *testing.T) {
+	srv := &antigravityFallbackServer{fixture: antigravityFullFixture}
+	ts := httptest.NewServer(srv.handler())
+	defer ts.Close()
+	windows, err := NewClient(ts.URL, "mgmt-key").FetchActiveQuota(context.Background(), newAntigravityAccount())
+	if err != nil || len(windows) != 4 {
+		t.Fatalf("windows=%d err=%v", len(windows), err)
+	}
+	if got := srv.sequence(); len(got) != 1 {
+		t.Fatalf("calls = %v, want 1", got)
+	}
 }

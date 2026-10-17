@@ -2219,6 +2219,38 @@ func (c *Client) APICall(ctx context.Context, authIndex, method, endpoint string
 	return out, nil
 }
 
+// appendMissingWindows appends incoming windows whose names are not present yet.
+func appendMissingWindows(dst, incoming []QuotaWindow) []QuotaWindow {
+	seen := make(map[string]struct{}, len(dst)+len(incoming))
+	for _, w := range dst {
+		seen[w.Name] = struct{}{}
+	}
+	for _, w := range incoming {
+		if _, ok := seen[w.Name]; ok {
+			continue
+		}
+		seen[w.Name] = struct{}{}
+		dst = append(dst, w)
+	}
+	return dst
+}
+
+// antigravityFamiliesComplete reports whether another endpoint could add
+// nothing: either neither known family is present (unknown layout, trust the
+// response) or both Gemini and Claude/GPT windows are present.
+func antigravityFamiliesComplete(ws []QuotaWindow) bool {
+	gemini, third := false, false
+	for _, w := range ws {
+		n := strings.ToLower(w.Name)
+		if strings.HasPrefix(n, "gemini models") {
+			gemini = true
+		} else if strings.HasPrefix(n, "claude and gpt models") {
+			third = true
+		}
+	}
+	return gemini == third
+}
+
 func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]QuotaWindow, error) {
 	p := strings.ToLower(strings.TrimSpace(account.Provider))
 	if p == "claude" {
@@ -2241,6 +2273,7 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 		}
 
 		var lastErrKind string
+		var merged []QuotaWindow
 		allAuth := true
 		anyAttempt := 0
 
@@ -2280,7 +2313,17 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 				lastErrKind = "empty"
 				continue
 			}
-			return windows, nil
+			// Upstream endpoints are not equivalent: daily/sandbox may return
+			// only the Claude/GPT family while prod also returns Gemini. Keep
+			// the first response and fill in missing windows from later
+			// endpoints until both known families are present.
+			merged = appendMissingWindows(merged, windows)
+			if antigravityFamiliesComplete(merged) {
+				return merged, nil
+			}
+		}
+		if len(merged) > 0 {
+			return merged, nil
 		}
 
 		if anyAttempt > 0 && allAuth && lastErrKind == "auth" {
