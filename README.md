@@ -5,7 +5,7 @@
   <p>A native Go plugin for CLIProxyAPI that monitors provider account quotas and credits, with a responsive bilingual (English/Korean) dashboard.</p>
 
   <p>
-    <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.9-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.9" /></a>
+    <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.10-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.10" /></a>
     <a href="https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/actions/workflows/verify.yml" target="_blank" rel="noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/dohwi/cliproxyapi-plugin-quota-monitor/verify.yml?branch=main&style=flat-square&label=verify" alt="Verify workflow status" /></a>
     <a href="LICENSE" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="MIT License" /></a>
   </p>
@@ -39,7 +39,7 @@
 
 | Domain | Technology / Specification |
 |---|---|
-| Runtime & ABI | Go 1.26.9, cgo, C shared library (`.so` / `.dylib` / `.dll`) |
+| Runtime & ABI | Go 1.26.10, cgo, C shared library (`.so` / `.dylib` / `.dll`) |
 | Host Integration | CLIProxyAPI Plugin C ABI (`v0` management/resource routes) |
 | Embedded UI | HTML5, Vanilla JavaScript, CSS Grid/Flexbox |
 | Bundled Typography | SUIT Regular/SemiBold, Manrope Variable (self-hosted WOFF2) |
@@ -91,13 +91,9 @@ The Linux builds require glibc 2.36 or older (the official Debian bookworm image
 
 ### Releasing
 
-Bump `pluginVersion` in `internal/plugin/plugin.go`, merge, then push a matching tag:
+Bump `pluginVersion` in `internal/plugin/plugin.go` and push to `main`. That is all: the Release workflow reads the version, skips if `vX.Y.Z` already exists, otherwise tests it, builds each platform on a native runner, packages `<id>_<version>_<os>_<arch>.zip`, writes `checksums.txt`, and creates the tag and GitHub release. The CLIProxyAPI plugin store reads the latest release, so the plugin page then offers the update.
 
-```bash
-git tag v0.2.0 && git push origin v0.2.0
-```
-
-The tag must match `pluginVersion` and be a dotted numeric version (`vX.Y.Z`); the workflow builds each platform on a native runner, packages `<id>_<version>_<os>_<arch>.zip`, writes `checksums.txt` and creates the GitHub release.
+Pushing a matching `vX.Y.Z` tag by hand, or running the workflow manually, also works. The version must be dotted numeric (`vX.Y.Z`).
 
 ## Language
 

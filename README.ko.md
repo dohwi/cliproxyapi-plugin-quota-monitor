@@ -5,7 +5,7 @@
   <p>CLIProxyAPI를 위한 공급자 계정 쿼터·크레딧 모니터링 및 반응형 대시보드(한국어/영어) 네이티브 Go 플러그인.</p>
 
   <p>
-    <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.9-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.9" /></a>
+    <a href="https://go.dev" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/Go-1.26.10-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26.10" /></a>
     <a href="https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/actions/workflows/verify.yml" target="_blank" rel="noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/dohwi/cliproxyapi-plugin-quota-monitor/verify.yml?branch=main&style=flat-square&label=verify" alt="Verification workflow" /></a>
     <a href="LICENSE" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="MIT License" /></a>
   </p>
@@ -39,7 +39,7 @@
 
 | Domain | Technology / Specification |
 |---|---|
-| Runtime & ABI | Go 1.26.9, cgo, C shared library (`.so` / `.dylib` / `.dll`) |
+| Runtime & ABI | Go 1.26.10, cgo, C shared library (`.so` / `.dylib` / `.dll`) |
 | Host Integration | CLIProxyAPI Plugin C ABI (`v0` management/resource routes) |
 | Embedded UI | HTML5, Vanilla JavaScript, CSS Grid/Flexbox |
 | Bundled Typography | SUIT Regular/SemiBold, Manrope Variable (self-hosted WOFF2) |
@@ -91,13 +91,9 @@ Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)가 필요합
 
 ### 릴리스
 
-`internal/plugin/plugin.go`의 `pluginVersion`을 올려 병합한 뒤 같은 버전의 태그를 푸시합니다.
+`internal/plugin/plugin.go`의 `pluginVersion`을 올려 `main`에 푸시하면 끝입니다. 릴리스 워크플로가 버전을 읽고, `vX.Y.Z`가 이미 있으면 건너뜁니다. 없으면 테스트 후 플랫폼별 네이티브 러너에서 빌드해 `<id>_<version>_<os>_<arch>.zip`으로 패키징하고, `checksums.txt`와 함께 태그와 GitHub 릴리스를 만듭니다. CLIProxyAPI 플러그인 스토어가 최신 릴리스를 읽으므로 플러그인 페이지에 업데이트가 표시됩니다.
 
-```bash
-git tag v0.2.0 && git push origin v0.2.0
-```
-
-태그는 `pluginVersion`과 일치하는 점 구분 숫자 버전(`vX.Y.Z`)이어야 합니다. 워크플로가 플랫폼별 네이티브 러너에서 빌드해 `<id>_<version>_<os>_<arch>.zip`으로 패키징하고, `checksums.txt`를 만들어 GitHub 릴리스를 생성합니다.
+같은 버전의 `vX.Y.Z` 태그를 직접 푸시하거나 워크플로를 수동 실행해도 됩니다. 버전은 점 구분 숫자(`vX.Y.Z`)여야 합니다.
 
 ## Language
 
