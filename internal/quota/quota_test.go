@@ -2056,8 +2056,9 @@ func TestAntigravityClaudeOnlyEverywhereKeepsPartial(t *testing.T) {
 	if err != nil || len(windows) != 2 {
 		t.Fatalf("windows=%d err=%v, want 2 windows", len(windows), err)
 	}
-	if got := srv.sequence(); len(got) != 3 {
-		t.Fatalf("calls = %v, want 3", got)
+	// 3 summary endpoints + 2 per-model retrieveUserQuota attempts (no Gemini there).
+	if got := srv.sequence(); len(got) != 5 {
+		t.Fatalf("calls = %v, want 5", got)
 	}
 }
 
@@ -2073,5 +2074,71 @@ func TestAntigravityFullFirstResponseStopsEarly(t *testing.T) {
 	}
 	if got := srv.sequence(); len(got) != 1 {
 		t.Fatalf("calls = %v, want 1", got)
+	}
+}
+
+// Real retrieveUserQuota shape (docker1, 2026-10-24): per-model buckets, no
+// groups. Gemini remaining must be derived from here because
+// retrieveUserQuotaSummary no longer returns the Gemini group.
+const antigravityUserQuotaFixture = `{"buckets":[
+ {"tokenType":"WTUS","modelId":"chat_20706","remainingFraction":1},
+ {"resetTime":"2026-10-24T00:53:02Z","tokenType":"WTUS","modelId":"claude-sonnet-4-6","remainingFraction":0.1},
+ {"resetTime":"2026-10-24T00:53:02Z","tokenType":"WTUS","modelId":"gemini-2.5-pro","remainingFraction":0.8},
+ {"resetTime":"2026-10-24T01:10:00Z","tokenType":"WTUS","modelId":"gemini-3-flash","remainingFraction":0.35},
+ {"resetTime":"2026-10-24T00:53:02Z","tokenType":"WTUS","modelId":"gemini-3.5-flash-low","remainingFraction":1},
+ {"tokenType":"WTUS","modelId":"tab_flash_lite_preview","remainingFraction":0}]}`
+
+func TestAntigravityGeminiFromUserQuotaWhenSummaryLacksIt(t *testing.T) {
+	srv := &antigravityFallbackServer{
+		fixture: antigravityClaudeOnlyFixture,
+		fixtures: map[string]string{
+			antigravityUserQuotaDailyURL: antigravityUserQuotaFixture,
+			antigravityUserQuotaProdURL:  antigravityUserQuotaFixture,
+		},
+	}
+	ts := httptest.NewServer(srv.handler())
+	defer ts.Close()
+	windows, err := NewClient(ts.URL, "mgmt-key").FetchActiveQuota(context.Background(), newAntigravityAccount())
+	if err != nil {
+		t.Fatalf("FetchActiveQuota: %v", err)
+	}
+	if len(windows) != 3 {
+		t.Fatalf("windows = %d, want 2 Claude + 1 Gemini: %+v", len(windows), windows)
+	}
+	var g *QuotaWindow
+	for i := range windows {
+		if windows[i].Name == "Gemini Models / Five Hour Limit Remaining" {
+			g = &windows[i]
+		}
+	}
+	if g == nil || g.RemainingPercent == nil || *g.RemainingPercent < 34.99 || *g.RemainingPercent > 35.01 {
+		t.Fatalf("gemini window = %+v, want lowest gemini fraction (35%%)", g)
+	}
+	if g.WindowMinutes == nil || *g.WindowMinutes != 300 || g.ResetAt == nil || g.ResetAt.UTC().Format("15:04") != "01:10" {
+		t.Errorf("gemini minutes/reset wrong: %+v", g)
+	}
+	seq := srv.sequence()
+	if last := seq[len(seq)-1]; last != antigravityUserQuotaDailyURL {
+		t.Errorf("last call = %s, want daily retrieveUserQuota (stop after first success)", last)
+	}
+}
+
+func TestAntigravityUserQuotaFailureKeepsClaudeWindows(t *testing.T) {
+	srv := &antigravityFallbackServer{
+		fixture: antigravityClaudeOnlyFixture,
+		script:  map[string]int{antigravityUserQuotaDailyURL: 500, antigravityUserQuotaProdURL: 500},
+	}
+	ts := httptest.NewServer(srv.handler())
+	defer ts.Close()
+	windows, err := NewClient(ts.URL, "mgmt-key").FetchActiveQuota(context.Background(), newAntigravityAccount())
+	if err != nil || len(windows) != 2 {
+		t.Fatalf("windows=%d err=%v, want 2 Claude windows", len(windows), err)
+	}
+}
+
+func TestParseAntigravityModelQuotaNoGemini(t *testing.T) {
+	ws, err := ParseAntigravityModelQuota([]byte(`{"buckets":[{"modelId":"claude-sonnet-4-6","remainingFraction":0.5}]}`))
+	if err != nil || len(ws) != 0 {
+		t.Fatalf("ws=%v err=%v, want none", ws, err)
 	}
 }

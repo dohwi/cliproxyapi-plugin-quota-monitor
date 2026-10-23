@@ -2155,9 +2155,70 @@ var antigravityQuotaURLs = [...]string{
 	antigravityProdURL,
 }
 
+// Per-model quota. Google stopped returning the "Gemini Models" group from
+// retrieveUserQuotaSummary; Gemini remaining fractions only exist here.
+const (
+	antigravityUserQuotaDailyURL = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
+	antigravityUserQuotaProdURL  = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
+
+	antigravityGeminiFiveHourName = "Gemini Models / Five Hour Limit Remaining"
+)
+
+var antigravityUserQuotaURLs = [...]string{
+	antigravityUserQuotaDailyURL,
+	antigravityUserQuotaProdURL,
+}
+
+// ParseAntigravityModelQuota derives the Gemini five-hour window from the
+// per-model retrieveUserQuota response: the lowest remaining fraction across
+// gemini-* models (and its reset time). Non-Gemini and internal buckets are
+// ignored. Returns no windows when no Gemini bucket carries a fraction.
+func ParseAntigravityModelQuota(data []byte) ([]QuotaWindow, error) {
+	var root struct {
+		Buckets []map[string]any `json:"buckets"`
+	}
+	if err := json.Unmarshal(data, &root); err != nil {
+		return nil, &APICallError{Kind: "parse"}
+	}
+	var best *float64
+	var bestReset *time.Time
+	for _, b := range root.Buckets {
+		id := strings.ToLower(strings.TrimSpace(fmt.Sprint(objectValue(b, "modelId", "model_id"))))
+		if !strings.HasPrefix(id, "gemini-") {
+			continue
+		}
+		n, ok := quotaNumber(objectValue(b, "remainingFraction", "remaining_fraction"))
+		if !ok || n < 0 || n > 1 {
+			continue
+		}
+		r := float64(n * 100)
+		if best == nil || r < *best {
+			best = &r
+			bestReset = nil
+			if t, ok := quotaTime(objectValue(b, "resetTime", "reset_time")); ok {
+				bestReset = t
+			}
+		}
+	}
+	if best == nil {
+		return []QuotaWindow{}, nil
+	}
+	mins := 300
+	w := QuotaWindow{Name: antigravityGeminiFiveHourName, WindowMinutes: &mins, RemainingPercent: best, ResetAt: bestReset}
+	u := 100 - *best
+	w.UsedPercent = &u
+	normalizeWindow(&w)
+	return []QuotaWindow{w}, nil
+}
+
 func isAllowedEndpoint(endpoint string) bool {
 	if endpoint == codexQuotaURL || endpoint == codexResetCreditsURL || endpoint == claudeQuotaURL || endpoint == claudeResetUsageURL {
 		return true
+	}
+	for _, u := range antigravityUserQuotaURLs {
+		if endpoint == u {
+			return true
+		}
 	}
 	for _, u := range antigravityQuotaURLs {
 		if endpoint == u {
@@ -2251,6 +2312,15 @@ func antigravityFamiliesComplete(ws []QuotaWindow) bool {
 	return gemini == third
 }
 
+func hasGeminiWindow(ws []QuotaWindow) bool {
+	for _, w := range ws {
+		if strings.HasPrefix(strings.ToLower(w.Name), "gemini models") {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]QuotaWindow, error) {
 	p := strings.ToLower(strings.TrimSpace(account.Provider))
 	if p == "claude" {
@@ -2320,6 +2390,24 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 			merged = appendMissingWindows(merged, windows)
 			if antigravityFamiliesComplete(merged) {
 				return merged, nil
+			}
+		}
+		// The summary API no longer returns Gemini; fill it from per-model quota.
+		if overallCtx.Err() == nil && len(merged) > 0 && !hasGeminiWindow(merged) {
+			for _, endpoint := range antigravityUserQuotaURLs {
+				if overallCtx.Err() != nil {
+					break
+				}
+				r, err := c.APICall(overallCtx, account.AuthIndex, http.MethodPost, endpoint, headers, data)
+				if err != nil {
+					continue
+				}
+				gw, perr := ParseAntigravityModelQuota([]byte(r.Body))
+				if perr != nil || len(gw) == 0 {
+					continue
+				}
+				merged = appendMissingWindows(merged, gw)
+				break
 			}
 		}
 		if len(merged) > 0 {
