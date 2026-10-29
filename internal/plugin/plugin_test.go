@@ -284,7 +284,7 @@ func TestRoutesAndMetadata(t *testing.T) {
 		t.Fatalf("expected dashboard plus three hidden font resources, got %d: %s", len(menuEnv.Result.Resources), s)
 	}
 	res := menuEnv.Result.Resources[0]
-	if res.Path != "/dashboard" || res.Menu != "계정 쿼터" || res.Description != "OAuth 계정별 남은 쿼터 및 상태 모니터" {
+	if res.Path != "/dashboard" || res.Menu != "Quota Monitor" || res.Description != "OAuth 계정별 남은 쿼터 및 상태 모니터" {
 		t.Fatalf("unexpected dashboard resource: %#v", res)
 	}
 	for _, want := range []string{"/assets/manrope-variable.woff2", "/assets/suit-regular.woff2", "/assets/suit-semibold.woff2"} {
@@ -1429,7 +1429,7 @@ func TestDashboardAndAssetsCarrySecurityHeaders(t *testing.T) {
 	for _, path := range []string{resourceBase + "/dashboard", mgmtBase + "/dashboard"} {
 		page := call(path)
 		csp := first(page, "Content-Security-Policy")
-		for _, want := range []string{"default-src 'none'", "frame-ancestors 'none'", "base-uri 'none'", "form-action 'none'", "connect-src 'self'", "font-src 'self'"} {
+		for _, want := range []string{"default-src 'none'", "frame-ancestors 'self'", "base-uri 'none'", "form-action 'none'", "connect-src 'self'", "font-src 'self'"} {
 			if !strings.Contains(csp, want) {
 				t.Errorf("%s: CSP missing %q: %q", path, want, csp)
 			}
@@ -1439,7 +1439,7 @@ func TestDashboardAndAssetsCarrySecurityHeaders(t *testing.T) {
 				t.Errorf("%s: CSP must not contain %q: %q", path, bad, csp)
 			}
 		}
-		for h, want := range map[string]string{"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Cache-Control": "no-store"} {
+		for h, want := range map[string]string{"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "SAMEORIGIN", "Cache-Control": "no-store"} {
 			if got := first(page, h); got != want {
 				t.Errorf("%s: %s = %q, want %q", path, h, got, want)
 			}

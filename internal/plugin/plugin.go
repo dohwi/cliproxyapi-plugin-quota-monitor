@@ -24,7 +24,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.2.4"
+	pluginVersion             = "0.2.9"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -46,10 +46,7 @@ const (
 	maxCollectionAccounts = 512
 	maxProbeJobs          = 128
 	maxResetDetailJobs    = 16
-	// activeProbeTTL is retained only for legacy test compatibility; per-account
-	// scheduling supersedes the global TTL for all probe decisions.
-	activeProbeTTL = 5 * time.Minute
-	forceCooldown  = 30 * time.Second
+	forceCooldown         = 30 * time.Second
 
 	// Per-account probe interval tiers (requirement 1).
 	probeIntervalCurrent      = 2 * time.Minute  // current/recently-used account
@@ -531,6 +528,7 @@ type metadata struct {
 	Version          string `json:"Version"`
 	Author           string `json:"Author"`
 	GitHubRepository string `json:"GitHubRepository"`
+	Logo             string `json:"Logo,omitempty"`
 }
 type registrationResponse struct {
 	SchemaVersion uint32          `json:"schema_version"`
@@ -549,7 +547,7 @@ func handleRegister(request []byte) []byte {
 		sv = req.SchemaVersion
 	}
 	configureFromEnv(req.ConfigYAML)
-	return OKEnvelope(registrationResponse{SchemaVersion: sv, Metadata: metadata{Name: pluginName, Version: pluginVersion, Author: pluginAuthor, GitHubRepository: pluginRepo}, Capabilities: map[string]bool{"management_api": true}})
+	return OKEnvelope(registrationResponse{SchemaVersion: sv, Metadata: metadata{Name: pluginName, Version: pluginVersion, Author: pluginAuthor, GitHubRepository: pluginRepo, Logo: pluginLogo}, Capabilities: map[string]bool{"management_api": true}})
 }
 
 func configureFromEnv(configYAML []byte) {
@@ -678,7 +676,7 @@ const resourceBase = "/v0/resource/plugins/quota-monitor"
 // plugin. Its Menu label makes it appear in the management console sidebar.
 var resourceDashboard = resourceRoute{
 	Path:        "/dashboard",
-	Menu:        "계정 쿼터",
+	Menu:        "Quota Monitor", // matches the plugin store name; the host registers it once, so it cannot follow the page language
 	Description: "OAuth 계정별 남은 쿼터 및 상태 모니터",
 }
 
@@ -1000,7 +998,7 @@ func handleManagementHandle(raw []byte) []byte {
 	if method == "GET" && path == mgmtBase+"/data/accounts" {
 		// Dashboard data: sanitized (no auth_index), snapshot only, even when empty,
 		// expired, forced, or another collection is in flight. Management-authenticated.
-		return addNoStore(mgmtResponse(200, resourceSnapshot()))
+		return mgmtResponseNoStore(200, resourceSnapshot())
 	}
 
 	if method == "POST" && path == mgmtBase+"/data/refresh" {
@@ -1008,14 +1006,14 @@ func handleManagementHandle(raw []byte) []byte {
 		// cooldown; it requires a confirmation query so a stray call never fans out
 		// upstream work. Snapshot GETs remain read-only.
 		if values := req.Query["confirm"]; len(values) != 1 || values[0] != "1" {
-			return addNoStore(mgmtResponse(400, map[string]string{"error": "explicit confirmation required"}))
+			return mgmtResponseNoStore(400, map[string]string{"error": "explicit confirmation required"})
 		}
 		if values, present := req.Query["account_key"]; present {
 			if len(values) != 1 || strings.TrimSpace(values[0]) == "" || len(values[0]) > 512 {
-				return addNoStore(mgmtResponse(400, map[string]string{"error": "invalid account key"}))
+				return mgmtResponseNoStore(400, map[string]string{"error": "invalid account key"})
 			}
 			code, body := refreshSingleAccount(values[0])
-			return addNoStore(mgmtResponse(code, body))
+			return mgmtResponseNoStore(code, body)
 		}
 		// Reserve before collection so failures and concurrent requests cannot
 		// bypass the global cooldown or fan out upstream work.
@@ -1024,7 +1022,7 @@ func handleManagementHandle(raw []byte) []byte {
 		at := now()
 		if !st.lastResourceRefreshAt.IsZero() && at.Sub(st.lastResourceRefreshAt) < forceCooldown {
 			st.mu.Unlock()
-			return addNoStore(mgmtResponse(429, map[string]string{"error": "refresh cooldown"}))
+			return mgmtResponseNoStore(429, map[string]string{"error": "refresh cooldown"})
 		}
 		st.lastResourceRefreshAt = at
 		st.mu.Unlock()
@@ -1033,7 +1031,7 @@ func handleManagementHandle(raw []byte) []byte {
 		if result.err != nil {
 			body["error"] = "refresh failed"
 		}
-		return addNoStore(mgmtResponse(200, body))
+		return mgmtResponseNoStore(200, body)
 	}
 
 	if method == "POST" && path == mgmtBase+"/refresh" {
@@ -1078,11 +1076,7 @@ func handleManagementHandle(raw []byte) []byte {
 				}()
 			}
 		}
-		return OKEnvelope(managementResponse{
-			StatusCode: 200,
-			Headers:    dashboardPageHeaders(),
-			Body:       []byte(dashboard.HTML),
-		})
+		return dashboardResponse()
 	case mgmtBase + "/status":
 		result, body := collectManagementSnapshot(false)
 		configured, _ := body["configured"].(bool)
@@ -1476,6 +1470,11 @@ func runCollection(ctx context.Context, client *quotamonitor.Client, resolver *a
 	fetchContextErr := fetchCtx.Err()
 	fetchCancel()
 	if err == nil {
+		// Only providers whose quota can be measured belong on the dashboard.
+		// Filtering here (not in the UI) keeps cards, counts, availability and
+		// the overview consistent, and stops unrelated auth files (e.g. other
+		// plugin providers) from consuming the collection cap.
+		result.accounts = filterQuotaProviders(result.accounts)
 		if len(result.accounts) > maxCollectionAccounts {
 			result.accounts = result.accounts[:maxCollectionAccounts]
 			result.truncated = true
@@ -1594,6 +1593,26 @@ func updateAccountProbeDue(st *stateData, accounts []quotamonitor.AccountQuota) 
 		delete(st.probeDue, oldest)
 		delete(st.schedules, oldest)
 	}
+}
+
+// quotaProviders are the providers quota-monitor can actually measure.
+var quotaProviders = map[string]struct{}{"claude": {}, "codex": {}, "antigravity": {}}
+
+func isQuotaProvider(provider string) bool {
+	_, ok := quotaProviders[strings.ToLower(strings.TrimSpace(provider))]
+	return ok
+}
+
+// filterQuotaProviders drops accounts of providers quota-monitor does not
+// support. The input slice is not modified.
+func filterQuotaProviders(in []quotamonitor.AccountQuota) []quotamonitor.AccountQuota {
+	out := make([]quotamonitor.AccountQuota, 0, len(in))
+	for _, a := range in {
+		if isQuotaProvider(a.Provider) {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 func probeEligible(a quotamonitor.AccountQuota) bool {
@@ -2215,39 +2234,58 @@ func marshalJSON(v any) ([]byte, error) {
 	out := strings.TrimSuffix(buf.String(), "\n")
 	return []byte(out), nil
 }
-func addNoStore(raw []byte) []byte {
-	var e envelope
-	if json.Unmarshal(raw, &e) == nil {
-		var r managementResponse
-		if json.Unmarshal(e.Result, &r) == nil {
-			if r.Headers == nil {
-				r.Headers = map[string][]string{}
-			}
-			r.Headers["Cache-Control"] = []string{"no-store"}
-			e.Result, _ = marshalJSON(r)
-			out, _ := json.Marshal(e)
-			return out
-		}
-	}
-	return raw
-}
 func mgmtResponse(status int, body any) []byte {
+	return mgmtResponseWithCache(status, body, false)
+}
+
+// mgmtResponseNoStore is mgmtResponse with Cache-Control: no-store set while the
+// envelope is built, so the already-encoded response is never parsed again.
+func mgmtResponseNoStore(status int, body any) []byte {
+	return mgmtResponseWithCache(status, body, true)
+}
+
+func mgmtResponseWithCache(status int, body any, noStore bool) []byte {
 	b, err := marshalJSON(body)
 	if err != nil {
 		b = []byte(`{"error":"response encoding failed"}`)
 	}
-	return OKEnvelope(managementResponse{StatusCode: status, Headers: map[string][]string{"Content-Type": {"application/json"}, "X-Content-Type-Options": {"nosniff"}}, Body: b})
+	headers := map[string][]string{"Content-Type": {"application/json"}, "X-Content-Type-Options": {"nosniff"}}
+	if noStore {
+		headers["Cache-Control"] = []string{"no-store"}
+	}
+	return OKEnvelope(managementResponse{StatusCode: status, Headers: headers, Body: b})
 }
 
 // dashboardSecurityHeaders hardens the self-contained page. The page is a single
 // HTML document with inline script/style, so script-src must allow 'unsafe-inline';
-// everything else is locked down: no external origins, no framing, no sniffing,
+// everything else is locked down: no external origins, framing only by the same origin (the management console embeds this page), no sniffing,
 // no referrer, no base-tag or form-target hijacking.
 var dashboardSecurityHeaders = map[string][]string{
-	"Content-Security-Policy": {"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"},
+	"Content-Security-Policy": {"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"},
 	"X-Content-Type-Options":  {"nosniff"},
 	"Referrer-Policy":         {"no-referrer"},
-	"X-Frame-Options":         {"DENY"},
+	"X-Frame-Options":         {"SAMEORIGIN"},
+}
+
+var (
+	dashboardRespOnce sync.Once
+	dashboardRespEnv  []byte
+)
+
+// dashboardResponse returns the fully encoded dashboard envelope. The page body,
+// status and headers are compile-time constants (embedded assets, static CSP):
+// nothing in the response depends on the request, language, key or plugin
+// state, so it is built once. The result is read-only; HandleMethod's caller
+// copies it into C memory and must never mutate it.
+func dashboardResponse() []byte {
+	dashboardRespOnce.Do(func() {
+		dashboardRespEnv = OKEnvelope(managementResponse{
+			StatusCode: 200,
+			Headers:    dashboardPageHeaders(),
+			Body:       []byte(dashboard.HTML),
+		})
+	})
+	return dashboardRespEnv
 }
 
 func dashboardPageHeaders() map[string][]string {
