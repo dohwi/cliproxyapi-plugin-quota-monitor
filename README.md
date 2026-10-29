@@ -28,6 +28,7 @@
 ## Features
 
 - **Per-account quota and credit tracking**: remaining percentage per window, reset time and credit balance for Claude, Codex, Antigravity and other providers.
+- **Automatic endpoint grouping**: each account's `proxy_url` in the CLIProxyAPI auth directory is read (read-only) and its proxy host name is shown as the account's endpoint, e.g. `direct`, `warp1`, `my-proxy`. Names are discovered from your data, so no configuration is needed; the Endpoint filter and card label only appear when accounts use more than one endpoint. Only single-word host names are shown; IP addresses and dotted domains appear as `unknown`. The plugin never changes routing: the proxy itself is applied by CLIProxyAPI.
 - **Recently used account highlight**: visually marks the account that most recently handled traffic through the proxy.
 - **Bounded collection**: per-account probe schedule, a single background worker, timeouts and concurrency limits keep provider APIs from being overloaded.
 - **Refresh consistency**: generation-based cache management stops a stale asynchronous probe from overwriting newer data.

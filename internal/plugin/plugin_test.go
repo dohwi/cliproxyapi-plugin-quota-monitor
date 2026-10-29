@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"quota-monitor/internal/dashboard"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -259,7 +260,7 @@ func TestRoutesAndMetadata(t *testing.T) {
 	reset(t)
 	raw, _ := HandleMethod("plugin.register", []byte(`{"schema_version":6}`))
 	s := string(raw)
-	for _, want := range []string{"quota-monitor", "0.2.2", "dohwi", "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor", "management_api", `"schema_version":6`} {
+	for _, want := range []string{"quota-monitor", pluginVersion, "dohwi", "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor", "management_api", `"schema_version":6`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q: %s", want, s)
 		}
@@ -1180,10 +1181,10 @@ func TestEndpointDTOSafeEnum(t *testing.T) {
 	}
 
 	// JSON must only contain allowlisted enum strings for the endpoint field
-	allowed := map[string]bool{"direct": true, "warp1": true, "warp2": true, "unknown": true}
+	labelRE := regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
 	for i, sa := range safe {
-		if !allowed[string(sa.Endpoint)] {
-			t.Errorf("safe[%d].Endpoint=%q is not in allowlist", i, sa.Endpoint)
+		if !labelRE.MatchString(string(sa.Endpoint)) {
+			t.Errorf("safe[%d].Endpoint=%q is not a safe single-label value", i, sa.Endpoint)
 		}
 	}
 }
@@ -1267,8 +1268,8 @@ func TestEndpointDTOPresentOnResource(t *testing.T) {
 	if endpointByIdx["1"] != "direct" {
 		t.Errorf("acc1 (direct) endpoint=%v, want direct", endpointByIdx["1"])
 	}
-	if endpointByIdx["2"] != "unknown" {
-		t.Errorf("acc2 (unknown host) endpoint=%v, want unknown", endpointByIdx["2"])
+	if endpointByIdx["2"] != "someproxy" {
+		t.Errorf("acc2 (single-label host) endpoint=%v, want someproxy", endpointByIdx["2"])
 	}
 	// Sensitive fields must be absent from resource DTO
 	b, _ := json.Marshal(arr)
@@ -1318,8 +1319,9 @@ func TestDashboardEndpointSortUI(t *testing.T) {
 		"endpointFilter",
 		"Endpoint 필터",
 		"Direct",
-		"WARP 1",
-		"WARP 2",
+		"normalizeEndpoint",
+		"endpointCompare",
+		"rebuildEndpointOptions",
 		"filterAccountsByEndpoint",
 		"sortAccountsByEndpoint",
 		"statusRank",
@@ -1399,8 +1401,68 @@ console.log('OK_ENDPOINT_SORT_TESTS');
 	}
 }
 
+// TestDashboardDiscoversCustomEndpointNames verifies that arbitrary proxy names
+// reported by the server appear in the filter, sort naturally, get readable
+// labels, and that a single distinct endpoint hides the whole Endpoint UI.
+func TestDashboardDiscoversCustomEndpointNames(t *testing.T) {
+	nodeScript := `
+const vm = require('vm');
+const html = process.argv[1];
+const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+function mkEl() {
+  const el = { children: [], attrs: {}, value: 'all', hidden: false, textContent: '',
+    appendChild(c) { this.children.push(c); return c; },
+    removeChild(c) { this.children.splice(this.children.indexOf(c), 1); },
+    get firstChild() { return this.children[0]; },
+    setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k] || null; },
+    closest() { return field; }, addEventListener() {}, classList: { add() {}, remove() {}, toggle() {} } };
+  return el;
+}
+const field = mkEl(); const sel = mkEl();
+const ctx = {
+  console, Math, Number, Array, Object, String, isNaN, Date, RegExp,
+  document: { addEventListener() {}, getElementById(id) { return id === 'endpointFilter' ? sel : mkEl(); }, createElement() { return mkEl(); } },
+  localStorage: { getItem() { return '0'; }, setItem() {} }, setInterval() { return 0; }, clearInterval() {}
+};
+vm.createContext(ctx);
+vm.runInContext(script, ctx);
+function assert(ok, msg) { if (!ok) throw new Error('FAIL: ' + msg); }
+
+for (const name of ['warp1', 'warp-sg', 'my-proxy', 'tor3', 'direct']) {
+  assert(ctx.endpointLabel(name) === name, 'label must be shown as-is: ' + name + ' -> ' + ctx.endpointLabel(name));
+}
+assert(ctx.normalizeEndpoint('10.0.0.5') === 'unknown', 'IP-like value must not become a label');
+assert(ctx.normalizeEndpoint('A.B') === 'unknown', 'dotted value must not become a label');
+
+const mk = (k, ep) => ({ account_key: k, provider: 'codex', status: 'known', endpoint: ep, operational: {}, windows: [], stale: false });
+const accounts = [mk('a','unknown'), mk('b','tor10'), mk('c','my-proxy'), mk('d','tor2'), mk('e','direct'), mk('f','warp1')];
+const order = ctx.sortAccountsByEndpoint(accounts).map(a => a.endpoint).join(',');
+assert(order === 'direct,my-proxy,tor2,tor10,warp1,unknown', 'natural order, got ' + order);
+assert(ctx.filterAccountsByEndpoint(accounts, 'tor10').length === 1, 'custom filter works');
+
+// Options are rebuilt from data: only present endpoints, in sorted order.
+const ev = (code) => vm.runInContext(code, ctx);
+ev('cachedAccounts = ' + JSON.stringify(accounts));
+const shown = ctx.syncEndpointFilterVisibility();
+const vals = sel.children.map(o => o.value).join(',');
+assert(shown === true && field.hidden === false, 'filter must be visible with multiple endpoints');
+assert(vals === 'all,direct,my-proxy,tor2,tor10,warp1,unknown', 'options from data, got ' + vals);
+
+// A single distinct endpoint hides the filter and resets the selection.
+ev('selectedEndpoint = "tor10"; cachedAccounts = ' + JSON.stringify([mk('x','direct'), mk('y','direct')]));
+assert(ctx.syncEndpointFilterVisibility() === false && field.hidden === true, 'single endpoint hides filter');
+assert(ev('selectedEndpoint') === 'all', 'selection reset when filter hidden');
+console.log('OK_CUSTOM_ENDPOINTS');
+`
+	cmd := nodeDashboardCmd(t, "node", nodeScript)
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "OK_CUSTOM_ENDPOINTS") {
+		t.Fatalf("custom endpoint discovery failed: %v\n%s", err, out)
+	}
+}
+
 func TestDashboardCardHeaderHasEndpointButNoTopStatusChip(t *testing.T) {
-	for _, want := range []string{"badge-endpoint", "badge-endpoint-direct", "endpointLabel(endpointKey)", "WARP 1", "WARP 2", "data-endpoint", ".quota-group:first-child", "getAvailabilityState", "data-availability", "--card-state-bg", "availability.label", "grid-auto-rows: 1fr;", "data-provider", "height: 100%", "min-height: 226px", "grid-template-columns: minmax(0, 1fr) 64px"} {
+	for _, want := range []string{"badge-endpoint", "badge-endpoint-unknown", "endpointLabel(endpointKey)", "data-endpoint", ".quota-group:first-child", "getAvailabilityState", "data-availability", "--card-state-bg", "availability.label", "grid-auto-rows: 1fr;", "data-provider", "height: 100%", "min-height: 226px", "grid-template-columns: minmax(0, 1fr) 64px"} {
 		if !strings.Contains(dashboard.HTML, want) {
 			t.Errorf("dashboard.HTML missing endpoint or availability marker %q", want)
 		}

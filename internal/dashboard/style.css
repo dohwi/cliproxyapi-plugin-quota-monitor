@@ -170,6 +170,7 @@
   .toolbar { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: end; gap: var(--filter-gap); min-width: 0; }
   .filter-field { flex: 0 1 210px; width: 210px; max-width: 100%; min-width: 0; position: relative; }
   .filter-endpoint-field { flex-basis: 175px; width: 175px; }
+  .filter-endpoint-field[hidden] { display: none; }
   .filter-status-field { flex-basis: 140px; width: 140px; }
   .filter-field label { display: block; margin-bottom: 6px; }
   .filter-label, .filter-field label { color: var(--filter-label-color); font-size: 0.75rem; font-weight: 600; line-height: 1.2; white-space: nowrap; text-align: left; }
@@ -328,7 +329,7 @@
   .account-alias { grid-column: 1; grid-row: 2; font-size: 0.78rem; font-weight: 550; color: var(--muted); min-width: 0; white-space: normal; overflow-wrap: anywhere; }
   /* Endpoint is plain metadata; reserve pills for exceptional states/actions. */
   .badge-endpoint { grid-column: 2; grid-row: 2; justify-self: end; display: inline-flex; align-items: center; color: #475569; font-size: 0.72rem; font-weight: 600; line-height: 1.2; white-space: nowrap; }
-  .badge-endpoint-direct, .badge-endpoint-warp1, .badge-endpoint-warp2 { color: #64748b; }
+  .badge-endpoint { color: #64748b; }
   .badge-endpoint-unknown { color: var(--muted); }
 
   .skeleton-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 11px; min-height: 226px; height: 100%; display: flex; flex-direction: column; gap: 6px; }

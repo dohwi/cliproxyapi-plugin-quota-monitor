@@ -13,6 +13,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -355,14 +356,32 @@ func ParseEndpointKindFromProxyURL(rawProxyURL string) EndpointKind {
 	if err != nil || u.User != nil {
 		return EndpointUnknown
 	}
-	switch strings.ToLower(u.Hostname()) {
-	case "warp1":
-		return EndpointWarp1
-	case "warp2":
-		return EndpointWarp2
-	default:
-		return EndpointUnknown
+	if label, ok := safeEndpointLabel(u.Hostname()); ok {
+		return EndpointKind(label)
 	}
+	return EndpointUnknown
+}
+
+var endpointLabelRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
+
+// safeEndpointLabel turns a proxy hostname into a display-safe endpoint label.
+// Only single-label names (e.g. Docker/Compose service names such as "warp1",
+// "my-proxy") are accepted. IP literals, dotted/FQDN hosts, all-numeric names
+// and the reserved values direct/unknown/all are rejected so that addresses
+// and internal domain names are never exposed.
+func safeEndpointLabel(host string) (string, bool) {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if !endpointLabelRE.MatchString(h) {
+		return "", false
+	}
+	switch h {
+	case "direct", "unknown", "all", "localhost":
+		return "", false
+	}
+	if _, err := strconv.Atoi(h); err == nil {
+		return "", false
+	}
+	return h, true
 }
 
 // parseProxyURL validates and parses an absolute HTTP(S)/SOCKS proxy URL. An

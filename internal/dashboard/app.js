@@ -605,21 +605,37 @@ function statusRank(acc) {
   return (key in order) ? order[key] : 7;
 }
 
-// Endpoint rank — canonical group order: Direct → WARP 1 → WARP 2 → Unknown.
-var EP_BASE = { direct:0, warp1:1, warp2:2, unknown:3 };
+// Endpoints are discovered from the data: "direct", "unknown", or any
+// sanitized single-label proxy name the server reports (e.g. "warp1",
+// "my-proxy"). Group order: Direct → named proxies (natural order) → Unknown.
+var EP_BASE = { direct:0, unknown:1000000 };
+function normalizeEndpoint(ep) {
+  var k = String(ep || 'unknown').toLowerCase();
+  return /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(k) ? k : 'unknown';
+}
+function endpointCompare(a, b) {
+  if (a === b) return 0;
+  var ra = (a in EP_BASE) ? EP_BASE[a] : 1, rb = (b in EP_BASE) ? EP_BASE[b] : 1;
+  if (ra !== rb) return ra - rb;
+  var an = a.match(/^(.*?)(\d+)$/), bn = b.match(/^(.*?)(\d+)$/);
+  if (an && bn && an[1] === bn[1]) return Number(an[2]) - Number(bn[2]);
+  return a < b ? -1 : 1;
+}
 function endpointRank(ep) {
-  return (ep in EP_BASE) ? EP_BASE[ep] : 3;
+  return (ep in EP_BASE) ? EP_BASE[ep] : 1;
 }
 
 function filterAccountsByEndpoint(accounts, selectedEp) {
   if (!selectedEp || selectedEp === 'all') return accounts.slice();
   return accounts.filter(function(acc) {
-    return String(acc && acc.endpoint || 'unknown').toLowerCase() === selectedEp;
+    return normalizeEndpoint(acc && acc.endpoint) === selectedEp;
   });
 }
 
+// Names are shown exactly as reported ("direct", "warp1", "my-proxy"); only
+// the "unknown" placeholder is localized.
 function endpointLabel(ep) {
-  return ep === 'direct' ? 'Direct' : ep === 'warp1' ? 'WARP 1' : ep === 'warp2' ? 'WARP 2' : t('ep.unknown');
+  return ep === 'unknown' ? t('ep.unknown') : ep;
 }
 
 function displayedQuotaWindows(acc) {
@@ -710,9 +726,7 @@ function sortAccountsByEndpoint(accounts) {
   arr.sort(function(a, b) {
     var pr = providerRank(a.provider) - providerRank(b.provider);
     if (pr !== 0) return pr;
-    var aep = String(a.endpoint || 'unknown').toLowerCase();
-    var bep = String(b.endpoint || 'unknown').toLowerCase();
-    var er = endpointRank(aep) - endpointRank(bep);
+    var er = endpointCompare(normalizeEndpoint(a.endpoint), normalizeEndpoint(b.endpoint));
     if (er !== 0) return er;
     var sr = statusRank(a) - statusRank(b);
     if (sr !== 0) return sr;
@@ -1504,7 +1518,60 @@ function renderFleetAvailability(entries) {
   el.innerHTML = html;
 }
 
+// Endpoint UI is only useful when accounts actually span more than one
+// network path. With a single distinct endpoint (e.g. all Direct) the filter
+// and per-card labels are hidden as noise.
+function presentEndpoints() {
+  var seen = {};
+  for (var i = 0; i < cachedAccounts.length; i++) {
+    seen[normalizeEndpoint(cachedAccounts[i] && cachedAccounts[i].endpoint)] = true;
+  }
+  return seen;
+}
+
+// Rebuild the filter options from the endpoints actually present so any
+// proxy name configured by the user shows up without code changes.
+function rebuildEndpointOptions(sel, present) {
+  if (!sel || !sel.appendChild) return;
+  var keys = Object.keys(present).sort(endpointCompare);
+  var sig = keys.join('|');
+  if (sel.getAttribute && sel.getAttribute('data-ep-sig') === sig) return;
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  var all = document.createElement('option');
+  all.value = 'all';
+  all.textContent = t('all');
+  all.setAttribute('data-i18n', 'all');
+  sel.appendChild(all);
+  keys.forEach(function(k) {
+    var o = document.createElement('option');
+    o.value = k;
+    o.textContent = endpointLabel(k);
+    sel.appendChild(o);
+  });
+  if (sel.setAttribute) sel.setAttribute('data-ep-sig', sig);
+  sel.value = present[selectedEndpoint] ? selectedEndpoint : 'all';
+}
+
+function hasMultipleEndpoints() {
+  return Object.keys(presentEndpoints()).length > 1;
+}
+
+function syncEndpointFilterVisibility() {
+  var present = presentEndpoints();
+  var show = Object.keys(present).length > 1;
+  var sel = document.getElementById('endpointFilter');
+  var field = sel && sel.closest ? sel.closest('.filter-endpoint-field') : null;
+  if (field) field.hidden = !show;
+  rebuildEndpointOptions(sel, present);
+  if (!show || (selectedEndpoint !== 'all' && !present[selectedEndpoint])) {
+    selectedEndpoint = 'all';
+    if (sel) sel.value = 'all';
+  }
+  return show;
+}
+
 function applyFilters() {
+  syncEndpointFilterVisibility();
   updateFilterTitles();
   var stEl = document.getElementById('statusFilter');
   var st = (stEl && stEl.value) ? stEl.value : 'all';
@@ -1861,8 +1928,7 @@ function renderAccounts(accounts) {
     card.setAttribute('role', 'group');
     card.setAttribute('aria-label', String(acc.account || acc.alias || t('card.account')) + ' · ' + availability.label + (isCurrent ? t('card.current') : ''));
     card.setAttribute('data-provider', pKey);
-    var cardEndpoint = String(acc.endpoint || 'unknown').toLowerCase();
-    if (!(cardEndpoint in EP_BASE)) cardEndpoint = 'unknown';
+    var cardEndpoint = normalizeEndpoint(acc.endpoint);
     card.setAttribute('data-endpoint', cardEndpoint);
     if (isCurrent) card.setAttribute('data-current', 'true');
     if (acc.account_key) card.setAttribute('data-account-key', acc.account_key);
@@ -1901,12 +1967,13 @@ function renderAccounts(accounts) {
     aliasEl.title = labelText;
     iden.appendChild(aliasEl);
 
-    var endpointKey = String(acc.endpoint || 'unknown').toLowerCase();
-    if (!(endpointKey in EP_BASE)) endpointKey = 'unknown';
-    var endpointEl = document.createElement('span');
-    endpointEl.className = 'badge-endpoint badge-endpoint-' + endpointKey;
-    endpointEl.textContent = endpointLabel(endpointKey);
-    iden.appendChild(endpointEl);
+    if (hasMultipleEndpoints()) {
+      var endpointKey = normalizeEndpoint(acc.endpoint);
+      var endpointEl = document.createElement('span');
+      endpointEl.className = 'badge-endpoint badge-endpoint-' + endpointKey;
+      endpointEl.textContent = endpointLabel(endpointKey);
+      iden.appendChild(endpointEl);
+    }
 
     header.appendChild(iden);
     if (acc.account_key && acc.refresh_supported !== false && ['codex', 'claude', 'antigravity'].indexOf(pKey) >= 0 && availability.key !== 'disabled') {

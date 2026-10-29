@@ -24,7 +24,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.2.2"
+	pluginVersion             = "0.2.3"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -712,8 +712,9 @@ type safeAccount struct {
 	APICredits       *quotamonitor.APICredits   `json:"api_credits,omitempty"`
 	ResetCredits     *quotamonitor.ResetCredits `json:"reset_credits,omitempty"`
 	Operational      *safeOperational           `json:"operational,omitempty"`
-	// Endpoint is a safe allowlisted enum: direct|warp1|warp2|unknown.
-	// URL/host/IP/token details are never included.
+	// Endpoint is "direct", "unknown", or a sanitized single-label proxy
+	// hostname (e.g. a Docker service name such as "warp1"). URLs, ports,
+	// credentials, IPs and dotted/FQDN hosts are never included.
 	Endpoint quotamonitor.EndpointKind `json:"endpoint"`
 	PlanType string                    `json:"plan_type,omitempty"`
 	// CurrentAccount marks the single most-recently-used account per provider
