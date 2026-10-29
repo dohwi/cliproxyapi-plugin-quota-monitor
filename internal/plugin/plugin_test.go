@@ -1401,6 +1401,61 @@ console.log('OK_ENDPOINT_SORT_TESTS');
 	}
 }
 
+// TestDashboardAndAssetsCarrySecurityHeaders locks the response hardening: the
+// page forbids framing, sniffing, referrers and every external origin, and font
+// and JSON responses cannot be MIME-sniffed into something executable.
+func TestDashboardAndAssetsCarrySecurityHeaders(t *testing.T) {
+	reset(t)
+	call := func(path string) managementResponse {
+		raw := handleManagementHandle(func() []byte {
+			b, _ := json.Marshal(managementRequest{Method: "GET", Path: path})
+			return b
+		}())
+		var e struct {
+			Result managementResponse `json:"result"`
+		}
+		if json.Unmarshal(raw, &e) != nil {
+			t.Fatalf("%s: unmarshal envelope failed", path)
+		}
+		return e.Result
+	}
+	first := func(r managementResponse, k string) string {
+		if v := r.Headers[k]; len(v) > 0 {
+			return v[0]
+		}
+		return ""
+	}
+
+	for _, path := range []string{resourceBase + "/dashboard", mgmtBase + "/dashboard"} {
+		page := call(path)
+		csp := first(page, "Content-Security-Policy")
+		for _, want := range []string{"default-src 'none'", "frame-ancestors 'none'", "base-uri 'none'", "form-action 'none'", "connect-src 'self'", "font-src 'self'"} {
+			if !strings.Contains(csp, want) {
+				t.Errorf("%s: CSP missing %q: %q", path, want, csp)
+			}
+		}
+		for _, bad := range []string{"http:", "https:", "*", "unsafe-eval"} {
+			if strings.Contains(csp, bad) {
+				t.Errorf("%s: CSP must not contain %q: %q", path, bad, csp)
+			}
+		}
+		for h, want := range map[string]string{"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Cache-Control": "no-store"} {
+			if got := first(page, h); got != want {
+				t.Errorf("%s: %s = %q, want %q", path, h, got, want)
+			}
+		}
+	}
+	for _, f := range []string{"manrope-variable.woff2", "suit-regular.woff2", "suit-semibold.woff2"} {
+		font := call(resourceBase + "/assets/" + f)
+		if font.StatusCode != 200 || first(font, "X-Content-Type-Options") != "nosniff" {
+			t.Errorf("font %s: status=%d nosniff=%q", f, font.StatusCode, first(font, "X-Content-Type-Options"))
+		}
+	}
+	if got := first(call(mgmtBase+"/does-not-exist"), "X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("json response X-Content-Type-Options = %q, want nosniff", got)
+	}
+}
+
 // TestDashboardDiscoversCustomEndpointNames verifies that arbitrary proxy names
 // reported by the server appear in the filter, sort naturally, get readable
 // labels, and that a single distinct endpoint hides the whole Endpoint UI.

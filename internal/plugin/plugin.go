@@ -24,7 +24,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.2.3"
+	pluginVersion             = "0.2.4"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -1059,11 +1059,11 @@ func handleManagementHandle(raw []byte) []byte {
 	// browser-navigable resource under the host resource prefix. The bare
 	// "/dashboard" form is accepted defensively for relative dispatches.
 	case resourceBase + "/assets/manrope-variable.woff2":
-		return OKEnvelope(managementResponse{StatusCode: 200, Headers: map[string][]string{"Content-Type": {"font/woff2"}, "Cache-Control": {"public, max-age=31536000, immutable"}}, Body: dashboard.Manrope})
+		return fontResponse(dashboard.Manrope)
 	case resourceBase + "/assets/suit-regular.woff2":
-		return OKEnvelope(managementResponse{StatusCode: 200, Headers: map[string][]string{"Content-Type": {"font/woff2"}, "Cache-Control": {"public, max-age=31536000, immutable"}}, Body: dashboard.SUITRegular})
+		return fontResponse(dashboard.SUITRegular)
 	case resourceBase + "/assets/suit-semibold.woff2":
-		return OKEnvelope(managementResponse{StatusCode: 200, Headers: map[string][]string{"Content-Type": {"font/woff2"}, "Cache-Control": {"public, max-age=31536000, immutable"}}, Body: dashboard.SUITSemibold})
+		return fontResponse(dashboard.SUITSemibold)
 	case mgmtBase + "/dashboard", resourceBase + "/dashboard", "/dashboard":
 		// The resource form is unauthenticated, so it must never start upstream
 		// work. Only the authenticated management form may warm an empty cache.
@@ -1080,11 +1080,8 @@ func handleManagementHandle(raw []byte) []byte {
 		}
 		return OKEnvelope(managementResponse{
 			StatusCode: 200,
-			Headers: map[string][]string{
-				"Content-Type":  {"text/html; charset=utf-8"},
-				"Cache-Control": {"no-store"},
-			},
-			Body: []byte(dashboard.HTML),
+			Headers:    dashboardPageHeaders(),
+			Body:       []byte(dashboard.HTML),
 		})
 	case mgmtBase + "/status":
 		result, body := collectManagementSnapshot(false)
@@ -2239,5 +2236,28 @@ func mgmtResponse(status int, body any) []byte {
 	if err != nil {
 		b = []byte(`{"error":"response encoding failed"}`)
 	}
-	return OKEnvelope(managementResponse{StatusCode: status, Headers: map[string][]string{"Content-Type": {"application/json"}}, Body: b})
+	return OKEnvelope(managementResponse{StatusCode: status, Headers: map[string][]string{"Content-Type": {"application/json"}, "X-Content-Type-Options": {"nosniff"}}, Body: b})
+}
+
+// dashboardSecurityHeaders hardens the self-contained page. The page is a single
+// HTML document with inline script/style, so script-src must allow 'unsafe-inline';
+// everything else is locked down: no external origins, no framing, no sniffing,
+// no referrer, no base-tag or form-target hijacking.
+var dashboardSecurityHeaders = map[string][]string{
+	"Content-Security-Policy": {"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"},
+	"X-Content-Type-Options":  {"nosniff"},
+	"Referrer-Policy":         {"no-referrer"},
+	"X-Frame-Options":         {"DENY"},
+}
+
+func dashboardPageHeaders() map[string][]string {
+	h := map[string][]string{"Content-Type": {"text/html; charset=utf-8"}, "Cache-Control": {"no-store"}}
+	for k, v := range dashboardSecurityHeaders {
+		h[k] = v
+	}
+	return h
+}
+
+func fontResponse(font []byte) []byte {
+	return OKEnvelope(managementResponse{StatusCode: 200, Headers: map[string][]string{"Content-Type": {"font/woff2"}, "Cache-Control": {"public, max-age=31536000, immutable"}, "X-Content-Type-Options": {"nosniff"}}, Body: font})
 }

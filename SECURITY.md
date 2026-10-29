@@ -18,6 +18,10 @@ The unauthenticated `/v0/resource/.../data/*` routes do not exist (HTTP 404). Th
 
 Management HTTP access is restricted to loopback URLs; redirects and environment proxies are disabled. Auth-directory scanning rejects final symlinks and nonregular files and applies size/count bounds. Keep the configured directory and its ancestors on a trusted filesystem.
 
+## Response hardening
+
+The dashboard page is served with a strict `Content-Security-Policy` (`default-src 'none'`; scripts and styles inline only, fonts/connect `'self'`, no framing, `base-uri 'none'`, `form-action 'none'`), plus `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY`. Fonts and JSON responses are `nosniff`. The page loads no external origin.
+
 ## Data handling
 
 Dashboard DTOs omit raw tokens, internal auth indexes, paths and proxy URLs. Account display identifiers are not anonymous: treat snapshots and screenshots as potentially sensitive. The dashboard persists its language preference (`localStorage`) and, for the current tab only, the accepted management key (`sessionStorage`). Never commit operational auth files, usage logs, keys or real account identifiers; use reserved example domains for fixtures.
