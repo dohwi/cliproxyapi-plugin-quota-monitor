@@ -149,12 +149,16 @@ reset rights. Unsupported/missing values remain omitted, not displayed as zero.
 
 ## 2. Configuration and host routes
 
-The plugin accepts these environment variables at registration:
+The plugin resolves its settings at registration:
 
-- `QUOTA_MONITOR_MGMT_URL`: only `http`/`https` loopback URLs are accepted;
+- Management key: `QUOTA_MONITOR_MGMT_KEY` if set; otherwise the key learned from a
+  host-authenticated `/v0/management/plugins/quota-monitor/...` request (never from
+  unauthenticated resource routes), restored from an AES-256-GCM encrypted store.
+  It is sent only as a bearer credential to the loopback endpoint and never
+  included in output or errors.
+- `QUOTA_MONITOR_MGMT_URL` or plugin config `management_url` (optional, default
+  `http://127.0.0.1:8317/v0`): only `http`/`https` loopback URLs are accepted;
   userinfo, query, and fragment are rejected.
-- `QUOTA_MONITOR_MGMT_KEY`: sent only as a bearer credential to that configured
-  loopback endpoint and never included in output or errors.
 
 When configuration is absent or invalid, registration still succeeds and the
 plugin reports `configured:false` with a generic reason and empty accounts.

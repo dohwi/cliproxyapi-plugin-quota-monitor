@@ -1,12 +1,14 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -20,11 +22,12 @@ import (
 	"quota-monitor/internal/dashboard"
 	"quota-monitor/internal/overview"
 	quotamonitor "quota-monitor/internal/quota"
+	"quota-monitor/internal/secret"
 )
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.2.9"
+	pluginVersion             = "0.3.0"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -330,6 +333,8 @@ type collectionProgress struct {
 
 type stateData struct {
 	mu            sync.Mutex
+	configYAML    []byte
+	learnedKey    string
 	configured    bool
 	reason        string
 	client        *quotamonitor.Client
@@ -481,7 +486,9 @@ func executeBackgroundCollection(ctx context.Context, expectedGen uint64) bool {
 	return res.err == nil
 }
 
-var state = &stateData{reason: "QUOTA_MONITOR_MGMT_URL and QUOTA_MONITOR_MGMT_KEY are required", probeDue: make(map[string]time.Time), current: make(map[string]currentChoice)}
+const missingKeyReason = "Management key not available yet: open this dashboard and sign in with the management key once (or set QUOTA_MONITOR_MGMT_KEY)"
+
+var state = &stateData{reason: missingKeyReason, probeDue: make(map[string]time.Time), current: make(map[string]currentChoice)}
 
 func Shutdown() {
 	st := state
@@ -524,12 +531,30 @@ func HandleMethod(method string, request []byte) ([]byte, bool) {
 }
 
 type metadata struct {
-	Name             string `json:"Name"`
-	Version          string `json:"Version"`
-	Author           string `json:"Author"`
-	GitHubRepository string `json:"GitHubRepository"`
-	Logo             string `json:"Logo,omitempty"`
+	Name             string        `json:"Name"`
+	Version          string        `json:"Version"`
+	Author           string        `json:"Author"`
+	GitHubRepository string        `json:"GitHubRepository"`
+	Logo             string        `json:"Logo,omitempty"`
+	ConfigFields     []configField `json:"ConfigFields,omitempty"`
 }
+
+// configField mirrors pluginapi.ConfigField (host RPC decoder uses default Go field names).
+type configField struct {
+	Name        string `json:"Name"`
+	Type        string `json:"Type"`
+	Description string `json:"Description"`
+}
+
+// pluginConfigFields documents the optional plugin-owned settings. The management
+// key is intentionally not a field: it is learned from the authenticated dashboard
+// and stored encrypted, never written to config.yaml. The host URL is not a field
+// either: the plugin runs inside the host, so it defaults to the host's own
+// loopback port (management_url / QUOTA_MONITOR_MGMT_URL remain as hidden overrides).
+var pluginConfigFields = []configField{
+	{Name: "auth_dir", Type: "string", Description: "Auth files directory. Normally detected automatically."},
+}
+
 type registrationResponse struct {
 	SchemaVersion uint32          `json:"schema_version"`
 	Metadata      metadata        `json:"metadata"`
@@ -547,11 +572,78 @@ func handleRegister(request []byte) []byte {
 		sv = req.SchemaVersion
 	}
 	configureFromEnv(req.ConfigYAML)
-	return OKEnvelope(registrationResponse{SchemaVersion: sv, Metadata: metadata{Name: pluginName, Version: pluginVersion, Author: pluginAuthor, GitHubRepository: pluginRepo, Logo: pluginLogo}, Capabilities: map[string]bool{"management_api": true}})
+	return OKEnvelope(registrationResponse{SchemaVersion: sv, Metadata: metadata{Name: pluginName, Version: pluginVersion, Author: pluginAuthor, GitHubRepository: pluginRepo, Logo: pluginLogo, ConfigFields: pluginConfigFields}, Capabilities: map[string]bool{"management_api": true}})
+}
+
+const defaultMgmtURL = "http://127.0.0.1:8317/v0"
+
+var learnMu sync.Mutex
+
+// keyFromHeaders extracts the management key the way the host does.
+func keyFromHeaders(h map[string][]string) string {
+	get := func(name string) string {
+		for k, v := range h {
+			if strings.EqualFold(k, name) && len(v) > 0 {
+				return strings.TrimSpace(v[0])
+			}
+		}
+		return ""
+	}
+	if ah := get("Authorization"); ah != "" {
+		if parts := strings.SplitN(ah, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+			return strings.TrimSpace(parts[1])
+		}
+		return ah
+	}
+	return get("X-Management-Key")
+}
+
+// learnManagementKey adopts the key from an already host-authenticated request,
+// stores it encrypted and (re)configures the collector. The environment variable
+// always wins so an explicit operator setting is never overridden.
+func learnManagementKey(h map[string][]string) {
+	key := keyFromHeaders(h)
+	if !secret.ValidKey(key) || strings.TrimSpace(os.Getenv("QUOTA_MONITOR_MGMT_KEY")) != "" {
+		return
+	}
+	learnMu.Lock()
+	defer learnMu.Unlock()
+	state.mu.Lock()
+	current := ""
+	if state.client != nil {
+		current = state.client.ManagementKey
+	}
+	cfg := bytes.Clone(state.configYAML)
+	if key == current {
+		state.mu.Unlock()
+		return
+	}
+	state.learnedKey = key
+	state.mu.Unlock()
+	if err := secret.Save(secret.DefaultDir(), key); err != nil {
+		log.Printf("quota-monitor: key kept in memory only: %v", err)
+	}
+	configureFromEnv(cfg)
 }
 
 func configureFromEnv(configYAML []byte) {
 	rawURL, key := strings.TrimSpace(os.Getenv("QUOTA_MONITOR_MGMT_URL")), strings.TrimSpace(os.Getenv("QUOTA_MONITOR_MGMT_KEY"))
+	if rawURL == "" {
+		rawURL = authdir.ConfigScalar(configYAML, "management_url")
+	}
+	if rawURL == "" {
+		// Zero-config default: the host's own loopback listener.
+		rawURL = defaultMgmtURL
+	}
+	state.mu.Lock()
+	state.configYAML = bytes.Clone(configYAML)
+	if key == "" {
+		key = state.learnedKey
+	}
+	state.mu.Unlock()
+	if key == "" {
+		key = secret.Load(secret.DefaultDir())
+	}
 	state.mu.Lock()
 	done := stopCollectorLocked()
 	var previousAuthDir string
@@ -603,8 +695,8 @@ func configureFromEnv(configYAML []byte) {
 	state.snapshotComplete = false
 	state.probeDue = make(map[string]time.Time)
 	state.resolver = resolver
-	state.reason = "QUOTA_MONITOR_MGMT_URL and QUOTA_MONITOR_MGMT_KEY are required"
-	if rawURL == "" || key == "" {
+	state.reason = missingKeyReason
+	if key == "" {
 		return
 	}
 	if err := validateLoopbackURL(rawURL); err != nil {
@@ -978,10 +1070,11 @@ func handleManagementRegister() []byte {
 }
 
 type managementRequest struct {
-	Method string              `json:"Method"`
-	Path   string              `json:"Path"`
-	Query  map[string][]string `json:"Query"`
-	Body   []byte              `json:"Body"`
+	Method  string              `json:"Method"`
+	Path    string              `json:"Path"`
+	Headers map[string][]string `json:"Headers"`
+	Query   map[string][]string `json:"Query"`
+	Body    []byte              `json:"Body"`
 }
 type managementResponse struct {
 	StatusCode int                 `json:"StatusCode"`
@@ -995,6 +1088,11 @@ func handleManagementHandle(raw []byte) []byte {
 		return mgmtResponse(400, map[string]string{"error": "bad request"})
 	}
 	method, path := strings.ToUpper(strings.TrimSpace(req.Method)), strings.TrimRight(strings.TrimSpace(req.Path), "/")
+	// Only /v0/management/... requests are authenticated by the host, so only
+	// those can carry a trustworthy management key. Resource routes are public.
+	if strings.HasPrefix(path, mgmtBase+"/") {
+		learnManagementKey(req.Headers)
+	}
 	if method == "GET" && path == mgmtBase+"/data/accounts" {
 		// Dashboard data: sanitized (no auth_index), snapshot only, even when empty,
 		// expired, forced, or another collection is in flight. Management-authenticated.

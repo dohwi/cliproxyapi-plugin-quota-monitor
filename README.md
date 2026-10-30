@@ -90,6 +90,22 @@ Every release publishes all five store platforms; the Release workflow refuses t
 
 The Linux builds require glibc 2.36 or older (the official Debian bookworm image).
 
+### Configuration
+
+**No setup is required.** Install the plugin, open its dashboard and sign in with your CLIProxyAPI management key (the same one you use for the management page). The plugin learns the key from that authenticated request, stores it **encrypted** (AES-256-GCM) and starts collecting in the background. After a host restart it restores the key by itself.
+
+| Item | Default | How to change |
+|---|---|---|
+| Management key | learned from the dashboard sign-in | Sign in again with a new key, or set `QUOTA_MONITOR_MGMT_KEY` on the host process (it always wins) |
+| Auth directory | host `auth-dir`, then `/root/.cli-proxy-api` | `auth_dir` in the plugin config, or `QUOTA_MONITOR_AUTH_DIR` |
+| Disable background collection | off | `QUOTA_MONITOR_DISABLE_BACKGROUND=1` |
+
+Where the key is stored: `<user-config-dir>/cliproxyapi/quota-monitor/` (`~/.config/...` on Linux), or `QUOTA_MONITOR_DATA_DIR`. It holds `mgmt-key.enc` (the encrypted key) and `master.key` (the random encryption key), both mode `0600`. This keeps the credential out of `config.yaml`, backups and accidental commits, but it cannot stop another process running as the same OS user, which can read both files. Delete the directory to forget the key.
+
+If the dashboard stays on "Waiting for the management key" or shows a connection error although you signed in, your host probably listens on a port other than the default `8317`. Set `management_url: http://127.0.0.1:<port>/v0` under `plugins.configs.quota-monitor` in `config.yaml` (or `QUOTA_MONITOR_MGMT_URL`).
+
+Until the key is known, the dashboard shows a "Waiting for the management key" notice.
+
 ### Releasing
 
 Bump `pluginVersion` in `internal/plugin/plugin.go` and push to `main`. That is all: the Release workflow reads the version, skips if `vX.Y.Z` already exists, otherwise tests it, builds each platform on a native runner, packages `<id>_<version>_<os>_<arch>.zip`, writes `checksums.txt`, and creates the tag and GitHub release. The CLIProxyAPI plugin store reads the latest release, so the plugin page then offers the update.
@@ -100,7 +116,7 @@ Pushing a matching `vX.Y.Z` tag by hand, or running the workflow manually, also 
 
 The dashboard ships in English and Korean. A single translate icon button in the filter area switches between Korean and English; its tooltip names the language it switches to.
 
-- **Selection order**: saved choice, then browser language (Korean selects Korean, anything else selects English), then Korean.
+- **Selection order**: saved choice, then browser language (Korean selects Korean, anything else selects English), then English.
 - **Shared setting**: the choice is stored in the browser under `cpa_plugin_lang`, the same key used by the [usage-audit](https://github.com/dohwi/cliproxyapi-plugin-usage-audit) dashboard. Changing it in one open dashboard updates the other. This only applies when both dashboards are served from the same origin.
 - **Privacy**: the language key is the only thing the page writes to `localStorage`. The management key is held in `sessionStorage` for the current tab only and is never written to `localStorage`, cookies or a URL.
 - **Not translated**: the plugin name shown in the host menu is registered once at load time, so it is fixed to the plugin store name ("Quota Monitor") in every language.

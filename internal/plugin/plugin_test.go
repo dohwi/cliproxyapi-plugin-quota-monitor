@@ -21,7 +21,7 @@ import (
 func reset(t *testing.T) {
 	t.Helper()
 	Shutdown()
-	state = &stateData{reason: "QUOTA_MONITOR_MGMT_URL and QUOTA_MONITOR_MGMT_KEY are required", probeDue: make(map[string]time.Time)}
+	state = &stateData{reason: missingKeyReason, probeDue: make(map[string]time.Time)}
 	t.Cleanup(func() {
 		Shutdown()
 		os.Unsetenv("QUOTA_MONITOR_MGMT_URL")

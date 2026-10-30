@@ -8,12 +8,12 @@ cross-repository ABI, probe, resource, and release contract is
 
 ## Configuration
 
-The server process must set both:
+The management key is learned from the first host-authenticated request to `/v0/management/plugins/quota-monitor/...` (never from the unauthenticated `/v0/resource/...` routes), kept in memory, and stored encrypted (AES-256-GCM, `mgmt-key.enc` + `master.key`, mode 0600) under `QUOTA_MONITOR_DATA_DIR` or the per-user config directory. `QUOTA_MONITOR_MGMT_KEY` overrides it.
 
-- `QUOTA_MONITOR_MGMT_URL`: CLIProxyAPI management base URL. Only `http`/`https` loopback hosts (`localhost`, `127.0.0.0/8`, `::1`, or other literal loopback IPs) are accepted. Userinfo, query strings, and fragments are rejected. `localhost` remains accepted for compatibility with existing local host configurations; use a literal loopback IP when hardening against local DNS rebinding/misresolution.
-- `QUOTA_MONITOR_MGMT_KEY`: management key, retained in memory and sent as `Authorization: Bearer ...` only to the configured loopback endpoint. Redirects are rejected by the reused quota client.
+- `QUOTA_MONITOR_MGMT_URL` / `management_url` (advanced override, not advertised in the UI): CLIProxyAPI base URL including the `/v0` prefix, default `http://127.0.0.1:8317/v0`. Only `http`/`https` loopback hosts (`localhost`, `127.0.0.0/8`, `::1`, or other literal loopback IPs) are accepted. Userinfo, query strings, and fragments are rejected. `localhost` remains accepted for compatibility with existing local host configurations; use a literal loopback IP when hardening against local DNS rebinding/misresolution.
+- The key is retained in memory and sent as `Authorization: Bearer ...` only to the configured loopback endpoint. Redirects are rejected by the reused quota client.
 
-When either value is absent or invalid, the plugin remains registered but reports `configured:false`, an empty `accounts` array, `stale:false`, and a safe configuration `reason`. `configured:true` means only that the environment was syntactically valid and a loopback quota client was created; it does not mean the upstream quota source is reachable or fresh.
+When the key is absent or either value is invalid, the plugin remains registered but reports `configured:false`, an empty `accounts` array, `stale:false`, and a safe configuration `reason`. `configured:true` means only that the environment was syntactically valid and a loopback quota client was created; it does not mean the upstream quota source is reachable or fresh.
 
 ## Host integration
 

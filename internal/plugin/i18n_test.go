@@ -115,7 +115,7 @@ function makeCtx(stored, navLangs) {
 function assert(c, m) { if (!c) throw new Error(m); }
 
 let r = makeCtx(null, null);
-assert(r.ctx.currentLang === 'ko', 'defaults to ko without navigator');
+assert(r.ctx.currentLang === 'en', 'defaults to en without navigator');
 r = makeCtx(null, ['en-US', 'ko']);
 assert(r.ctx.currentLang === 'en', 'browser language en-US selects en');
 r = makeCtx(null, ['ko-KR']);
@@ -153,7 +153,7 @@ c.setLanguage('fr');
 assert(c.currentLang === 'ko', 'unsupported language ignored');
 console.log('OK_I18N_SWITCH');
 `
-	cmd := nodeDashboardCmd(t, "node", script)
+	cmd := nodeDashboardCmdRaw(t, "node", script)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("language switch contract failed: %v\n%s", err, out)

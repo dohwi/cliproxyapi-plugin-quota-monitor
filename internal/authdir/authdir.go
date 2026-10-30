@@ -533,6 +533,22 @@ func ResolveDirWithFallback(configYAML []byte, previousDir string) string {
 	return containerAuthDir
 }
 
+// ConfigScalar returns the top-level scalar value for key from the plugin's
+// config_yaml (JSON or simple YAML), or "" when absent.
+func ConfigScalar(configYAML []byte, key string) string {
+	if len(configYAML) == 0 {
+		return ""
+	}
+	var m map[string]any
+	if json.Unmarshal(configYAML, &m) == nil {
+		if v, ok := m[key].(string); ok {
+			return strings.TrimSpace(v)
+		}
+		return ""
+	}
+	return extractYAMLScalar(configYAML, key)
+}
+
 // extractYAMLScalar is a minimal, zero-dependency extractor for a scalar
 // mapping value from YAML bytes. It handles the common "key: value" form.
 // It does NOT handle multiline, anchors, or complex YAML; returns "" on any

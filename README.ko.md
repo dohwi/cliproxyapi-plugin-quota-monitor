@@ -90,6 +90,22 @@ make build
 
 Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)가 필요합니다.
 
+### 설정
+
+**별도 설정이 필요 없습니다.** 플러그인을 설치하고 대시보드를 열어 CLIProxyAPI 관리 키(관리 페이지에 쓰는 것과 같은 키)로 로그인하세요. 플러그인이 인증된 요청에서 키를 받아 **암호화**(AES-256-GCM)해 저장하고 백그라운드 수집을 시작합니다. 호스트를 재시작해도 스스로 키를 복원합니다.
+
+| 항목 | 기본값 | 변경 방법 |
+|---|---|---|
+| 관리 키 | 대시보드 로그인에서 자동 취득 | 새 키로 다시 로그인하거나, 호스트 프로세스에 `QUOTA_MONITOR_MGMT_KEY` 지정(항상 우선) |
+| 인증 디렉터리 | 호스트 `auth-dir` → `/root/.cli-proxy-api` | 플러그인 설정의 `auth_dir` 또는 `QUOTA_MONITOR_AUTH_DIR` |
+| 백그라운드 수집 끄기 | 꺼짐 | `QUOTA_MONITOR_DISABLE_BACKGROUND=1` |
+
+키 저장 위치는 `<user-config-dir>/cliproxyapi/quota-monitor/`(Linux는 `~/.config/...`) 또는 `QUOTA_MONITOR_DATA_DIR`입니다. 암호화된 키 `mgmt-key.enc`와 무작위 암호화 키 `master.key`가 `0600` 권한으로 저장됩니다. `config.yaml`, 백업, 실수로 한 커밋에 키가 남지 않게 해 주지만, 같은 OS 사용자로 실행되는 다른 프로세스는 두 파일을 모두 읽을 수 있어 막지 못합니다. 키를 잊게 하려면 이 디렉터리를 삭제하세요.
+
+로그인했는데도 대시보드가 "관리 키를 확인하는 중입니다"에 머물거나 연결 오류가 나면, 호스트가 기본 포트 `8317`이 아닌 다른 포트를 쓰는 경우입니다. `config.yaml`의 `plugins.configs.quota-monitor`에 `management_url: http://127.0.0.1:<포트>/v0`를 지정하세요(또는 `QUOTA_MONITOR_MGMT_URL`).
+
+키를 알기 전에는 대시보드에 "관리 키를 확인하는 중입니다" 안내가 표시됩니다.
+
 ### 릴리스
 
 `internal/plugin/plugin.go`의 `pluginVersion`을 올려 `main`에 푸시하면 끝입니다. 릴리스 워크플로가 버전을 읽고, `vX.Y.Z`가 이미 있으면 건너뜁니다. 없으면 테스트 후 플랫폼별 네이티브 러너에서 빌드해 `<id>_<version>_<os>_<arch>.zip`으로 패키징하고, `checksums.txt`와 함께 태그와 GitHub 릴리스를 만듭니다. CLIProxyAPI 플러그인 스토어가 최신 릴리스를 읽으므로 플러그인 페이지에 업데이트가 표시됩니다.
@@ -100,7 +116,7 @@ Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)가 필요합
 
 대시보드는 한국어와 영어를 지원하며, 필터 영역의 번역 아이콘 버튼 하나를 누를 때마다 한국어와 영어가 전환되며, 툴팁에 전환될 언어가 표시됩니다.
 
-- **선택 순서**: 저장된 선택 → 브라우저 언어(한국어면 한국어, 그 외는 영어) → 한국어.
+- **선택 순서**: 저장된 선택 → 브라우저 언어(한국어면 한국어, 그 외는 영어) → 영어.
 - **공유 설정**: 선택값은 브라우저의 `cpa_plugin_lang` 키에 저장되며, [usage-audit](https://github.com/dohwi/cliproxyapi-plugin-usage-audit) 대시보드와 같은 키를 씁니다. 한쪽에서 바꾸면 열려 있는 다른 쪽도 따라갑니다. 두 대시보드가 같은 origin에서 제공될 때만 적용됩니다.
 - **개인정보**: 언어 키가 페이지가 `localStorage`에 쓰는 유일한 값입니다. 관리 키는 현재 탭의 `sessionStorage`에만 보관되며 `localStorage`, 쿠키, URL에는 쓰이지 않습니다.
 - **번역되지 않는 항목**: 호스트 메뉴에 표시되는 플러그인 이름은 로드 시 한 번 등록되므로 플러그인 스토어 이름("Quota Monitor")으로 고정되며 언어에 따라 바뀌지 않습니다.

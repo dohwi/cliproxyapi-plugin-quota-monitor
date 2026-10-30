@@ -87,7 +87,7 @@ var POLL_MAX_MS = 900000;              // 15m cap
 // ── i18n ────────────────────────────────────────────────────────────────────
 // The language preference is the only value this page persists (LANG_KEY). The key is
 // shared with the other CLIProxyAPI plugin dashboards so one choice applies to all of them.
-// Order: saved choice → browser language (ko* → ko, else en) → ko.
+// Order: saved choice → browser language (ko* → ko, else en) → en.
 var LANG_KEY = 'cpa_plugin_lang';
 var SUPPORTED_LANGS = ['ko', 'en'];
 var I18N = {
@@ -98,8 +98,8 @@ var I18N = {
     'lang.label': '언어',
     'lang.toEn': 'English로 전환',
     'lang.toKo': '한국어로 전환',
-    'unconfigured': '환경변수 미설정 (QUOTA_MONITOR_MGMT_URL, QUOTA_MONITOR_MGMT_KEY)',
-    'unconfigured.reason': '환경변수 미설정 (QUOTA_MONITOR_MGMT_URL, QUOTA_MONITOR_MGMT_KEY): {r}',
+    'unconfigured': '관리 키를 확인하는 중입니다. 이 페이지에서 관리 키로 로그인하면 자동으로 설정됩니다',
+    'unconfigured.reason': '설정 대기 중: {r}',
     'retry': '다시 시도',
     'retry.aria': '데이터 다시 시도',
     'toolbar.aria': '대시보드 컨트롤',
@@ -230,8 +230,8 @@ var I18N = {
     'lang.label': 'Language',
     'lang.toEn': 'Switch to English',
     'lang.toKo': 'Switch to Korean',
-    'unconfigured': 'Environment variables not set (QUOTA_MONITOR_MGMT_URL, QUOTA_MONITOR_MGMT_KEY)',
-    'unconfigured.reason': 'Environment variables not set (QUOTA_MONITOR_MGMT_URL, QUOTA_MONITOR_MGMT_KEY): {r}',
+    'unconfigured': 'Waiting for the management key. Sign in with it on this page and setup completes automatically',
+    'unconfigured.reason': 'Waiting for setup: {r}',
     'retry': 'Retry',
     'retry.aria': 'Retry loading data',
     'toolbar.aria': 'Dashboard controls',
@@ -381,7 +381,7 @@ function detectLang() {
     var list = nav && (nav.languages && nav.languages.length ? nav.languages : [nav.language]);
     if (list && list[0]) return normalizeLang(list[0]) || 'en';
   } catch (e) {}
-  return 'ko';
+  return 'en';
 }
 currentLang = detectLang();
 
