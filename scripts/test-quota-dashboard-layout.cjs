@@ -91,7 +91,7 @@ accounts.push({ ...accounts[4], account_key: 'fixture-8', account: 'weekly-locke
   windows: [{name: 'primary', remaining_percent: 60, reset_at: reset(5)}, {name: 'secondary', remaining_percent: 0, reset_at: reset(120)}] });
 // Match the real endpoint and observation contract, including the user's two card shapes.
 accounts.forEach((account, i) => {
-  account.endpoint = 'direct';
+  account.endpoint = i === 1 ? 'warp1' : 'direct';
   account.observed_at = new Date(Date.now() - (i === 4 ? 39 : 7) * 60000).toISOString();
 });
 (async () => {

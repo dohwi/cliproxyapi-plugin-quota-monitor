@@ -207,6 +207,7 @@ var I18N = {
     'q.lockedAria': '{title} 잠금',
     'q.lockNote': '현재 계정 잠금',
     'q.weeklyLeft': '주간 잔여',
+    'q.fiveLeft': '5시간 잔여',
     'q.leftAria': '{label} 잔여 {v}',
     'q.familyAria': '{f} 쿼터',
     'q.none': '쿼터 없음',
@@ -340,6 +341,7 @@ var I18N = {
     'q.lockedAria': '{title} locked',
     'q.lockNote': 'Account currently locked',
     'q.weeklyLeft': 'Weekly left',
+    'q.fiveLeft': '5-hour left',
     'q.leftAria': '{label}: {v} remaining',
     'q.familyAria': '{f} quota',
     'q.none': 'No quota',
@@ -1699,16 +1701,20 @@ function renderQuotaLock(acc, availability) {
   var countdown = formatResetCountdownSeconds(info.seconds);
   var ariaParts = [t('q.lockedAria', { title: title }), countdown];
   var weeklyExtra = '';
-  if (info.role === 'short') {
+  {
+    // The other window's remaining quota is shown under either lock type so both lock cards carry the same information.
+    var otherRole = info.role === 'short' ? 'long' : 'short';
+    var otherLabel = info.role === 'short' ? t('q.weeklyLeft') : t('q.fiveLeft');
+    var otherClass = info.role === 'short' ? 'quota-reset-weekly' : 'quota-reset-primary';
     var wins = displayedQuotaWindows(acc);
     for (var i = 0; i < wins.length; i++) {
-      if (quotaWindowRole(wins[i], acc.provider) !== 'long') continue;
+      if (quotaWindowRole(wins[i], acc.provider) !== otherRole) continue;
       var weeklyRemaining = quotaNumber(wins[i]);
       var weeklyValue = weeklyRemaining===null?'—':fmtPct(weeklyRemaining);
       var weeklyCountdown = formatResetCountdownSeconds(resetSeconds(wins[i]));
-      var weeklyAria = t('q.weeklyLeft')+' '+weeklyValue+', '+weeklyCountdown;
+      var weeklyAria = otherLabel+' '+weeklyValue+', '+weeklyCountdown;
       ariaParts.push(weeklyAria);
-      weeklyExtra = '<div class="quota-lock-weekly" role="group" aria-label="'+esc(weeklyAria)+'"><span class="quota-lock-weekly-summary">'+esc(t('q.weeklyLeft'))+' <strong>'+esc(weeklyValue)+'</strong><span aria-hidden="true"> · </span><small class="quota-reset-weekly">'+esc(weeklyCountdown)+'</small></span></div>';
+      weeklyExtra = '<div class="quota-lock-weekly" role="group" aria-label="'+esc(weeklyAria)+'"><span class="quota-lock-weekly-summary">'+esc(otherLabel)+' <strong>'+esc(weeklyValue)+'</strong><span aria-hidden="true"> · </span>'+(info.role === 'short' ? '<small class="quota-reset-weekly">' : '<small class="quota-reset-primary">')+''+esc(weeklyCountdown)+'</small></span></div>';
       break;
     }
   }
@@ -1777,7 +1783,7 @@ function renderAGFamilySection(family, windows) {
       +'<div class="ag-family-lock-title">'+lockTitle+'</div><div class="ag-family-lock-time '+roleClass+'">'+esc(timeText)+'</div>'+context+'</div></section>';
   }
   return '<section class="ag-family-section" aria-label="'+esc(sectionAria)+'">'
-    +'<div class="ag-family-head" title="'+esc(familyLabel)+'">'+icon+'</div>'
+    +'<div class="ag-family-head" title="'+esc(familyLabel)+'">'+icon+'<span class="ag-family-name">'+esc(family === 'claude' ? 'Claude / GPT' : 'Gemini')+'</span></div>'
     +'<div class="ag-family-limits">'+renderAGLimitItem(t('q.fiveHour'),shortWin)+renderAGLimitItem(t('q.weekly'),longWin)+'</div>'
     +'</section>';
 }
