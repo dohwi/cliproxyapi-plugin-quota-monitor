@@ -208,6 +208,7 @@ var I18N = {
     'q.lockNote': '현재 계정 잠금',
     'q.weeklyLeft': '주간 잔여',
     'q.fiveLeft': '5시간 잔여',
+    'q.notProvided': '제공되지 않음',
     'q.leftAria': '{label} 잔여 {v}',
     'q.familyAria': '{f} 쿼터',
     'q.none': '쿼터 없음',
@@ -342,6 +343,7 @@ var I18N = {
     'q.lockNote': 'Account currently locked',
     'q.weeklyLeft': 'Weekly left',
     'q.fiveLeft': '5-hour left',
+    'q.notProvided': 'Not provided',
     'q.leftAria': '{label}: {v} remaining',
     'q.familyAria': '{f} quota',
     'q.none': 'No quota',
@@ -1772,8 +1774,8 @@ function findAGWindow(windows, family, role) {
 }
 
 function renderAGLimitItem(label, win) {
-  win = win || {}; var st = percentageState(win);
-  return '<div class="ag-limit-item"><span class="ag-limit-label">'+esc(label)+'</span><strong class="ag-limit-value" data-window-name="'+esc(String(win.name||win.kind||''))+'" data-window-role="value" style="color:'+st.color+'">'+esc(st.remaining===null?'—':fmtPct(st.remaining))+'</strong><span class="ag-limit-reset" data-window-name="'+esc(String(win.name||win.kind||''))+'" data-window-role="reset">'+esc(formatRelativeReset(win))+'</span></div>';
+  var missing = !win; win = win || {}; var st = percentageState(win);
+  return '<div class="ag-limit-item"><span class="ag-limit-label">'+esc(label)+'</span><strong class="ag-limit-value" data-window-name="'+esc(String(win.name||win.kind||''))+'" data-window-role="value" style="color:'+st.color+'">'+esc(st.remaining===null?'—':fmtPct(st.remaining))+'</strong><span class="ag-limit-reset" data-window-name="'+esc(String(win.name||win.kind||''))+'" data-window-role="reset">'+esc(missing ? t('q.notProvided') : formatRelativeReset(win))+'</span></div>';
 }
 
 function renderAGFamilySection(family, windows) {

@@ -2192,6 +2192,7 @@ const (
 	antigravityUserQuotaProdURL  = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
 
 	antigravityGeminiFiveHourName = "Gemini Models / Five Hour Limit Remaining"
+	antigravityGeminiWeeklyName   = "Gemini Models / Weekly Limit Remaining"
 )
 
 var antigravityUserQuotaURLs = [...]string{
@@ -2210,8 +2211,15 @@ func ParseAntigravityModelQuota(data []byte) ([]QuotaWindow, error) {
 	if err := json.Unmarshal(data, &root); err != nil {
 		return nil, &APICallError{Kind: "parse"}
 	}
-	var best *float64
-	var bestReset *time.Time
+	// Lowest remaining fraction per window length across gemini-* models. The
+	// per-model response is observed to carry only the five-hour window; if a
+	// bucket explicitly declares a longer window (window/windowType) it is kept
+	// separately so a weekly value appears as soon as upstream provides one.
+	type best struct {
+		remaining float64
+		reset     *time.Time
+	}
+	found := map[int]*best{}
 	for _, b := range root.Buckets {
 		id := strings.ToLower(strings.TrimSpace(fmt.Sprint(objectValue(b, "modelId", "model_id"))))
 		if !strings.HasPrefix(id, "gemini-") {
@@ -2221,24 +2229,39 @@ func ParseAntigravityModelQuota(data []byte) ([]QuotaWindow, error) {
 		if !ok || n < 0 || n > 1 {
 			continue
 		}
-		r := float64(n * 100)
-		if best == nil || r < *best {
-			best = &r
-			bestReset = nil
-			if t, ok := quotaTime(objectValue(b, "resetTime", "reset_time")); ok {
-				bestReset = t
+		mins := 300
+		if raw := objectValue(b, "window", "windowType", "window_type"); raw != nil {
+			if m, ok := windowMinutesForName(fmt.Sprint(raw)); ok && (m == 300 || m == 10080) {
+				mins = m
 			}
 		}
+		r := float64(n * 100)
+		cur := found[mins]
+		if cur == nil || r < cur.remaining {
+			cur = &best{remaining: r}
+			if t, ok := quotaTime(objectValue(b, "resetTime", "reset_time")); ok {
+				cur.reset = t
+			}
+			found[mins] = cur
+		}
 	}
-	if best == nil {
-		return []QuotaWindow{}, nil
+	out := []QuotaWindow{}
+	for _, spec := range []struct {
+		mins int
+		name string
+	}{{300, antigravityGeminiFiveHourName}, {10080, antigravityGeminiWeeklyName}} {
+		cur := found[spec.mins]
+		if cur == nil {
+			continue
+		}
+		m, r := spec.mins, cur.remaining
+		w := QuotaWindow{Name: spec.name, WindowMinutes: &m, RemainingPercent: &r, ResetAt: cur.reset}
+		u := 100 - r
+		w.UsedPercent = &u
+		normalizeWindow(&w)
+		out = append(out, w)
 	}
-	mins := 300
-	w := QuotaWindow{Name: antigravityGeminiFiveHourName, WindowMinutes: &mins, RemainingPercent: best, ResetAt: bestReset}
-	u := 100 - *best
-	w.UsedPercent = &u
-	normalizeWindow(&w)
-	return []QuotaWindow{w}, nil
+	return out, nil
 }
 
 func isAllowedEndpoint(endpoint string) bool {

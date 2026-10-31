@@ -2165,3 +2165,23 @@ func TestParseAntigravityWeeklyVariations(t *testing.T) {
 		}
 	}
 }
+
+// The per-model response observed so far has no weekly information, so no weekly
+// window may be invented; an explicitly declared weekly bucket must be kept.
+func TestParseAntigravityModelQuotaWeekly(t *testing.T) {
+	ws, err := ParseAntigravityModelQuota([]byte(antigravityUserQuotaFixture))
+	if err != nil || len(ws) != 1 || ws[0].Name != antigravityGeminiFiveHourName {
+		t.Fatalf("observed shape must yield only the five-hour window: %+v err=%v", ws, err)
+	}
+	ws, err = ParseAntigravityModelQuota([]byte(`{"buckets":[
+	 {"modelId":"gemini-3-flash","remainingFraction":0.35,"resetTime":"2026-10-24T01:10:00Z"},
+	 {"modelId":"gemini-3-pro","remainingFraction":0.9,"window":"weekly","resetTime":"2026-10-30T00:00:00Z"},
+	 {"modelId":"gemini-2.5-pro","remainingFraction":0.6,"window":"window_weekly","resetTime":"2026-10-31T00:00:00Z"}]}`))
+	if err != nil || len(ws) != 2 {
+		t.Fatalf("want 5h + weekly, got %+v err=%v", ws, err)
+	}
+	w := ws[1]
+	if w.Name != antigravityGeminiWeeklyName || w.WindowMinutes == nil || *w.WindowMinutes != 10080 || w.RemainingPercent == nil || *w.RemainingPercent < 59.99 || *w.RemainingPercent > 60.01 {
+		t.Errorf("weekly must be the lowest declared weekly bucket (60%%): %+v", w)
+	}
+}
