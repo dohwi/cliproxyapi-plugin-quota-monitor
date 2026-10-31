@@ -1814,7 +1814,8 @@ function renderAGFamilySection(family, windows) {
   }
   return '<section class="ag-family-section" aria-label="'+esc(sectionAria)+'">'
     +'<div class="ag-family-head" title="'+esc(familyLabel)+'">'+icon+'<span class="ag-family-name">'+esc(family === 'claude' ? 'Claude / GPT' : 'Gemini')+'</span></div>'
-    +'<div class="ag-family-limits">'+renderAGLimitItem(t('q.fiveHour'),shortWin)+renderAGLimitItem(t('q.weekly'),longWin)+'</div>'
+    // Upstream does not publish a Gemini weekly limit; hide that row instead of showing a dead placeholder.
+    +'<div class="ag-family-limits">'+renderAGLimitItem(t('q.fiveHour'),shortWin)+((longWin || family !== 'gemini') ? renderAGLimitItem(t('q.weekly'),longWin) : '')+'</div>'
     +'</section>';
 }
 
