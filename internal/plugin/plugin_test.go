@@ -450,7 +450,7 @@ func TestDashboardPastelTokensAndProviderIcons(t *testing.T) {
 		"--prov-ag-text: #5b4bb7;",
 		"--prov-codex-bg: #eaf8f6;",
 		"--prov-codex-border: #bfe8e2;",
-		"--prov-codex-text: #147a72;",
+		"--prov-codex-text: #0f6b64;",
 		"--status-active-bg: #f5faf7;",
 		"--status-active-text: #065f46;",
 		"--pct-high: #047857;",

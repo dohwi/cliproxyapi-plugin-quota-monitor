@@ -27,7 +27,7 @@
     --prov-ag-text: #5b4bb7;
     --prov-codex-bg: #eaf8f6;
     --prov-codex-border: #bfe8e2;
-    --prov-codex-text: #147a72;
+    --prov-codex-text: #0f6b64;
     --prov-claude-text: #a44a2c;
     --prov-neutral-bg: #f1f5f9;
     --prov-neutral-border: #cbd5e1;
@@ -70,7 +70,7 @@
     --pct-high: #047857;
     --pct-med: #2563eb;
     --pct-warn: #b45309;
-    --pct-low: #dc2626;
+    --pct-low: #c81e1e;
     --pct-unknown: #64748b;
 
     /* Recent usage stays independent of quota availability. */
@@ -113,6 +113,9 @@
   /* Specificity beats .ui-ripple-host { position: relative } so the icon stays pinned to the card corner. */
   .account-card > .card-heading .card-refresh, .account-card .card-refresh.ui-ripple-host { position: absolute; top: 7px; right: 7px; z-index: 1; width: 28px; height: 28px; min-height: 28px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); }
   .card-refresh svg { width: 15px; height: 15px; flex-shrink: 0; }
+  /* Keep the 28px visual, but give pointer/touch a 40px hit area and a visible keyboard focus ring. */
+  .card-refresh::after { content: ''; position: absolute; inset: -6px; }
+  .account-card .card-refresh:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 1px; background: rgba(255,255,255,0.7); }
   .account-card .card-refresh:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,0.7); border-color: var(--border); }
   .card-refresh[aria-busy="true"] svg { animation: card-refresh-spin 0.9s linear infinite; }
   @keyframes card-refresh-spin { to { transform: rotate(360deg); } }
@@ -186,13 +189,13 @@
   .compact-select:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 2px; border-color: var(--filter-control-focus); }
   .compact-select:disabled { background: #f2f4f7; color: var(--filter-label-color); cursor: not-allowed; opacity: 0.75; }
   .filter-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: var(--filter-gap); min-width: 0; }
-  .filter-actions .filter-reset-button { width: auto; min-width: 86px; }
+  .filter-actions .filter-reset-button { width: auto; min-width: 112px; white-space: nowrap; }
   .manual-refresh-status:empty { display: none; }
   .manual-refresh-status { margin-top: 8px; color: var(--muted); font-size: 0.8125rem; text-align: left; }
   .filter-reset-button { min-height: var(--filter-control-height); height: var(--filter-control-height); padding: 0 13px; border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); background: var(--filter-control-bg); color: #182230; font-family: inherit; font-size: 0.875rem; font-weight: 600; line-height: 1.2; justify-content: center; }
-  #fullRefreshBtn { background: #fff; border-color: #dfb7b7; color: #a43a3a; }
-  #fullRefreshBtn:hover:not(:disabled) { background: #fff5f5; border-color: #c88989; color: #8b2e2e; }
-  #fullRefreshBtn:focus-visible { outline-color: #a43a3a; }
+  #fullRefreshBtn { background: #fff; border-color: #93b4f0; color: var(--accent-hover); }
+  #fullRefreshBtn:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); color: #1e40af; }
+  #fullRefreshBtn:focus-visible { outline-color: var(--accent); }
   .filter-reset-button:hover:not(:disabled) { background: var(--filter-control-hover-bg); border-color: #98a2b3; }
   .filter-reset-button:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 2px; border-color: var(--filter-control-focus); }
 
@@ -213,7 +216,7 @@
 
   /* Three stable regions: identity above, quota centered, optional credits below. */
   .card-heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .card-quota { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+  .card-quota { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; }
   .quota-groups { display: flex; flex-direction: column; gap: 5px; margin-top: 0; min-width: 0; }
   /* Fill the shared row while allowing it to grow for the largest card's wrapped content. */
   .account-card { background: var(--surface); border: 1px solid var(--account-border); border-radius: var(--radius); padding: 10px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; min-height: 226px; height: 100%; position: relative; overflow-wrap: anywhere; container-type: inline-size; }
@@ -272,7 +275,7 @@
   .quota-value-row:nth-child(odd) { padding-right: 12px; border-right: 1px solid rgba(148,163,184,0.28); }
   .quota-value-label { min-width: 0; font-size: 0.7rem; font-weight: 700; color: #475569; white-space: normal; overflow-wrap: anywhere; }
   .quota-value-number { width: 64px; font-size: 1.18rem; line-height: 1.25; font-weight: 800; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.035em; }
-  .quota-value-reset { grid-column: 1 / -1; align-self: end; min-width: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.35; text-align: right; white-space: normal; overflow-wrap: anywhere; }
+  .quota-value-reset { grid-column: 1 / -1; align-self: end; min-width: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.35; text-align: right; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
 
   /* Antigravity: one card, split into Gemini/Claude top-bottom sections. */
   .ag-family-stack { display: flex; flex-direction: column; gap: 8px; }
@@ -282,11 +285,12 @@
   .ag-family-head { margin: 0 0 1px 0; display: inline-flex; align-items: center; width: fit-content; line-height: 1; color: #334155; }
   .ag-family-name { margin-left: 5px; font-size: 0.74rem; font-weight: 750; }
   .ag-family-icon { width: 14px; height: 14px; flex-shrink: 0; display: inline-block; vertical-align: middle; }
-  .ag-family-limits { display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 0; }
-  .ag-limit-item { display: grid; grid-template-columns: minmax(0,1fr) 54px minmax(0, 88px); align-items: baseline; column-gap: 6px; min-width: 0; width: 100%; }
+  .ag-family-limits { display: grid; grid-template-columns: 4.6em 54px minmax(max-content, 1fr); row-gap: 3px; column-gap: 6px; width: 100%; min-width: 0; }
+  .ag-limit-item { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; column-gap: 6px; min-width: 0; width: 100%; }
   .ag-limit-label { min-width: 0; font-size: 0.72rem; font-weight: 650; color: #64748b; white-space: normal; overflow-wrap: anywhere; }
   .ag-limit-value { font-size: 0.88rem; line-height: 1.25; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
-  .ag-limit-reset { min-width: 0; font-size: 0.68rem; line-height: 1.35; color: #64748b; text-align: right; white-space: normal; overflow-wrap: anywhere; }
+  .ag-limit-label { white-space: nowrap; }
+  .ag-limit-reset { min-width: 0; font-size: 0.68rem; line-height: 1.35; color: #64748b; text-align: right; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
   .ag-family-section.is-locked { margin: 0; padding: 6px 0; border: 0; border-top: 1px solid rgba(148,163,184,0.28); border-radius: 0; background: transparent; }
   .ag-family-section.is-locked:first-child { padding-top: 0; border-top: 0; }
   .ag-family-section.is-locked .ag-family-lock { width: 100%; }
@@ -357,6 +361,7 @@
   }
   @container (max-width: 240px) {
     .ag-limit-item { grid-template-columns: minmax(0, 1fr) 54px; row-gap: 2px; }
+    .ag-family-limits { grid-template-columns: minmax(0, 1fr); }
     .ag-limit-reset { grid-column: 1 / -1; }
   }
 
@@ -433,4 +438,89 @@
   @media (min-width: 1200px) {
     :root { --dashboard-top-offset: 24px; }
     body { padding: 0 14px 16px; }
+  }
+
+  /* ===================== Card body (appended design layer, grouped by area) ===================== */
+
+  /* ---- Colour legend ---- */
+  .pct-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; padding: 0; list-style: none; color: var(--muted); font-size: 0.75rem; }
+  .pct-legend li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .pct-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+
+  /* ---- Dividers: one hairline under the card header and nothing else inside the card body ---- */
+  .quota-group, .ag-family-section, .ag-family-section.is-locked, .ag-family-section:first-child,
+  .ag-family-section.is-locked:first-child { border-top: 0; }
+  .ag-family-stack { gap: 12px; }
+  .ag-family-section { padding-top: 0; }
+  .quota-value-row:nth-child(odd) { border-right-color: rgba(148,163,184,0.20); }
+
+  /* ---- Single-window cards (GPT / Claude): values centred below the one divider; equal footer zone ---- */
+  .account-card:not([data-provider="antigravity"]) .card-quota { justify-content: center; padding-top: 0; border-top: 1px solid rgba(148,163,184,0.30); margin-top: 2px; }
+  .account-card:not([data-provider="antigravity"]) .quota-group { padding-top: 0; border-top: 0; }
+  .account-card:not([data-provider="antigravity"]) .quota-groups { gap: 0; }
+  .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { content: ''; flex: 0 0 62px; }
+
+  /* ---- Locked state: antigravity section + GPT/Claude card share one 3-step reading order ---- */
+  .ag-family-section.is-locked { padding: 10px 0 8px; }
+  .ag-family-lock { min-height: 0; align-items: center; gap: 2px; padding: 0; }
+  .ag-family-lock-title { font-size: 0.74rem; font-weight: 650; color: #475569; gap: 4px; }
+  .ag-family-lock-title .ag-family-icon { display: none; }
+  .ag-family-lock-title .ag-lock-padlock { width: 12px; height: 12px; color: #64748b; }
+  .ag-family-lock-time { margin-top: 0; font-size: 1.2rem; line-height: 1.25; font-weight: 800; }
+  .ag-family-lock-context { width: auto; margin-top: 2px; padding-top: 0; border-top: 0; font-size: 0.74rem; color: #475569; }
+  .ag-family-lock-context strong { font-weight: 700; color: #334155; font-size: 0.74rem; }
+  .ag-family-lock-context .quota-reset-weekly, .ag-family-lock-context .quota-reset-primary { color: inherit; font-weight: 500; }
+
+  .quota-lock-state { min-height: 0; gap: 2px; padding: 0 0 6px; }
+  .quota-lock-icon { width: 14px; height: 14px; color: #64748b; }
+  .quota-lock-title { font-size: 0.74rem; font-weight: 650; color: #475569; }
+  .quota-lock-time { margin-top: 0; font-size: 1.2rem; line-height: 1.25; }
+  .quota-lock-note { display: none; }
+  .quota-lock-weekly { width: auto; margin-top: 2px; padding-top: 0; border-top: 0; color: #475569; }
+  .quota-lock-weekly-summary { font-size: 0.74rem; font-weight: 500; color: #475569; }
+  .quota-lock-weekly strong { font-size: 0.74rem; font-weight: 700; color: #334155; }
+  .quota-lock-weekly small, .quota-lock-weekly .quota-reset-weekly, .quota-lock-weekly .quota-reset-primary { color: inherit; font-weight: 500; font-size: 0.74rem; }
+
+  /* ---- Empty states (pending / error / disabled): icon + one clear line + a hint, centred in the whole body ---- */
+  .quota-pending { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin-top: 0; margin-bottom: 0; padding: 0 8px; border-top: 0; text-align: center; }
+  .quota-pending-icon { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; color: #94a3b8; }
+  .quota-pending-icon svg { width: 28px; height: 28px; }
+  .quota-pending-title { font-size: 0.95rem; font-weight: 750; color: #475569; }
+  .quota-pending-hint { font-size: 0.74rem; color: #475569; line-height: 1.35; }
+  .quota-pending.is-error, .quota-pending.is-error .quota-pending-icon, .quota-pending.is-error .quota-pending-title { color: #b91c1c; font-weight: 600; }
+  .quota-pending.is-error .quota-pending-title { font-weight: 750; }
+  .account-card:has(.quota-pending) { padding-bottom: 10px; }
+  .account-card:has(.quota-pending) .card-quota { justify-content: center; margin-bottom: 0; }
+  .account-card:has(.quota-pending) .quota-pending { padding-bottom: 0; transform: translateY(1px); }
+  .account-card:has(.quota-pending)::after { display: none; }
+
+  /* ---- Credits footer: plain, quiet two-line caption (no pills, no boxes) ---- */
+  .credit-summary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    margin: 0; padding: 0; min-height: 0; border-top: 0; font-size: 0.74rem; color: #475569; text-align: center; }
+  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 62px; box-sizing: border-box; justify-content: flex-start; padding: 2px 0 0; }
+  .credit-reset-summary, .credit-api-summary { display: flex; flex-direction: row; align-items: baseline; justify-content: center; flex-wrap: wrap;
+    gap: 0 5px; padding: 0; border: 0; border-radius: 0; background: none; color: #475569; line-height: 1.45; width: auto; max-width: 100%; }
+  .credit-reset-primary { display: inline-flex; }
+  .credit-reset-primary strong, .credit-api-summary strong { font-size: 0.74rem; font-weight: 700; color: #334155; }
+  .credit-reset-expiry { display: inline-flex; width: auto; padding: 0; color: #475569; font-size: 0.72rem; }
+  .credit-reset-expiry-tree { display: none; }
+  .credit-reset-expiry-text::before { content: '· '; }
+
+  /* ---- Text contrast: small text reaches WCAG AA (4.5:1) on the tinted card surfaces ---- */
+  .badge-endpoint, .badge-endpoint-unknown { color: #475569; }
+  .ag-limit-label, .quota-value-label, .ag-limit-reset, .quota-value-reset { color: #475569; }
+  .account-card[data-locked="true"] .quota-reset-primary, .quota-reset-primary { filter: brightness(0.9); }
+  .quota-reset-weekly { filter: brightness(0.9); }
+  .badge-provider-claude, .badge-provider-antigravity { filter: brightness(0.9); }
+  .prov-sep, .prov-plan { color: #475569; }
+  .badge-provider-codex .prov-plan, .badge-provider-codex .prov-sep { filter: brightness(0.78); }
+
+  /* ---- One-column (phone) layout: no neighbour to match, so cards hug their content ---- */
+  @media (max-width: 559px) {
+    .cards-grid { grid-auto-rows: auto; }
+    .account-card, .account-card:not([data-provider="antigravity"]) { min-height: 0; }
+    .account-card:not([data-provider="antigravity"]) .card-quota { padding: 8px 0 4px; }
+    .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 0; padding: 8px 0 0; }
+    .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { display: none; }
+    .quota-pending { padding: 18px 8px 22px; }
   }

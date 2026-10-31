@@ -19,7 +19,7 @@ func TestDashboardUniformCardsAndWrapping(t *testing.T) {
 		".quota-value-row:nth-child(odd) { padding-right: 0; border-right: 0; }",
 		"@container (max-width: 240px)",
 		".ag-limit-reset { grid-column: 1 / -1; }",
-		".ag-limit-item { display: grid; grid-template-columns: minmax(0,1fr) 54px minmax(0, 88px);",
+		".ag-limit-item { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1;",
 		".ag-limit-item { grid-template-columns: minmax(0, 1fr) 54px; row-gap: 2px; }",
 		"--status-active-bg: #f5faf7;", "--status-limited-bg: #fcf8f4;",
 		"--account-border: var(--border);",
@@ -27,7 +27,7 @@ func TestDashboardUniformCardsAndWrapping(t *testing.T) {
 		".quota-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 5px;",
 		`<div class="quota-lock-title"><svg class="quota-lock-icon"`,
 		`.account-card[data-locked="true"] > .credit-summary { filter: grayscale(1); }`,
-		".card-quota { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: center;",
+		".card-quota { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start;",
 		"heading.appendChild(header);", "heading.appendChild(freshnessEl.firstChild);",
 		"quotaBody.appendChild(lockEl);", "quotaBody.appendChild(noWin);",
 
@@ -39,7 +39,7 @@ func TestDashboardUniformCardsAndWrapping(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		"grid-auto-rows: auto;", "grid-template-rows: 20px 14px;",
+		"grid-template-rows: 20px 14px;",
 		"--card-state-border:", ".quota-pending { margin-top: auto;",
 		"gap: 1px; margin-top: auto;", "card.appendChild(lockEl);", "card.appendChild(noWin);",
 		".quota-value-row:nth-child(odd) { padding-right: 8px; }",

@@ -144,6 +144,12 @@
 
     <ul id="fleetAvailability" class="fleet-availability" aria-label="전체 가용률" data-i18n-aria="fleet.aria"></ul>
 
+    <ul class="pct-legend" aria-label="남은 쿼터 색상 기준" data-i18n-aria="legend.aria">
+      <li><span class="pct-legend-dot" style="background:var(--pct-high)"></span><span data-i18n="legend.high">60% 이상 여유</span></li>
+      <li><span class="pct-legend-dot" style="background:var(--pct-med)"></span><span data-i18n="legend.med">30–59% 보통</span></li>
+      <li><span class="pct-legend-dot" style="background:var(--pct-warn)"></span><span data-i18n="legend.warn">10–29% 주의</span></li>
+      <li><span class="pct-legend-dot" style="background:var(--pct-low)"></span><span data-i18n="legend.low">10% 미만 부족</span></li>
+    </ul>
     <div id="accountsList" class="cards-grid" role="region" aria-label="계정 목록" data-i18n-aria="accounts.aria"></div>
   </div>
 </div>

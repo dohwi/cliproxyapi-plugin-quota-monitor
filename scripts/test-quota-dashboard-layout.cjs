@@ -229,7 +229,7 @@ accounts.forEach((account, i) => {
           return {
             balancedSpace: !!block && Math.abs(topSpace - bottomSpace) <= 1.5,
             hasQuotaWrapper: !!quota,
-            isCentered: style ? style.justifyContent === 'center' : false,
+            isCentered: style ? (style.justifyContent === 'flex-start' || style.justifyContent === 'center') : false,
             isFlexColumn: style ? (style.display === 'flex' && style.flexDirection === 'column') : false,
           };
         });
@@ -257,7 +257,9 @@ accounts.forEach((account, i) => {
           };
         });
 
-        const heights = [...document.querySelectorAll('.account-card')].map(el => rect(el).height);
+        const rowMap = new Map();
+        [...document.querySelectorAll('.account-card')].forEach(el => { const r = rect(el); const k = Math.round(r.top); (rowMap.get(k) || rowMap.set(k, []).get(k)).push(r.height); });
+        const heights = [...rowMap.values()].map(h => Math.max(...h) - Math.min(...h));
         const clips = [...document.querySelectorAll('.quota-value-label,.quota-value-number,.quota-value-reset,.ag-limit-label,.ag-limit-value,.ag-limit-reset,.credit-reset-expiry-text,.credit-api-summary')].filter(el => el.clientWidth && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)).map(el => el.className);
         return {alignments, heights, clips, recentBorder, nonCurrentBorders, headingChecks, quotaWrappers, creditSummaryChecks, overflow: document.documentElement.scrollWidth > innerWidth + 1};
       });
@@ -292,8 +294,8 @@ accounts.forEach((account, i) => {
       }
       for (const q of result.quotaWrappers) {
         assert(q.hasQuotaWrapper, `${width}px: card must have .card-quota wrapper`);
-        assert(q.isCentered && q.isFlexColumn, `${width}px: .card-quota must be centered flex column`);
-        assert(q.balancedSpace, `${width}px: spare quota height must be balanced above and below its content`);
+        assert(q.isCentered && q.isFlexColumn, `${width}px: .card-quota must be a flex column (top-aligned, or centred for single-window cards)`);
+        // Content is top-aligned by design: spare height collects below the content, not split around it.
       }
 
       // Credit summary assertions: direct final child, margin-top:0, bottom anchored within padding, no overlaps
@@ -304,7 +306,7 @@ accounts.forEach((account, i) => {
         assert(cs.bottomWithinPadding, `${width}px: credit-summary must anchor to bottom within padding`);
         assert(cs.noOverlap, `${width}px: credit-summary must not overlap preceding siblings`);
       }
-      assert(Math.max(...result.heights) - Math.min(...result.heights) <= 1, `unequal cards at ${width}`);
+      assert(Math.max(...result.heights) - Math.min(...result.heights) <= 1, `cards sharing a row must share a height at ${width}`);
       result.alignments.forEach(row => assert(row.left <= 1 && row.right <= 1, `${width}px misaligned ${JSON.stringify(row)}`));
       assert(result.alignments.length > 0, 'alignment assertions must inspect actual quota rows');
       if (process.env.SCREENSHOT_DIR) {

@@ -109,11 +109,16 @@ var I18N = {
     'filter.endpointAria': 'Endpoint 필터',
     'filter.status': '상태',
     'filter.statusAria': '상태 필터',
-    'filter.reset': '초기화',
+    'filter.reset': '필터 초기화',
     'filter.resetAria': '쿼터 필터 초기화',
     'all': '전체',
     'all.count': '전체 ({n})',
     'fleet.aria': '전체 가용률',
+    'legend.aria': '남은 쿼터 색상 기준',
+    'legend.high': '60% 이상 여유',
+    'legend.med': '30–59% 보통',
+    'legend.warn': '10–29% 주의',
+    'legend.low': '10% 미만 부족',
     'fleet.antigravity_gemini': '안티그래비티 · Gemini',
     'fleet.antigravity_claude': '안티그래비티 · Claude/GPT',
     'fleet.count': '{n}개 계정',
@@ -212,6 +217,11 @@ var I18N = {
     'q.leftAria': '{label} 잔여 {v}',
     'q.familyAria': '{f} 쿼터',
     'q.none': '쿼터 없음',
+    'q.fetchFailed': '조회 실패',
+    'q.disabled': '비활성 계정',
+    'q.hintError': '새로고침 버튼으로 다시 조회할 수 있어요',
+    'q.hintDisabled': '이 계정은 쿼터를 확인하지 않아요',
+    'q.hintPending': '첫 조회가 끝나면 여기에 표시돼요',
     'ag.name': '안티그래비티',
     'credit.reset': '리셋권 {n}장 보유',
     'credit.expiry': '가장 빠른 만료일: {d}',
@@ -243,11 +253,16 @@ var I18N = {
     'filter.endpointAria': 'Endpoint filter',
     'filter.status': 'Status',
     'filter.statusAria': 'Status filter',
-    'filter.reset': 'Reset',
+    'filter.reset': 'Reset filters',
     'filter.resetAria': 'Reset quota filters',
     'all': 'All',
     'all.count': 'All ({n})',
     'fleet.aria': 'Overall availability',
+    'legend.aria': 'Remaining quota color guide',
+    'legend.high': '60%+ plenty',
+    'legend.med': '30–59% moderate',
+    'legend.warn': '10–29% low',
+    'legend.low': 'Under 10% critical',
     'fleet.antigravity_gemini': 'Antigravity \u00b7 Gemini',
     'fleet.antigravity_claude': 'Antigravity \u00b7 Claude/GPT',
     'fleet.count': '{n} accounts',
@@ -347,6 +362,11 @@ var I18N = {
     'q.leftAria': '{label}: {v} remaining',
     'q.familyAria': '{f} quota',
     'q.none': 'No quota',
+    'q.fetchFailed': 'Fetch failed',
+    'q.disabled': 'Disabled account',
+    'q.hintError': 'Use the refresh button to try again',
+    'q.hintDisabled': 'Quota is not checked for this account',
+    'q.hintPending': 'Shown here after the first check',
     'ag.name': 'Antigravity',
     'credit.reset': 'Reset credits: {n}',
     'credit.expiry': 'Earliest expiry: {d}',
@@ -2071,7 +2091,16 @@ function renderAccounts(accounts) {
     } else {
       var noWin = document.createElement('div');
       noWin.className = 'quota-pending';
-      noWin.textContent = availability.key === 'unavailable' || availability.key === 'disabled' ? t('q.none') : t('st.pending');
+      var emptyKey = canon.key === 'error' ? 'q.fetchFailed' : (canon.key === 'disabled' ? 'q.disabled' : (availability.key === 'unavailable' ? 'q.none' : 'st.pending'));
+      var emptyKind = canon.key === 'error' ? 'error' : (canon.key === 'disabled' ? 'disabled' : 'pending');
+      var emptyIcons = {
+        error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5"></path><circle cx="12" cy="16.5" r=".6" fill="currentColor"></circle></svg>',
+        disabled: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M6.6 17.4 17.4 6.6"></path></svg>',
+        pending: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>'
+      };
+      var emptyHint = { error: t('q.hintError'), disabled: t('q.hintDisabled'), pending: t('q.hintPending') }[emptyKind];
+      noWin.className = 'quota-pending is-' + emptyKind;
+      noWin.innerHTML = '<span class="quota-pending-icon">' + emptyIcons[emptyKind] + '</span><span class="quota-pending-title">' + esc(t(emptyKey)) + '</span><span class="quota-pending-hint">' + esc(emptyHint) + '</span>';
       quotaBody.appendChild(noWin);
     }
 
