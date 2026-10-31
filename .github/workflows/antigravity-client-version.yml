@@ -1,0 +1,47 @@
+name: Antigravity client version
+
+# Google hides quota groups (e.g. Gemini weekly) from clients that look too old.
+# Weekly check that the pinned User-Agent still matches the official stable CLI.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare pinned and stable version
+        id: check
+        continue-on-error: true
+        run: |
+          set +e
+          out="$(./scripts/check-antigravity-client-version.sh 2>&1)"
+          code=$?
+          echo "$out"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          {
+            echo 'msg<<EOF'
+            echo "$out"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Open an issue on drift
+        if: steps.check.outputs.code == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MSG: ${{ steps.check.outputs.msg }}
+        run: |
+          title="Antigravity client version drift"
+          if [ -z "$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')" ]; then
+            gh issue create --title "$title" --body "$MSG"$'\n\n'"Without a current client version Google may omit quota groups. See docs/antigravity-quota.md."
+          fi
+      - name: Fail if the lookup itself broke
+        if: steps.check.outputs.code == '2'
+        run: |
+          echo "::warning::Antigravity updater lookup failed; check scripts/check-antigravity-client-version.sh"
