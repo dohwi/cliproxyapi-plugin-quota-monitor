@@ -2142,3 +2142,26 @@ func TestParseAntigravityModelQuotaNoGemini(t *testing.T) {
 		t.Fatalf("ws=%v err=%v, want none", ws, err)
 	}
 }
+
+func TestParseAntigravityWeeklyVariations(t *testing.T) {
+	cases := []struct {
+		name     string
+		body     string
+		wantMins int
+	}{
+		{"window_weekly enum", `{"groups":[{"buckets":[{"displayName":"Weekly Limit","window":"window_weekly","remainingFraction":0.8}]}]}`, 10080},
+		{"7d string in window", `{"groups":[{"buckets":[{"displayName":"Weekly Limit","window":"7d","remainingFraction":0.8}]}]}`, 10080},
+		{"3p-weekly bucketId without window", `{"groups":[{"buckets":[{"bucketId":"3p-weekly","remainingFraction":0.5}]}]}`, 10080},
+		{"Weekly in displayName without window", `{"groups":[{"buckets":[{"displayName":"Weekly Limit Remaining","remainingFraction":0.7}]}]}`, 10080},
+		{"5h in bucketId without window", `{"groups":[{"buckets":[{"bucketId":"3p-5h","remainingFraction":0.9}]}]}`, 300},
+	}
+	for _, tc := range cases {
+		ws, err := ParseAntigravityQuota([]byte(tc.body))
+		if err != nil || len(ws) != 1 {
+			t.Fatalf("%s: parse failed ws=%v err=%v", tc.name, ws, err)
+		}
+		if ws[0].WindowMinutes == nil || *ws[0].WindowMinutes != tc.wantMins {
+			t.Errorf("%s: window_minutes = %v, want %d", tc.name, ws[0].WindowMinutes, tc.wantMins)
+		}
+	}
+}

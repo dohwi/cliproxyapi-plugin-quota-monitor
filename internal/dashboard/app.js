@@ -651,14 +651,19 @@ function displayedQuotaWindows(acc) {
 
 function quotaWindowRole(w, provider) {
   var name = String(w && w.name || '').toLowerCase();
+  var kind = String(w && w.kind || '').toLowerCase();
+  var limitName = String(w && w.limit_name || '').toLowerCase();
   var minutes = Number(w && w.window_minutes);
-  if (getProviderKey(provider) === 'codex') {
-    if (/secondary|weekly/.test(name) || minutes === 10080) return 'long';
-    if (/primary|five[- ]hour|5h/.test(name) || minutes === 300) return 'short';
-  } else {
-    if (/weekly/.test(name) || minutes === 10080) return 'long';
-    if (/five[- ]hour|5h/.test(name) || minutes === 300) return 'short';
-  }
+  var isLong = /secondary|weekly|seven[-_ ]?days?|7[-_ ]?days?|7d|weeks?|주간/.test(name) ||
+               /secondary|weekly|seven[-_ ]?days?|7[-_ ]?days?|7d|weeks?|long/.test(kind) ||
+               /secondary|weekly|seven[-_ ]?days?|7[-_ ]?days?|7d|weeks?|주간/.test(limitName) ||
+               minutes === 10080 || minutes === 1440 * 7;
+  if (isLong) return 'long';
+  var isShort = /primary|five[-_ ]?hours?|5h|5[-_ ]?hours?|5시간/.test(name) ||
+                /primary|five[-_ ]?hours?|5h|short/.test(kind) ||
+                /primary|five[-_ ]?hours?|5h|5시간/.test(limitName) ||
+                minutes === 300;
+  if (isShort) return 'short';
   return 'other';
 }
 
@@ -1628,9 +1633,11 @@ function groupQuotaWindows(windows, provider) {
     w = w || {};
     var name = String(w.name||'').trim(), low = name.toLowerCase(), kind = null, group = name;
     if (key === 'antigravity') {
-      var family = /gemini/i.test(low) ? 'gemini' : (/claude|gpt/i.test(low) ? 'claude' : 'other');
-      var duration = /weekly/i.test(low)||Number(w.window_minutes)===10080 ? 'weekly' :
-                     (/five hour|5h/i.test(low)||Number(w.window_minutes)===300 ? 'five-hour' : null);
+      var isGemini = /gemini/i.test(low);
+      var isClaude = /claude|gpt|3p|third[-_ ]?party|anthropic/i.test(low);
+      var family = isGemini ? 'gemini' : (isClaude ? 'claude' : 'claude');
+      var duration = quotaWindowRole(w, 'antigravity') === 'long' ? 'weekly' :
+                     (quotaWindowRole(w, 'antigravity') === 'short' ? 'five-hour' : null);
       kind = duration ? family+'-'+duration : family;
       group = 'antigravity';
     } else if (key === 'claude') {
@@ -1742,9 +1749,24 @@ function agFamilyIcon(family) {
 }
 
 function findAGWindow(windows, family, role) {
-  var familyRE = family === 'claude' ? /claude|gpt/i : /gemini/i;
-  for (var i = 0; i < windows.length; i++) {
-    if (familyRE.test(String(windows[i].name || '')) && quotaWindowRole(windows[i], 'antigravity') === role) return windows[i];
+  var wins = Array.isArray(windows) ? windows : [];
+  for (var i = 0; i < wins.length; i++) {
+    var name = String(wins[i].name || '');
+    var kind = String(wins[i].kind || '');
+    var isGemini = /gemini/i.test(name) || /gemini/i.test(kind);
+    var isClaude = /claude|gpt|3p|third[-_ ]?party|anthropic/i.test(name) || /claude|gpt/i.test(kind);
+    if (family === 'gemini' && isGemini && quotaWindowRole(wins[i], 'antigravity') === role) return wins[i];
+    if (family === 'claude' && isClaude && quotaWindowRole(wins[i], 'antigravity') === role) return wins[i];
+  }
+  // 2nd pass: generic or unprefixed third-party weekly/short windows map to Claude
+  if (family === 'claude') {
+    for (var j = 0; j < wins.length; j++) {
+      var n = String(wins[j].name || '');
+      var k = String(wins[j].kind || '');
+      if (!/gemini/i.test(n) && !/gemini/i.test(k) && quotaWindowRole(wins[j], 'antigravity') === role) {
+        return wins[j];
+      }
+    }
   }
   return null;
 }
@@ -1776,6 +1798,12 @@ function renderAGFamilySection(family, windows) {
       var weeklyAria = t('q.weeklyLeft')+' '+weeklyValue+', '+weeklyCountdown;
       lockAria += ', '+weeklyAria;
       context = '<div class="ag-family-lock-context" role="group" aria-label="'+esc(weeklyAria)+'">'+esc(t('q.weeklyLeft'))+' <strong>'+esc(weeklyValue)+'</strong><span aria-hidden="true"> · </span><span class="quota-reset-weekly">'+esc(weeklyCountdown)+'</span></div>';
+    } else if (lockRole === 'long' && shortWin) {
+      var shortValue = shortRem===null?'—':fmtPct(shortRem);
+      var shortCountdown = formatResetCountdownSeconds(resetSeconds(shortWin));
+      var shortAria = t('q.fiveLeft')+' '+shortValue+', '+shortCountdown;
+      lockAria += ', '+shortAria;
+      context = '<div class="ag-family-lock-context" role="group" aria-label="'+esc(shortAria)+'">'+esc(t('q.fiveLeft'))+' <strong>'+esc(shortValue)+'</strong><span aria-hidden="true"> · </span><span class="quota-reset-primary">'+esc(shortCountdown)+'</span></div>';
     }
     var padlockSvg = '<svg class="ag-lock-padlock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>';
     var lockTitle = padlockSvg+icon+'<span>'+esc(familyLabel)+' · '+limitName+'</span>';

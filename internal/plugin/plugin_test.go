@@ -2230,6 +2230,21 @@ assert(lockedSection.indexOf('ag-family-icon') !== -1,     'locked: family icon 
 assert(/<img/i.test(lockedSection) === false,              'locked: no img tag');
 assert(/https?:\/\//i.test(lockedSection) === false,       'locked: no external URL');
 
+// ── Antigravity Weekly matching variations ────────────────────────────────────
+const variations = [
+  { name: '3p-weekly', remaining_percent: 75 },
+  { name: 'Weekly Limit Remaining', remaining_percent: 65 },
+  { name: 'Claude and GPT models / 7-Day Limit Remaining', remaining_percent: 85 },
+  { name: 'Claude and GPT models / 7d', remaining_percent: 90 },
+  { name: 'aidev-client / Weekly Limit Remaining', remaining_percent: 45 },
+];
+for (const w of variations) {
+  const rendered = ctx.renderAGFamilySection('claude', [w]);
+  assert(rendered.indexOf('75%') !== -1 || rendered.indexOf('65%') !== -1 || rendered.indexOf('85%') !== -1 || rendered.indexOf('90%') !== -1 || rendered.indexOf('45%') !== -1,
+    'variation must render weekly percentage: ' + w.name);
+  assert(rendered.indexOf('주간 제한') !== -1, 'variation must retain 주간 제한 label: ' + w.name);
+}
+
 console.log('OK_AG_ICON_TESTS');
 `
 	cmd := nodeDashboardCmd(t, "node", nodeScript)

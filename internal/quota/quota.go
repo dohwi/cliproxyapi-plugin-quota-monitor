@@ -1411,6 +1411,7 @@ func windowMinutesForName(raw string) (int, bool) {
 	if s == "" {
 		return 0, false
 	}
+	s = strings.TrimPrefix(s, "window_")
 	switch s {
 	case "five_hour", "five-hour", "5_hour", "5-hour", "5h", "5_hours", "five_hours":
 		return 300, true
@@ -1418,7 +1419,7 @@ func windowMinutesForName(raw string) (int, bool) {
 		return 60, true
 	case "daily", "one_day", "one-day", "24_hour", "24-hour", "24h", "day":
 		return 1440, true
-	case "weekly", "seven_day", "seven-day", "7d", "week":
+	case "weekly", "seven_day", "seven-day", "7d", "7_day", "7-day", "week", "seven_days", "7_days":
 		return 10080, true
 	case "monthly", "thirty_day", "thirty-day", "30d", "month":
 		return 43200, true
@@ -1725,6 +1726,16 @@ func ParseAntigravityQuota(data []byte) ([]QuotaWindow, error) {
 			if winRaw := objectValue(b, "window"); winRaw != nil {
 				if mins, ok := windowMinutesForName(fmt.Sprint(winRaw)); ok {
 					m := mins
+					w.WindowMinutes = &m
+				}
+			}
+			if w.WindowMinutes == nil {
+				lowName := strings.ToLower(name)
+				if strings.Contains(lowName, "week") || strings.Contains(lowName, "seven") || strings.Contains(lowName, "7d") || strings.Contains(lowName, "7_day") || strings.Contains(lowName, "7-day") || strings.Contains(lowName, "주간") {
+					m := 10080
+					w.WindowMinutes = &m
+				} else if strings.Contains(lowName, "five") || strings.Contains(lowName, "5h") || strings.Contains(lowName, "5_hour") || strings.Contains(lowName, "5-hour") || strings.Contains(lowName, "5시간") {
+					m := 300
 					w.WindowMinutes = &m
 				}
 			}
@@ -2324,7 +2335,7 @@ func antigravityFamiliesComplete(ws []QuotaWindow) bool {
 		n := strings.ToLower(w.Name)
 		if strings.HasPrefix(n, "gemini models") {
 			gemini = true
-		} else if strings.HasPrefix(n, "claude and gpt models") {
+		} else if strings.HasPrefix(n, "claude and gpt models") || strings.HasPrefix(n, "claude") || strings.HasPrefix(n, "3p") {
 			third = true
 		}
 	}
@@ -2333,7 +2344,7 @@ func antigravityFamiliesComplete(ws []QuotaWindow) bool {
 
 func hasGeminiWindow(ws []QuotaWindow) bool {
 	for _, w := range ws {
-		if strings.HasPrefix(strings.ToLower(w.Name), "gemini models") {
+		if strings.HasPrefix(strings.ToLower(w.Name), "gemini models") || strings.HasPrefix(strings.ToLower(w.Name), "gemini") {
 			return true
 		}
 	}
