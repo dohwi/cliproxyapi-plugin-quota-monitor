@@ -524,3 +524,30 @@
     .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { display: none; }
     .quota-pending { padding: 18px 8px 22px; }
   }
+
+  /* ===================== Unified geometry (all providers) ===================== */
+  /* Every quota row on every card has the same three tracks: label | percent | reset.
+     The percent column is a fixed width, so the right edge of every % sits at the same x. GPT/Claude show
+     the two limits as two stacked rows (like antigravity) instead of two side-by-side halves. */
+  :root { --pct-label-w: 4.6em; --pct-col-w: 56px; }
+  .ag-family-limits { grid-template-columns: var(--pct-label-w) var(--pct-col-w) minmax(0, 1fr); }
+  .ag-limit-item { grid-template-columns: subgrid; }
+  .ag-limit-value { width: var(--pct-col-w); font-size: 1.05rem; line-height: 1.25; text-align: right; }
+  .ag-limit-reset { white-space: nowrap; }
+
+  .quota-values { grid-template-columns: minmax(0, 1fr); row-gap: 6px; column-gap: 0; }
+  .quota-value-row { display: grid; grid-template-columns: var(--pct-label-w) var(--pct-col-w) minmax(0, 1fr); grid-template-rows: auto; align-items: baseline; column-gap: 6px; padding: 0; border-right: 0; }
+  .quota-value-row:nth-child(odd) { padding-right: 0; border-right: 0; }
+  .quota-value-label { grid-column: 1; }
+  .quota-value-number { grid-column: 2; width: var(--pct-col-w); font-size: 1.05rem; line-height: 1.25; text-align: right; }
+  .quota-value-reset { grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap; }
+
+  /* Locked heading: same distance below the header divider for antigravity, GPT and Claude. */
+  .ag-family-section.is-locked, .ag-family-section.is-locked:first-child, .ag-family-section.is-locked + .ag-family-section.is-locked { padding-top: 14px; }
+  .quota-lock-state { padding-top: 4px; justify-content: center; }
+  .ag-family-section.is-locked:first-child { padding-top: 4px; }
+
+  /* Locked GPT/Claude cards: heading sits at a fixed distance under the divider (same as antigravity),
+     not centred in the spare height, so the 'weekly limit' line never floats away from or hugs the divider. */
+  .account-card:not([data-provider="antigravity"]):has(.quota-lock-state) .card-quota { justify-content: flex-start; padding-top: 8px; }
+  .account-card:not([data-provider="antigravity"]) .quota-lock-state { padding-top: 0; }
