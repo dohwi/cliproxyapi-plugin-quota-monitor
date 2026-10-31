@@ -655,3 +655,21 @@
   .account-card[data-provider="antigravity"] .card-quota { padding: 2px 0 6px; }
   .ag-family-section.is-locked, .ag-family-section.is-locked:first-child { padding-bottom: 2px; }
   .account-card:not([data-provider="antigravity"]) .quota-lock-state { padding: 0; }
+
+  /* ===================== Locked = grey ===================== 
+     Everything that belongs to an exhausted limit (padlock, limit name, reset time, hint) is one neutral grey,
+     so the lock reads as "unavailable" and no single red/orange/indigo element shouts. The time stays the
+     largest text so it is still the first thing to read. */
+  .ag-family-lock-title .ag-lock-padlock, .quota-lock-title .quota-lock-icon { color: #64748b; }
+  .ag-family-lock-title .ag-lock-limit, .quota-lock-title > span { color: #475569; }
+  .ag-family-lock-title .ag-lock-family { color: #526174; border-left-color: rgba(148,163,184,0.5); }
+  .ag-family-lock-time, .ag-family-lock-time.quota-reset-primary, .ag-family-lock-time.quota-reset-weekly,
+  .quota-lock-time, .quota-lock-time.quota-reset-primary, .quota-lock-time.quota-reset-weekly { color: #475569; filter: none; }
+  .account-card .ag-family-lock-context, .account-card .ag-family-lock-context strong, .account-card .ag-family-lock-context .quota-reset-primary, .account-card .ag-family-lock-context .quota-reset-weekly,
+  .quota-lock-weekly, .quota-lock-weekly strong, .quota-lock-weekly small { color: #526174; filter: none; }
+  .account-card .ag-family-lock-context, .account-card .ag-family-lock-context .quota-reset-primary, .account-card .ag-family-lock-context .quota-reset-weekly { color: #526174; filter: none; }
+  .account-card .ag-family-lock-context strong, .quota-lock-weekly strong { color: #475569; }
+  /* same grey ramp on GPT/Claude locked cards as on antigravity (padlock lighter, text darker, hint in between) */
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title .quota-lock-icon { color: #64748b; }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span { color: #475569; }
+  .account-card[data-locked="true"] .quota-lock-weekly, .account-card[data-locked="true"] .quota-lock-weekly small { color: #526174; }
