@@ -252,7 +252,9 @@ accounts.forEach((account, i) => {
           return {
             isDirectFinalChild: isCredit,
             marginTopZero: creditStyle.marginTop === '0px',
-            bottomWithinPadding: Math.abs(bottomGap) <= 1.5,
+            // Credits travel with the quota values as one centred block: they must sit inside the card
+            // padding box and directly follow the values (no overlap), not be pinned to the card bottom.
+            bottomWithinPadding: bottomGap >= -1.5,
             noOverlap,
           };
         });
@@ -303,7 +305,7 @@ accounts.forEach((account, i) => {
       for (const cs of result.creditSummaryChecks) {
         assert(cs.isDirectFinalChild, `${width}px: credit-summary must be direct final card child`);
         assert(cs.marginTopZero, `${width}px: credit-summary margin-top must be 0`);
-        assert(cs.bottomWithinPadding, `${width}px: credit-summary must anchor to bottom within padding`);
+        assert(cs.bottomWithinPadding, `${width}px: credit-summary must stay inside the card padding box`);
         assert(cs.noOverlap, `${width}px: credit-summary must not overlap preceding siblings`);
       }
       assert(Math.max(...result.heights) - Math.min(...result.heights) <= 1, `cards sharing a row must share a height at ${width}`);

@@ -561,3 +561,23 @@
   .ag-family-lock { gap: 1px; }
   .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { flex-basis: 44px; }
   .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 44px; }
+
+  /* ===================== Card body: one rule for every provider and state =====================
+     Cards keep one shared height per row (tallest card wins). Inside every card the body under the
+     header divider is ONE block (values / lock / empty state, plus the credits caption if any) centred
+     vertically, so the free space is split evenly above and below instead of piling up at the bottom. */
+  .account-card::after, .account-card:not([data-provider="antigravity"])::after,
+  .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { content: none; display: none; }
+  .account-card:not([data-provider="antigravity"]) .card-quota,
+  .account-card:not([data-provider="antigravity"]):has(.quota-lock-state) .card-quota,
+  .account-card:has(.quota-pending) .card-quota { flex: 1 1 auto; justify-content: center; padding: 12px 0 18px; margin: 0; }
+  .account-card:not([data-provider="antigravity"]) .quota-lock-state { padding: 0; }
+  .account-card:has(.quota-pending) .quota-pending { transform: none; padding: 0 8px; }
+  .account-card:has(.quota-pending) { padding-bottom: 10px; }
+  /* credits travel with the values: wrap them into the same centred block */
+  .account-card:not([data-provider="antigravity"]):has(.credit-summary) .card-quota { flex: 0 0 auto; margin-top: auto; padding-bottom: 0; }
+  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 0; margin: 0 0 auto; padding: 12px 0 18px; justify-content: flex-start; }
+
+  /* Antigravity: same rule as GPT/Claude. The body (Gemini + Claude/GPT sections) is one block centred in
+     the free space under the divider; the tallest antigravity card defines the row height. */
+  .account-card[data-provider="antigravity"] .card-quota { flex: 1 1 auto; justify-content: center; padding: 4px 0 8px; margin: 0; }
