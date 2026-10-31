@@ -598,3 +598,16 @@
   .quota-lock-title, .ag-family-lock-title, .quota-lock-weekly-summary, .ag-family-lock-context, .quota-lock-weekly strong, .ag-family-lock-context strong { font-size: 0.72rem; }
   .ag-family-stack:has(.is-locked) { gap: 12px; }
   .ag-family-section.is-locked + .ag-family-section:not(.is-locked) { padding-top: 2px; }
+
+  /* ===================== Limit rows: text left, remaining % right =====================
+     Left column: limit label (top) with the reset time underneath as secondary info.
+     Right column: the remaining %, right-aligned so every card's numbers share one right edge. */
+  :root { --pct-col-w: 64px; }
+  .ag-family-limits { display: flex; flex-direction: column; row-gap: 6px; }
+  .quota-values { row-gap: 10px; }
+  .ag-family-stack { gap: 10px; }
+  .ag-family-head { margin-bottom: 4px; }
+  .ag-limit-item, .quota-value-row { display: grid; grid-template-columns: minmax(0, 1fr) var(--pct-col-w); grid-template-rows: auto auto; column-gap: 8px; row-gap: 1px; align-items: center; padding: 0; }
+  .ag-limit-label, .quota-value-label { grid-column: 1; grid-row: 1; align-self: end; font-size: 0.78rem; font-weight: 650; color: #334155; line-height: 1.25; }
+  .ag-limit-reset, .quota-value-reset { grid-column: 1; grid-row: 2; align-self: start; text-align: left; white-space: nowrap; font-size: 0.7rem; line-height: 1.3; }
+  .ag-limit-value, .quota-value-number { grid-column: 2; grid-row: 1 / span 2; width: var(--pct-col-w); min-width: 0; font-size: 1.4rem; line-height: 1.3; text-align: right; align-self: center; justify-self: end; }
