@@ -581,3 +581,20 @@
   /* Antigravity: same rule as GPT/Claude. The body (Gemini + Claude/GPT sections) is one block centred in
      the free space under the divider; the tallest antigravity card defines the row height. */
   .account-card[data-provider="antigravity"] .card-quota { flex: 1 1 auto; justify-content: center; padding: 4px 0 8px; margin: 0; }
+
+  /* ===================== Remaining quota is the hero =====================
+     Each limit row reads: small label (left) | BIG remaining % | small, muted reset time (right, secondary).
+     Same three-column track on every provider, so all % values still share one column. */
+  :root { --pct-label-w: 4.4em; --pct-col-w: 76px; }
+  .quota-value-number, .ag-limit-value { width: var(--pct-col-w); font-size: 1.6rem; line-height: 1.3; font-weight: 800; letter-spacing: -0.03em; text-align: right; }
+  .quota-value-label, .ag-limit-label { font-size: 0.74rem; font-weight: 600; color: #475569; align-self: center; }
+  .quota-value-reset, .ag-limit-reset { font-size: 0.7rem; font-weight: 500; color: #526174; align-self: center; }
+  .quota-value-row, .ag-limit-item { align-items: center; }
+  .quota-values { row-gap: 4px; }
+  .ag-family-limits { row-gap: 2px; }
+  .ag-family-head { margin-bottom: 2px; }
+  /* locked hero time and its hint keep the same visual weight as a big % */
+  .quota-lock-time, .ag-family-lock-time { font-size: 1.45rem; line-height: 1.2; }
+  .quota-lock-title, .ag-family-lock-title, .quota-lock-weekly-summary, .ag-family-lock-context, .quota-lock-weekly strong, .ag-family-lock-context strong { font-size: 0.72rem; }
+  .ag-family-stack:has(.is-locked) { gap: 12px; }
+  .ag-family-section.is-locked + .ag-family-section:not(.is-locked) { padding-top: 2px; }
