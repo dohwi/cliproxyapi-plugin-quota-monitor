@@ -2176,7 +2176,7 @@ const (
 	claudeQuotaURL        = "https://api.anthropic.com/api/oauth/usage"
 	claudeResetUsageURL   = claudeQuotaURL + "?cedar_ember=1"
 
-	antigravityUserAgent = "antigravity/cli/1.0.13 (aidev_client; os_type=darwin; arch=arm64)"
+	antigravityUserAgent = "antigravity/cli/1.4.12 (aidev_client; os_type=darwin; arch=arm64)"
 )
 
 var antigravityQuotaURLs = [...]string{

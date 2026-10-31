@@ -2245,13 +2245,9 @@ for (const w of variations) {
   assert(rendered.indexOf('주간 제한') !== -1, 'variation must retain 주간 제한 label: ' + w.name);
 }
 
-// ── Gemini weekly row: hidden when upstream gives none, shown when present ──
-const geminiNoWeekly = ctx.renderAGFamilySection('gemini', [{name:'Gemini Models / Five Hour Limit Remaining', window_minutes:300, remaining_percent:70}]);
-assert((geminiNoWeekly.match(/ag-limit-item/g) || []).length === 1, 'gemini without weekly data must render only the 5-hour row');
-const geminiWithWeekly = ctx.renderAGFamilySection('gemini', [{name:'Gemini Models / Five Hour Limit Remaining', window_minutes:300, remaining_percent:70},{name:'Gemini Models / Weekly Limit Remaining', window_minutes:10080, remaining_percent:40}]);
-assert((geminiWithWeekly.match(/ag-limit-item/g) || []).length === 2 && geminiWithWeekly.indexOf('40%') !== -1, 'gemini weekly row must appear as soon as data exists');
-const claudeNoWeekly = ctx.renderAGFamilySection('claude', [{name:'Claude and GPT models / Five Hour Limit Remaining', window_minutes:300, remaining_percent:70}]);
-assert((claudeNoWeekly.match(/ag-limit-item/g) || []).length === 2, 'claude keeps both rows so a missing weekly stays visible');
+// ── Gemini weekly row renders with live-shaped data (official agy 1.4.12 returns it) ──
+const geminiBoth = ctx.renderAGFamilySection('gemini', [{name:'Gemini Models / Five Hour Limit Remaining', window_minutes:300, remaining_percent:100},{name:'Gemini Models / Weekly Limit Remaining', window_minutes:10080, remaining_percent:97.02}]);
+assert((geminiBoth.match(/ag-limit-item/g) || []).length === 2 && geminiBoth.indexOf('97') !== -1, 'gemini weekly row must render alongside the 5-hour row');
 
 console.log('OK_AG_ICON_TESTS');
 `
