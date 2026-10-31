@@ -635,3 +635,23 @@
   .account-card[data-locked="true"] .quota-lock-time, .account-card[data-locked="true"] .quota-lock-weekly,
   .account-card[data-locked="true"] .quota-lock-weekly-summary { color: #334155; }
   .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-time { color: #475569; }
+
+  /* ===================== Toned-down lock marker + section divider =====================
+     The lock is a small padlock glyph next to the limit name (no filled circle, no red pill): enough to say
+     "this limit is used up" without shouting. Antigravity's two sections get one hairline between them. */
+  .ag-family-lock-title, .quota-lock-title { gap: 5px; flex-wrap: nowrap; }
+  .ag-family-lock-title .ag-lock-limit, .quota-lock-title > span { padding: 0; border-radius: 0; background: none; color: #334155; font-size: 0.78rem; font-weight: 700; gap: 0; }
+  .ag-family-lock-title .ag-lock-padlock, .quota-lock-title .quota-lock-icon { width: 14px; height: 14px; padding: 0; border-radius: 0; background: none; color: #b91c1c; stroke-width: 2; margin: 0; order: 0; }
+  .ag-family-lock-title .ag-lock-family { margin-left: 6px; padding-left: 8px; border-left: 1px solid rgba(148,163,184,0.5); }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span { background: none; color: #334155; }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title .quota-lock-icon { background: none; color: #334155; }
+
+  .account-card .ag-family-stack { gap: 0; }
+  .account-card .ag-family-stack > .ag-family-section + .ag-family-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(148,163,184,0.30); }
+
+  /* spacing pass: the divider between the two antigravity sections replaces the old gap, so cards stay compact */
+  .account-card .ag-family-stack > .ag-family-section + .ag-family-section { margin-top: 6px; padding-top: 8px; }
+  .account-card .ag-family-stack:has(.is-locked) > .ag-family-section.is-locked + .ag-family-section.is-locked { padding-top: 8px; }
+  .account-card[data-provider="antigravity"] .card-quota { padding: 2px 0 6px; }
+  .ag-family-section.is-locked, .ag-family-section.is-locked:first-child { padding-bottom: 2px; }
+  .account-card:not([data-provider="antigravity"]) .quota-lock-state { padding: 0; }
