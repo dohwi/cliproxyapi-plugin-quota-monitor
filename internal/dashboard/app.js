@@ -1828,7 +1828,9 @@ function renderAGFamilySection(family, windows) {
       context = '<div class="ag-family-lock-context" role="group" aria-label="'+esc(shortAria)+'">'+esc(t('q.fiveLeft'))+' <strong>'+esc(shortValue)+'</strong><span aria-hidden="true"> · </span><span class="quota-reset-primary">'+esc(shortCountdown)+'</span></div>';
     }
     var padlockSvg = '<svg class="ag-lock-padlock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>';
-    var lockTitle = padlockSvg+icon+'<span>'+esc(familyLabel)+' · '+limitName+'</span>';
+    // The card header already says "antigravity": repeat the family only for the Claude/GPT section, never the provider name.
+    var lockFamily = family === 'claude' ? '<span class="ag-lock-family">'+icon+'<span>Claude / GPT</span></span>' : '';
+    var lockTitle = padlockSvg+'<span class="ag-lock-limit">'+esc(limitName)+'</span>'+lockFamily;
     return '<section class="ag-family-section is-locked" aria-label="'+esc(sectionAria)+'"><div class="ag-family-lock" role="status" aria-label="'+esc(lockAria)+'">'
       +'<div class="ag-family-lock-title">'+lockTitle+'</div><div class="ag-family-lock-time '+roleClass+'">'+esc(timeText)+'</div>'+context+'</div></section>';
   }

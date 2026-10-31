@@ -2224,9 +2224,11 @@ const lockedWindows = [
 const lockedSection = ctx.renderAGFamilySection('gemini', lockedWindows);
 assert(lockedSection.indexOf('is-locked') !== -1,          'locked: is-locked class');
 assert(lockedSection.indexOf('aria-label="안티그래비티 쿼터"') !== -1, 'locked: aria-label preserved');
-assert(lockedSection.indexOf('>안티그래비티<') !== -1,           'locked: Gemini text node in lock title');
+// The card header already names the provider, so the lock title must NOT repeat it (visible text);
+// the accessible name above still carries it for screen readers.
+assert(lockedSection.indexOf('>안티그래비티<') === -1,           'locked: provider name is not repeated in the visible lock title');
+assert(lockedSection.indexOf('ag-lock-limit') !== -1,        'locked: lock title carries the limit name');
 assert(lockedSection.indexOf('ag-lock-padlock') !== -1,    'locked: padlock uses ag-lock-padlock class');
-assert(lockedSection.indexOf('ag-family-icon') !== -1,     'locked: family icon in lock title');
 assert(/<img/i.test(lockedSection) === false,              'locked: no img tag');
 assert(/https?:\/\//i.test(lockedSection) === false,       'locked: no external URL');
 

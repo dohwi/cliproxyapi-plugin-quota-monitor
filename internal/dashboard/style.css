@@ -611,3 +611,27 @@
   .ag-limit-label, .quota-value-label { grid-column: 1; grid-row: 1; align-self: end; font-size: 0.78rem; font-weight: 650; color: #334155; line-height: 1.25; }
   .ag-limit-reset, .quota-value-reset { grid-column: 1; grid-row: 2; align-self: start; text-align: left; white-space: nowrap; font-size: 0.7rem; line-height: 1.3; }
   .ag-limit-value, .quota-value-number { grid-column: 2; grid-row: 1 / span 2; width: var(--pct-col-w); min-width: 0; font-size: 1.4rem; line-height: 1.3; text-align: right; align-self: center; justify-self: end; }
+
+  /* ===================== Locked state: the padlock is the headline =====================
+     A filled badge (padlock + limit name) tells at a glance that this limit is exhausted. The provider
+     name is not repeated (the card header has it); only the Claude/GPT section names its family. */
+  .ag-family-lock-title, .quota-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .ag-family-lock-title .ag-lock-limit, .quota-lock-title > span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border-radius: 999px; background: #fee2e2; color: #991b1b; font-size: 0.78rem; font-weight: 750; line-height: 1.2; }
+  .ag-family-lock-title .ag-lock-padlock, .quota-lock-title .quota-lock-icon { display: inline-block; width: 16px; height: 16px; padding: 3px; box-sizing: content-box; border-radius: 50%; background: #dc2626; color: #fff; stroke-width: 2.2; flex: 0 0 auto; }
+  .ag-family-lock-title { flex-direction: row; }
+  .ag-family-lock-title .ag-lock-padlock { order: -1; margin-right: -2px; position: relative; z-index: 1; }
+  .ag-family-lock-title .ag-lock-family { display: inline-flex; align-items: center; gap: 4px; color: #475569; font-size: 0.74rem; font-weight: 650; }
+  .ag-family-lock-title .ag-lock-family .ag-family-icon { display: inline-block; width: 13px; height: 13px; }
+  /* GPT/Claude lock: padlock icon sits inside the same red pill */
+  .quota-lock-title .quota-lock-icon { margin-right: 0; }
+  .ag-family-lock-time, .quota-lock-time { margin-top: 2px; }
+
+  /* GPT/Claude locked cards keep their regions grayscale (a CSS filter also greys descendants), so the
+     padlock badge cannot stay red inside them. Instead of loosening that rule, draw the badge colour with
+     a contrast the grayscale cannot hide: a dark filled circle + dark pill with white padlock, which reads
+     as "locked" in gray too, while antigravity (filter-free body) shows the red version. */
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span { background: #e2e8f0; color: #0f172a; }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title .quota-lock-icon { background: #0f172a; color: #fff; }
+  .account-card[data-locked="true"] .quota-lock-time, .account-card[data-locked="true"] .quota-lock-weekly,
+  .account-card[data-locked="true"] .quota-lock-weekly-summary { color: #334155; }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-time { color: #475569; }

@@ -286,8 +286,10 @@ accounts.forEach((account, i) => {
       }));
       assert.equal(lockTitles.length, 2, `${width}px: both locked fixtures must have a title`);
       for (const title of lockTitles) {
-        assert(title && title.sameLine && title.gap >= 4 && title.gap <= 6 && title.size === 14 && !title.standalone,
-          `${width}px: small lock icon must sit immediately beside the restriction title`);
+        // The padlock is now a filled badge (16px glyph + 3px padding) that must still sit on the same line,
+        // directly in front of the limit name, and be at least as large as the old 14px icon.
+        assert(title && title.sameLine && title.gap >= 4 && title.gap <= 10 && title.size >= 14 && !title.standalone,
+          `${width}px: lock badge must sit immediately beside the restriction title`);
       }
 
       // Structure assertions: card-heading & card-quota
