@@ -551,3 +551,13 @@
      not centred in the spare height, so the 'weekly limit' line never floats away from or hugs the divider. */
   .account-card:not([data-provider="antigravity"]):has(.quota-lock-state) .card-quota { justify-content: flex-start; padding-top: 8px; }
   .account-card:not([data-provider="antigravity"]) .quota-lock-state { padding-top: 0; }
+
+  /* ---- Height diet: the tallest possible card is two locked antigravity sections (270px). Tighten the
+     locked blocks and the footer zone so the shared row height drops without moving any value between cards. ---- */
+  .ag-family-stack:has(.is-locked) { gap: 4px; }
+  .ag-family-section.is-locked { padding-top: 6px; padding-bottom: 4px; }
+  .ag-family-section.is-locked:first-child { padding-top: 4px; }
+  .ag-family-lock-time { font-size: 1.1rem; }
+  .ag-family-lock { gap: 1px; }
+  .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { flex-basis: 44px; }
+  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 44px; }
