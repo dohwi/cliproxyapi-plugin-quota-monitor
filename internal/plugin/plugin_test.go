@@ -419,9 +419,9 @@ func TestDashboardHTMLFeatures(t *testing.T) {
 		t.Errorf("dashboard.HTML fetch calls = %d, want 2 (snapshot and explicit refresh)", got)
 	}
 
-	// The key is typed by the operator into the page's own gate; it must never be
-	// recovered from the host panel's storage or leave through another channel.
-	for _, forbidden := range []string{"resolveManagementKey()", "enc::v1::", "cli-proxy-api-webui::secure-storage", "/management.html", "saveKey()", "logout()", "authActions", "X-MANAGEMENT-KEY", "manualRefreshKey", "manualRefreshDialog", "/v0/resource/plugins/quota-monitor/data"} {
+	// The operator types the key into the page's own gate, or the page reuses the one the host Management Center
+	// already stores for this origin (read-only, see SECURITY.md); it must never leave through another channel.
+	for _, forbidden := range []string{"resolveManagementKey()", "/management.html", "saveKey()", "logout()", "authActions", "X-MANAGEMENT-KEY", "manualRefreshKey", "manualRefreshDialog", "/v0/resource/plugins/quota-monitor/data"} {
 		if strings.Contains(dashboard.HTML, forbidden) {
 			t.Errorf("dashboard.HTML contains forbidden auth/management element: %q", forbidden)
 		}
@@ -1013,9 +1013,9 @@ func assertTenAccountsInvariant(t *testing.T, accs []quotamonitor.AccountQuota, 
 func TestResourceDashboardShellIsStaticAndNeverScrapesCredentials(t *testing.T) {
 	reset(t)
 	html := string(dashboard.HTML)
-	// The unauthenticated shell asks the operator for the key itself; credentials must
-	// never be recovered from the host panel's storage or another window.
-	for _, forbidden := range []string{"resolveManagementKey", "window.parent", "postMessage", "X-Management-Key"} {
+	// The unauthenticated shell asks the operator for the key itself or reuses the host's stored one read-only;
+	// credentials must never be posted to or scraped from another window.
+	for _, forbidden := range []string{"resolveManagementKey", "postMessage", "X-Management-Key"} {
 		if strings.Contains(html, forbidden) {
 			t.Fatalf("resource dashboard contains forbidden auth surface %q", forbidden)
 		}
@@ -2010,8 +2010,8 @@ assert(html.indexOf('fullRefreshBtn') !== -1, 'full refresh button present');
 assert(html.indexOf('refreshAllAccounts') !== -1, 'explicit refresh action present');
 // No auto-refresh interval select.
 assert(html.indexOf('autoRefreshSelect') === -1, 'autoRefreshSelect must be absent');
-// localStorage is limited to the language preference (see TestDashboardStorageLimitedToLanguagePreference).
-assert((html.match(/localStorage/g)||[]).length === (html.match(/localStorage\.(?:getItem\(LANG_KEY\)|setItem\(LANG_KEY, lang\))/g)||[]).length, 'localStorage only for LANG_KEY');
+// localStorage: language and theme-mode preferences, plus read-only access to the host's own entries.
+assert((html.match(/localStorage/g)||[]).length === (html.match(/localStorage\.(?:getItem\((?:LANG_KEY|THEME_KEY|name)\)|setItem\((?:LANG_KEY, lang|THEME_KEY, mode)\))/g)||[]).length, 'localStorage only for language/theme prefs and read-only host entries');
 // Keep the compact toolbar action label.
 assert(html.indexOf('전체 갱신') !== -1, 'full refresh action label present');
 // Current account uses the border instead of a redundant visible badge.

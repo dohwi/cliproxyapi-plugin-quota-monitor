@@ -24,6 +24,37 @@ var mgmtKey = '';
 var keyVerified = false;
 function readStoredKey() { try { return sessionStorage.getItem(KEY_STORAGE) || ''; } catch (e) { return ''; } }
 function writeStoredKey(key) { try { if (key) sessionStorage.setItem(KEY_STORAGE, key); else sessionStorage.removeItem(KEY_STORAGE); } catch (e) {} }
+// Read-only reuse of what the host Management Center already keeps for this origin: its management key
+// (HOST_AUTH_KEY) and theme (HOST_THEME_KEY), optionally obfuscated as enc::v1:: / enc::v2::. This page never
+// writes them back or keeps its own persistent copy of the key. Any failure just means "ask the operator".
+var HOST_AUTH_KEY = 'cli-proxy-auth';
+var HOST_THEME_KEY = 'cli-proxy-theme';
+var hostKeyFromStore = false; // true while the active key came from the host, not the form
+var hostKeyRejected = false;  // set after a host key was refused, so we never retry it
+function readHostStore(name) {
+  try {
+    var raw = localStorage.getItem(name);
+    if (!raw) return null;
+    var m = /^enc::v([12])::/.exec(raw);
+    if (m) {
+      var scope = m[1] === '2' ? 'v2|' + location.host : location.host + '|' + navigator.userAgent;
+      var secret = new TextEncoder().encode('cli-proxy-api-webui::secure-storage|' + scope);
+      var bin = atob(raw.slice(m[0].length));
+      var bytes = Uint8Array.from(bin, function(c, i) { return c.charCodeAt(0) ^ secret[i % secret.length]; });
+      raw = new TextDecoder().decode(bytes);
+    }
+    return JSON.parse(raw);
+  } catch (e) { return null; }
+}
+function readHostKey() {
+  try {
+    var saved = readHostStore(HOST_AUTH_KEY), auth = saved && (saved.state || saved);
+    if (!auth || !auth.managementKey || auth.rememberPassword === false) return '';
+    // A key saved for another server must not be sent to this one.
+    if (auth.apiBase && new URL(auth.apiBase, location.origin).origin !== location.origin) return '';
+    return String(auth.managementKey).trim();
+  } catch (e) { return ''; }
+}
 function authError() { var err = new Error('auth'); err.authRequired = true; return err; }
 function noteKeyAccepted() { if (!keyVerified) { keyVerified = true; writeStoredKey(mgmtKey); } }
 function showAuthGate(messageKey) {
@@ -49,18 +80,27 @@ function hideAuthGate() {
   if (gate) gate.style.display = 'none';
   if (heading) heading.style.display = '';
 }
-function dropKeyAndPrompt() { mgmtKey = ''; keyVerified = false; writeStoredKey(''); showAuthGate('auth.invalid'); }
+function dropKeyAndPrompt() {
+  // A refused host key is not retried on this page load: every rejection counts toward the host's IP ban.
+  if (hostKeyFromStore) hostKeyRejected = true;
+  hostKeyFromStore = false;
+  mgmtKey = ''; keyVerified = false; writeStoredKey(''); showAuthGate('auth.invalid');
+}
 function authGateOpen() { var gate = document.getElementById('authGate'); return !!gate && gate.style.display !== 'none'; }
 function initAuthGate() {
   mgmtKey = readStoredKey();
   keyVerified = !!mgmtKey; // only keys the host already accepted are ever stored
+  if (!mgmtKey && !hostKeyRejected) {
+    mgmtKey = readHostKey();
+    hostKeyFromStore = !!mgmtKey; // not yet verified: requests stay sequential
+  }
   var form = document.getElementById('authForm');
   if (!form) return;
   form.addEventListener('submit', function(e) {
     e.preventDefault();
     var input = document.getElementById('authKeyInput'), value = input ? String(input.value || '').trim() : '';
     if (!value) { showAuthGate('auth.empty'); return; }
-    mgmtKey = value; keyVerified = false;
+    mgmtKey = value; keyVerified = false; hostKeyFromStore = false;
     if (input) input.value = '';
     hideAuthGate();
     cachedAccounts = [];
@@ -89,6 +129,7 @@ var POLL_MAX_MS = 900000;              // 15m cap
 // shared with the other CLIProxyAPI plugin dashboards so one choice applies to all of them.
 // Order: saved choice → browser language (ko* → ko, else en) → en.
 var LANG_KEY = 'cpa_plugin_lang';
+var THEME_KEY = 'cpa_plugin_theme';
 var SUPPORTED_LANGS = ['ko', 'en'];
 var I18N = {
   ko: {
@@ -146,6 +187,8 @@ var I18N = {
     'auth.submit': '확인',
     'auth.empty': '관리 키를 입력하세요.',
     'auth.invalid': '관리 키가 올바르지 않거나 접근이 거부되었습니다. 다시 입력하세요.',
+    'theme.system': '시스템', 'theme.light': '라이트', 'theme.dark': '다크',
+    'theme.label': '테마: {mode} (클릭하면 {next})',
     'err.load': '데이터 로드 실패: {e}',
     'err.api': 'API 호출 실패 ({s})',
     'err.empty': '데이터 없음',
@@ -291,6 +334,8 @@ var I18N = {
     'auth.submit': 'Continue',
     'auth.empty': 'Enter the management key.',
     'auth.invalid': 'The management key is invalid or access was denied. Enter it again.',
+    'theme.system': 'System', 'theme.light': 'Light', 'theme.dark': 'Dark',
+    'theme.label': 'Theme: {mode} (click for {next})',
     'err.load': 'Failed to load data: {e}',
     'err.api': 'API request failed ({s})',
     'err.empty': 'No data',
@@ -450,6 +495,7 @@ function applyStaticI18n() {
     var el = document.getElementById(id);
     if (el && el._i18n) el.textContent = t(el._i18n.key, el._i18n.params);
   });
+  if (typeof applyTheme === 'function') applyTheme();
   // One toggle button: label/tooltip name the language a click switches to.
   eachNode('.lang-toggle', function(btn) {
     var label = t(currentLang === 'ko' ? 'lang.toEn' : 'lang.toKo');
@@ -458,6 +504,97 @@ function applyStaticI18n() {
     btn.setAttribute('data-current-lang', currentLang);
   });
 }
+// Theme: system (default) | light | dark, chosen with the toggle next to the language button.
+// "system" follows the host Management Center (light | dark; its white variant counts as light; its auto
+// resolves via the OS). Only this choice is stored (THEME_KEY); the host's own theme entry is read, never
+// written. Inside the console iframe the parent's data-theme wins; otherwise cli-proxy-theme, then the OS.
+var THEME_MODES = ['system', 'light', 'dark'];
+function readThemeMode() {
+  try { var v = localStorage.getItem(THEME_KEY); return THEME_MODES.indexOf(v) >= 0 ? v : 'system'; } catch (e) { return 'system'; }
+}
+var themeMode = readThemeMode();
+function osTheme() {
+  try { if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark'; } catch (e) {}
+  return 'light';
+}
+function hostTheme() {
+  try {
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      return window.parent.document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    }
+  } catch (e) {} // cross-origin parent: fall through to the stored choice
+  var saved = readHostStore(HOST_THEME_KEY), theme = saved && saved.state && saved.state.theme;
+  if (theme === 'dark') return 'dark';
+  if (theme === 'white' || theme === 'light') return 'light';
+  return theme === 'auto' || !theme ? osTheme() : 'light';
+}
+var THEME_ICONS = {
+  system: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  dark: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'
+};
+function themeName(mode) { return mode === 'dark' ? t('theme.dark') : mode === 'light' ? t('theme.light') : t('theme.system'); }
+function paintTheme(next) {
+  var root = document.documentElement;
+  if (!root || !root.removeAttribute) return;
+  if (next === 'light') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', next);
+}
+// The theme changes in a single step, with no colour animation. Controls carry their own colour transitions
+// while cards and the page do not, which made them change at different times; so for the swap every
+// transition is switched off (see [data-theme-switching] in the CSS) and restored right after the new colours
+// have been painted. Normal hover/focus transitions are unaffected.
+var themeSwitchTimer = 0;
+function swapTheme(next) {
+  var root = document.documentElement;
+  if (!root || !root.getAttribute) return;
+  var current = root.getAttribute('data-theme') || 'light';
+  if (current === next) return;
+  root.setAttribute('data-theme-switching', '');
+  void root.offsetWidth; // commit "no transitions" before the colours change
+  paintTheme(next);
+  void root.offsetWidth; // resolve the new colours while transitions are still off
+  clearTimeout(themeSwitchTimer);
+  themeSwitchTimer = setTimeout(function() { root.removeAttribute('data-theme-switching'); }, 80);
+}
+function applyTheme() {
+  var next = themeMode === 'system' ? hostTheme() : themeMode, root = typeof document !== 'undefined' && document.documentElement;
+  if (root && root.setAttribute && root.hasAttribute) { if (root.hasAttribute('data-theme-ready')) swapTheme(next); else { paintTheme(next); root.setAttribute('data-theme-ready', ''); } }
+  var after = THEME_MODES[(THEME_MODES.indexOf(themeMode) + 1) % THEME_MODES.length];
+  eachNode('.theme-toggle', function(btn) {
+    var label = t('theme.label', { mode: themeName(themeMode), next: themeName(after) });
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+    btn.setAttribute('data-theme-mode', themeMode);
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + THEME_ICONS[themeMode] + '</svg>';
+  });
+}
+function setThemeMode(mode) {
+  if (THEME_MODES.indexOf(mode) < 0 || mode === themeMode) return;
+  themeMode = mode;
+  try { localStorage.setItem(THEME_KEY, mode); } catch (e) {}
+  applyTheme();
+}
+function initThemeControls() {
+  applyTheme();
+  if (typeof window === 'undefined' || !window.addEventListener) return;
+  eachNode('.theme-toggle', function(btn) {
+    btn.addEventListener('click', function() {
+      setThemeMode(THEME_MODES[(THEME_MODES.indexOf(themeMode) + 1) % THEME_MODES.length]);
+    });
+  });
+  window.addEventListener('storage', function(e) {
+    if (!e) return;
+    if (e.key === THEME_KEY) { themeMode = readThemeMode(); applyTheme(); }
+    else if (e.key === HOST_THEME_KEY) applyTheme();
+  });
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch (e) {}
+  try {
+    if (window.parent && window.parent !== window) {
+      new MutationObserver(applyTheme).observe(window.parent.document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    }
+  } catch (e) {}
+}
+
 function setLanguage(lang, fromStorage) {
   var next = normalizeLang(lang);
   if (!next || next === currentLang) return;
@@ -2151,6 +2288,7 @@ function renderAccounts(accounts) {
 
 document.addEventListener('DOMContentLoaded', function() {
   if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', alignAccountGrid);
+  initThemeControls();
   initLanguageControls();
   initLoadingState();
   initFilterControls();

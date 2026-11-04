@@ -12,7 +12,7 @@ This is a native plugin loaded inside CLIProxyAPI, not an independently authenti
 | `POST /data/refresh?confirm=1` | Explicit refresh (30-second global cooldown) |
 | `GET  /accounts`, `GET /status`, `POST /refresh` | Management API |
 
-The unauthenticated `/v0/resource/.../data/*` routes do not exist (HTTP 404). The static page therefore asks the operator for the management key; it is sent only as an `Authorization: Bearer` header (never in a URL), kept in the tab's `sessionStorage` after the host accepted it, and dropped on a 401/403. It is never written to `localStorage`, cookies or the server. Without a key the page sends no data request, because CLIProxyAPI counts every rejected management request toward a temporary IP ban.
+The unauthenticated `/v0/resource/.../data/*` routes do not exist (HTTP 404). The static page therefore asks the operator for the management key; it is sent only as an `Authorization: Bearer` header (never in a URL), kept in the tab's `sessionStorage` after the host accepted it, and dropped on a 401/403. It is never written to `localStorage`, cookies or the server. As a convenience the page may read, never write, the key the host Management Center already stores for the same origin (`localStorage['cli-proxy-auth']`, including its `enc::v1::`/`enc::v2::` encoding). It is skipped when the host's "remember password" is off or its saved `apiBase` is another origin, and a host key that gets rejected is not retried during that page load. Without a key the page sends no data request, because CLIProxyAPI counts every rejected management request toward a temporary IP ban.
 
 `confirm=1` on the refresh action is a safeguard against stray calls, not authentication or CSRF protection: authentication is the host's management key.
 
@@ -24,7 +24,7 @@ The dashboard page is served with a strict `Content-Security-Policy` (`default-s
 
 ## Data handling
 
-Dashboard DTOs omit raw tokens, internal auth indexes, paths and proxy URLs. Account display identifiers are not anonymous: treat snapshots and screenshots as potentially sensitive. The dashboard persists its language preference (`localStorage`) and, for the current tab only, the accepted management key (`sessionStorage`). Never commit operational auth files, usage logs, keys or real account identifiers; use reserved example domains for fixtures.
+Dashboard DTOs omit raw tokens, internal auth indexes, paths and proxy URLs. Account display identifiers are not anonymous: treat snapshots and screenshots as potentially sensitive. The dashboard persists its language and theme-mode (system/light/dark) preferences (`localStorage`); in "system" mode the theme is read from the host (`cli-proxy-theme`, or the parent console's `data-theme`). The accepted management key is kept for the current tab only (`sessionStorage`). Never commit operational auth files, usage logs, keys or real account identifiers; use reserved example domains for fixtures.
 
 ## Verification
 

@@ -118,7 +118,7 @@ The dashboard ships in English and Korean. A single translate icon button in the
 
 - **Selection order**: saved choice, then browser language (Korean selects Korean, anything else selects English), then English.
 - **Shared setting**: the choice is stored in the browser under `cpa_plugin_lang`, the same key used by the [usage-audit](https://github.com/dohwi/cliproxyapi-plugin-usage-audit) dashboard. Changing it in one open dashboard updates the other. This only applies when both dashboards are served from the same origin.
-- **Privacy**: the language key is the only thing the page writes to `localStorage`. The management key is held in `sessionStorage` for the current tab only and is never written to `localStorage`, cookies or a URL.
+- **Privacy**: the page writes only its language and theme-mode (system/light/dark) preferences to `localStorage`. The management key is held in `sessionStorage` for the current tab only and is never written to `localStorage`, cookies or a URL. For convenience it may read, never write, the key and theme the host Management Center already stores for the same origin (skipped when the host's "remember password" is off or its saved address is another origin).
 - **Not translated**: the plugin name shown in the host menu is registered once at load time, so it is fixed to the plugin store name ("Quota Monitor") in every language.
 
 ## Routes

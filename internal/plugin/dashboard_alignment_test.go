@@ -30,7 +30,7 @@ func TestDashboardCompactControlAlignment(t *testing.T) {
 		`var columns = Math.min(4, Math.max(1, Math.floor((grid.getBoundingClientRect().width + 10) / 290)));`,
 		`container.setAttribute('data-count', String(accounts ? accounts.length : 0));`, ".manual-refresh-status:empty { display: none; }",
 		".filter-actions { grid-column: 1 / -1; justify-content: flex-start; }",
-		"#fullRefreshBtn { background: #fff; border-color: #93b4f0; color: var(--accent-hover); }",
+		"#fullRefreshBtn { background: var(--surface); border-color: #93b4f0; color: var(--accent-hover); }",
 		"#fullRefreshBtn:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); color: #1e40af; }",
 		"#fullRefreshBtn:focus-visible { outline-color: var(--accent); }",
 		"font-size: 0.875rem; font-weight: 600; line-height: 1.2; justify-content: center;",
