@@ -48,7 +48,7 @@ func TestDashboardCompactControlAlignment(t *testing.T) {
 // The redesign changes visual hierarchy without changing data-driven sizing or status semantics.
 func TestDashboardSemanticSurfaceHierarchy(t *testing.T) {
 	for _, token := range []string{
-		"--dashboard-top-offset: 88px;", "--dashboard-top-offset: 72px;", "--border: #e4e7ec;", "--radius: 12px;",
+		"--dashboard-top-offset: 88px;", "--dashboard-top-offset: 88px;", "--border: #e4e7ec;", "--radius: 12px;",
 		`<h1 data-i18n="page.heading">계정 쿼터</h1>`, "계정별 남은 쿼터와 초기화 시간을 한눈에 확인하세요.",
 		`<label for="providerFilter" data-i18n="filter.provider">프로바이더</label>`, `<label for="endpointFilter" data-i18n="filter.endpoint">엔드포인트</label>`,
 		".account-card { background: var(--surface); border: 1px solid var(--account-border);",

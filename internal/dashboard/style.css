@@ -395,7 +395,7 @@
   /* Labels and controls remain left aligned; quota numerals remain right aligned. */
   /* Responsive */
   @media (max-width: 767px) {
-    :root { --dashboard-top-offset: 72px; } /* menu button row ends at y=60px */
+    :root { --dashboard-top-offset: 88px; } /* iframe width != host width: one value fits all */
     body { padding: 0 10px 12px; }
     .container { width: 100%; }
     .dashboard-control-panel { padding: 10px; border-radius: 12px; }

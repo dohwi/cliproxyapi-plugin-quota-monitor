@@ -669,7 +669,7 @@ console.log('OK_PERCENT_TESTS');`
 	if err != nil || !strings.Contains(string(out), "OK_PERCENT_TESTS") {
 		t.Fatalf("node numeric percentage tests failed: %v\n%s", err, out)
 	}
-	for _, token := range []string{"--dashboard-top-offset: 88px;", "--dashboard-top-offset: 72px;", "prefers-reduced-motion", "quota-value-number", "5시간 제한", "주간 제한"} {
+	for _, token := range []string{"--dashboard-top-offset: 88px;", "--dashboard-top-offset: 88px;", "prefers-reduced-motion", "quota-value-number", "5시간 제한", "주간 제한"} {
 		if !strings.Contains(dashboard.HTML, token) {
 			t.Errorf("missing numeric/accessibility token %q", token)
 		}
