@@ -448,7 +448,7 @@
   /* ===================== Card body (appended design layer, grouped by area) ===================== */
 
   /* ---- Colour legend ---- */
-  .pct-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; padding: 0; list-style: none; color: var(--muted); font-size: 0.75rem; }
+  .pct-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; padding: 0 11px; /* align the dots with the card content above and below */ list-style: none; color: var(--muted); font-size: 0.75rem; }
   .pct-legend li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
   .pct-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 
