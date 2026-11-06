@@ -135,7 +135,6 @@ var I18N = {
   ko: {
     'page.title': '계정별 남은 쿼터',
     'page.heading': '계정 쿼터',
-    'page.subheading': '계정별 남은 쿼터와 초기화 시간을 한눈에 확인하세요.',
     'lang.label': '언어',
     'lang.toEn': 'English로 전환',
     'lang.toKo': '한국어로 전환',
@@ -281,7 +280,6 @@ var I18N = {
   en: {
     'page.title': 'Remaining quota by account',
     'page.heading': 'Account Quota',
-    'page.subheading': 'See each account\u2019s remaining quota and reset time at a glance.',
     'lang.label': 'Language',
     'lang.toEn': 'Switch to English',
     'lang.toKo': 'Switch to Korean',

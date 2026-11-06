@@ -466,7 +466,6 @@ func TestDashboardPastelTokensAndProviderIcons(t *testing.T) {
 
 	// 2. Forbidden external resources, CDNs, img tags, or gradients in cards/bars
 	for _, forbid := range []string{
-		"<img",
 		"unpkg.com",
 		"cdn.",
 		"cdnjs.cloudflare.com",

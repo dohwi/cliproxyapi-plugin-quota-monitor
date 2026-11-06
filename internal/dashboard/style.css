@@ -100,12 +100,16 @@
     overflow-wrap: anywhere;
   }
   .container { max-width: 1480px; margin: 0 auto; padding-top: var(--dashboard-top-offset); min-width: 0; }
-  .page-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 16px; margin-bottom: 18px; min-width: 0; }
+  .page-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-bottom: 10px; min-width: 0; }
   .page-heading-copy { min-width: 0; }
+  /* Header: one row, logo + title on the left and language/theme on the right. */
+  .page-heading { grid-template-areas: "brand actions"; }
+  .page-heading-brand { grid-area: brand; display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .page-logo { flex: none; width: 40px; height: 40px; border-radius: 10px; object-fit: contain; }
+  .page-heading-actions { grid-area: actions; display: inline-flex; align-items: center; gap: 6px; flex: none; }
   .page-heading h1 { font-size: 1.5rem; font-weight: 800; line-height: 1.3; letter-spacing: -0.04em; }
-  .page-heading p { margin-top: 4px; font-size: 0.8125rem; line-height: 20px; color: var(--muted); }
   @media (max-width: 767px) {
-    .page-heading { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin-bottom: 14px; align-items: start; }
+    .page-heading { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; margin-bottom: 10px; align-items: center; }
     .page-heading h1 { font-size: 1.3rem; }
   }
   /* Keep language controls in normal filter flow, below the host's floating tools. */
@@ -186,6 +190,13 @@
   .filter-endpoint-field[hidden] { display: none; }
   .filter-status-field { flex-basis: 140px; width: 140px; }
   .filter-field label { display: block; margin-bottom: 6px; }
+  /* Wide screens: the three selects share the free width and the buttons sit at the right end,
+     so the card is filled edge to edge instead of leaving the right half empty. */
+  @media (min-width: 768px) {
+    .toolbar { flex-wrap: nowrap; }
+    .toolbar .filter-field, .toolbar .filter-endpoint-field, .toolbar .filter-status-field { flex: 1 1 0; width: auto; min-width: 120px; }
+    .toolbar .filter-actions { flex: 0 0 auto; flex-wrap: nowrap; margin-left: 4px; }
+  }
   .filter-label, .filter-field label { color: var(--filter-label-color); font-size: 0.75rem; font-weight: 600; line-height: 1.2; white-space: nowrap; text-align: left; }
   .compact-select-wrap { position: relative; min-width: 0; }
   .compact-select-wrap::after { position: absolute; top: 50%; right: 10px; width: 7px; height: 7px; border-right: 1.5px solid var(--filter-label-color); border-bottom: 1.5px solid var(--filter-label-color); content: ""; pointer-events: none; transform: translateY(-65%) rotate(45deg); opacity: 0.75; }
@@ -407,7 +418,8 @@
     .filter-reset-button { min-height: 44px; }
     .compact-select-wrap, .compact-select { width: 100%; min-width: 0; }
     .filter-status-field { width: 100%; }
-    .filter-actions .filter-reset-button { flex: 0 1 auto; width: auto; justify-content: center; }
+    .filter-actions { flex-wrap: nowrap; }
+    .filter-actions .filter-reset-button { flex: 1 1 0; width: auto; min-width: 0; justify-content: center; }
     .cards-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: 1fr; gap: 8px; }
     .account-card { min-height: 226px; height: 100%; padding: 9px 10px; }
     .account-card[data-current="true"] { padding: 8px 9px; }
@@ -427,8 +439,9 @@
   }
   @media (min-width: 360px) and (max-width: 767px) {
     .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .filter-status-field { grid-column: 1 / -1; }
     .filter-actions { grid-column: 1 / -1; justify-content: flex-start; }
-    .filter-actions .filter-reset-button { flex: 0 1 auto; }
+    .filter-actions .filter-reset-button { flex: 1 1 0; }
   }
   @media (min-width: 560px) and (max-width: 767px) {
     .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

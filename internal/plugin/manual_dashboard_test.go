@@ -11,7 +11,7 @@ func TestDashboardManualRefreshNodeContract(t *testing.T) {
 		`id="fullRefreshBtn"`,
 		`id="manualRefreshStatus" class="manual-refresh-status" role="status" aria-live="polite"`,
 		`.filter-actions { display: flex; flex-wrap: wrap;`,
-		`.filter-actions .filter-reset-button { flex: 0 1 auto; width: auto;`,
+		`.filter-actions .filter-reset-button { flex: 1 1 0; width: auto;`,
 	} {
 		if !strings.Contains(dashboard.HTML, token) {
 			t.Errorf("missing manual refresh accessibility/responsiveness token %q", token)

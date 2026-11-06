@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"quota-monitor/internal/dashboard"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -157,10 +158,16 @@ func TestRegressionPastelTokensAndProviderIcons(t *testing.T) {
 	}
 
 	for _, forbid := range []string{
-		"<img", "unpkg.com", "cdn.", "cdnjs.cloudflare.com", "linear-gradient(", "radial-gradient(",
+		"unpkg.com", "cdn.", "cdnjs.cloudflare.com", "linear-gradient(", "radial-gradient(",
 	} {
 		if strings.Contains(dashboard.HTML, forbid) {
 			t.Errorf("dashboard.HTML contains forbidden pattern: %q", forbid)
+		}
+	}
+	// The only image is the inlined plugin logo: no <img may load anything but a data: URI.
+	for _, m := range regexp.MustCompile(`<img\b[^>]*>`).FindAllString(dashboard.HTML, -1) {
+		if !strings.Contains(m, `src="data:image/png;base64,`) {
+			t.Errorf("dashboard.HTML has an <img that is not an inlined data: URI: %.80s", m)
 		}
 	}
 }

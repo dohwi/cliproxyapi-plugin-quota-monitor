@@ -17,7 +17,7 @@ func TestDashboardAccountSummaryRemoved(t *testing.T) {
 func TestDashboardCompactControlAlignment(t *testing.T) {
 	for _, token := range []string{
 		"padding: 0 14px 16px;", "--bg-body: #f7f8fa;", "--accent: #2563eb;",
-		".page-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end;",
+		".page-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;",
 		"padding: 0 30px 0 10px;", "font-family: inherit; font-size: 0.875rem; font-weight: 500; line-height: 1.2; text-align: left; text-align-last: left;",
 		".toolbar { display: flex; flex-wrap: wrap; justify-content: flex-start;",
 		"#dashboardContent { background: transparent; border: 0; padding: 0; min-width: 0; }",
@@ -49,7 +49,7 @@ func TestDashboardCompactControlAlignment(t *testing.T) {
 func TestDashboardSemanticSurfaceHierarchy(t *testing.T) {
 	for _, token := range []string{
 		"--dashboard-top-offset: 88px;", "--dashboard-top-offset: 88px;", "--border: #e4e7ec;", "--radius: 12px;",
-		`<h1 data-i18n="page.heading">계정 쿼터</h1>`, "계정별 남은 쿼터와 초기화 시간을 한눈에 확인하세요.",
+		`<h1 data-i18n="page.heading">계정 쿼터</h1>`,
 		`<label for="providerFilter" data-i18n="filter.provider">프로바이더</label>`, `<label for="endpointFilter" data-i18n="filter.endpoint">엔드포인트</label>`,
 		".account-card { background: var(--surface); border: 1px solid var(--account-border);",
 		`.account-card[data-availability="active"] { --card-state-bg: var(--status-active-bg); }`,
