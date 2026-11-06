@@ -19,7 +19,7 @@
     --filter-label-color: #667085;
     --filter-gap: 10px;
     /* Keep the page heading close to the content on every viewport. */
-    --dashboard-top-offset: 24px;
+    --dashboard-top-offset: 88px; /* clears the console's floating buttons (to y=76px) */
 
     /* Provider palette tokens — badge text/bg only, NOT card bg/border */
     --prov-ag-bg: #f2efff;
@@ -395,7 +395,7 @@
   /* Labels and controls remain left aligned; quota numerals remain right aligned. */
   /* Responsive */
   @media (max-width: 767px) {
-    :root { --dashboard-top-offset: 16px; }
+    :root { --dashboard-top-offset: 72px; } /* menu button row ends at y=60px */
     body { padding: 0 10px 12px; }
     .container { width: 100%; }
     .dashboard-control-panel { padding: 10px; border-radius: 12px; }
@@ -437,11 +437,11 @@
     .dashboard-control-panel { padding-right: 8px; padding-left: 8px; }
   }
   @media (min-width: 768px) and (max-width: 1199px) {
-    :root { --dashboard-top-offset: 20px; }
+    :root { --dashboard-top-offset: 88px; }
     body { padding: 0 14px 16px; }
   }
   @media (min-width: 1200px) {
-    :root { --dashboard-top-offset: 24px; }
+    :root { --dashboard-top-offset: 88px; }
     body { padding: 0 14px 16px; }
   }
 
