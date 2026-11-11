@@ -1164,13 +1164,66 @@ func splitClaudeUnifiedSignal(key string) (window, field string, ok bool) {
 		return "", "", false
 	}
 	rest := strings.TrimPrefix(key, prefix)
-	for _, candidate := range []string{"limit", "remaining", "status", "reset"} {
+	for _, candidate := range []string{"limit", "remaining", "utilization", "status", "reset"} {
 		suffix := "-" + candidate
 		if strings.HasSuffix(rest, suffix) && len(rest) > len(suffix) {
 			return strings.TrimSuffix(rest, suffix), candidate, true
 		}
 	}
 	return "", "", false
+}
+
+// claudeUnifiedWindowName maps a unified rate-limit header window onto the
+// canonical name the OAuth usage response uses, so one logical window is not
+// stored twice (5h + five_hour) or left without a label (7d_sonnet).
+func claudeUnifiedWindowName(window string) string {
+	switch strings.ToLower(strings.TrimSpace(window)) {
+	case "5h", "5_hour", "5_hours", "5-hour", "5-hours", "five_hour", "five_hours", "five-hour", "five-hours":
+		return "five-hour"
+	case "7d", "7_day", "7_days", "7-day", "7-days", "seven_day", "seven_days", "seven-day", "weekly", "week":
+		return "weekly"
+	case "7d_sonnet", "seven_day_sonnet", "seven-day-sonnet", "weekly_sonnet", "weekly-sonnet":
+		return "weekly-sonnet"
+	case "7d_opus", "seven_day_opus", "seven-day-opus", "weekly_opus", "weekly-opus":
+		return "weekly-opus"
+	case "7d_oauth_apps", "seven_day_oauth_apps", "weekly_oauth_apps", "weekly-oauth-apps":
+		return "weekly-oauth-apps"
+	case "7d_cowork", "seven_day_cowork", "weekly_cowork", "weekly-cowork":
+		return "weekly-cowork"
+	case "7d_sessions", "seven_day_sessions", "weekly_sessions", "weekly-sessions":
+		return "weekly-sessions"
+	}
+	return window
+}
+
+// claudeUnifiedStatusExhausted reports whether a unified status value means the
+// window has no quota left. Anything else (allowed, unknown) makes no claim.
+func claudeUnifiedStatusExhausted(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "exceeded", "rate_limited", "rate-limited", "rejected":
+		return true
+	}
+	return false
+}
+
+// claudeUnifiedStatusKnown keeps the passive status allowlist strict while
+// admitting the documented exhausted values.
+func claudeUnifiedStatusKnown(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "allowed", "exceeded", "rate_limited", "rate-limited", "rejected":
+		return true
+	}
+	return false
+}
+
+// claudeUtilizationPercent converts a unified utilization value into a used
+// percentage. The documented unit is a 0..1 fraction, but an emitter that
+// already scaled to percent is still handled without clamping 0.2 to 0.2%.
+func claudeUtilizationPercent(n float64) float64 {
+	if n <= 1 {
+		return clampPercent(n * 100)
+	}
+	return clampPercent(n)
 }
 
 // whitelistSignals filters incoming signals against strictly known quota headers and typed validation rules.
@@ -1208,12 +1261,12 @@ func whitelistSignals(provider string, in map[string]string) map[string]string {
 			if _, field, ok := splitClaudeUnifiedSignal(lk); ok {
 				valid := false
 				switch field {
-				case "limit", "remaining":
+				case "limit", "remaining", "utilization":
 					valid = isValidNumeric(val)
 				case "status":
-					// rejected is an authoritative exhaustion signal and must
-					// survive the strict raw-signal allowlist.
-					valid = strings.EqualFold(val, "rejected")
+					// Exhausted values (exceeded/rate_limited/rejected) are
+					// authoritative and must survive the strict allowlist.
+					valid = claudeUnifiedStatusKnown(val)
 				case "reset":
 					_, okTs := parseTimestamp(val)
 					valid = okTs
@@ -1325,22 +1378,27 @@ func (a *Adapter) parseSignals(res *AccountQuota) {
 }
 
 func (a *Adapter) parseClaudeSignals(res *AccountQuota) {
-	// Anthropic unified ratelimit headers
-	// anthropic-ratelimit-unified-5m-limit, anthropic-ratelimit-unified-5m-remaining,
-	// anthropic-ratelimit-unified-5m-status, anthropic-ratelimit-unified-5m-reset.
+	// Anthropic unified ratelimit headers carry one entry per window:
+	// anthropic-ratelimit-unified-<window>-<field>, where <field> is
+	// utilization (used fraction), limit/remaining (raw counters), status
+	// (allowed/exceeded/rate_limited/rejected) or reset (epoch or RFC3339).
 	windowsMap := make(map[string]*QuotaWindow)
 	limits := make(map[string]float64)
 	remaining := make(map[string]float64)
+	utilization := make(map[string]float64)
 
 	for k, v := range res.RawSignals {
 		if !strings.HasPrefix(k, "anthropic-ratelimit-unified-") {
 			continue
 		}
-		// e.g. "anthropic-ratelimit-unified-five-hour-remaining".
+		// e.g. "anthropic-ratelimit-unified-7d_sonnet-utilization".
 		windowName, field, ok := splitClaudeUnifiedSignal(k)
 		if !ok {
 			continue
 		}
+		// Passive headers and the active OAuth usage response must describe the
+		// same logical window, otherwise a header-only window renders nameless.
+		windowName = claudeUnifiedWindowName(windowName)
 
 		w, exists := windowsMap[windowName]
 		if !exists {
@@ -1362,8 +1420,14 @@ func (a *Adapter) parseClaudeSignals(res *AccountQuota) {
 			if n, err := strconv.ParseFloat(v, 64); err == nil && n >= 0 && !math.IsNaN(n) && !math.IsInf(n, 0) {
 				remaining[windowName] = n
 			}
+		case "utilization":
+			if n, err := strconv.ParseFloat(v, 64); err == nil && n >= 0 && !math.IsNaN(n) && !math.IsInf(n, 0) {
+				utilization[windowName] = n
+			}
 		case "status":
-			if strings.EqualFold(v, "rejected") {
+			// Any terminal status means the window is exhausted; "allowed" and
+			// other values carry no exhaustion claim.
+			if claudeUnifiedStatusExhausted(v) {
 				blocked := false
 				reached := true
 				w.Allowed, w.LimitReached = &blocked, &reached
@@ -1384,6 +1448,17 @@ func (a *Adapter) parseClaudeSignals(res *AccountQuota) {
 			u := 100 - r
 			w.RemainingPercent, w.UsedPercent = &r, &u
 		}
+	}
+	// Utilization is the used fraction (0..1). Raw limit/remaining counters win
+	// when both are present because they are the more precise observation.
+	for name, used := range utilization {
+		w := windowsMap[name]
+		if w.UsedPercent != nil {
+			continue
+		}
+		u := claudeUtilizationPercent(used)
+		r := 100 - u
+		w.UsedPercent, w.RemainingPercent = &u, &r
 	}
 
 	if len(windowsMap) > 0 {
@@ -1419,7 +1494,12 @@ func windowMinutesForName(raw string) (int, bool) {
 		return 60, true
 	case "daily", "one_day", "one-day", "24_hour", "24-hour", "24h", "day":
 		return 1440, true
-	case "weekly", "seven_day", "seven-day", "7d", "7_day", "7-day", "week", "seven_days", "7_days":
+	case "weekly", "seven_day", "seven-day", "7d", "7_day", "7-day", "week", "seven_days", "7_days",
+		"weekly_opus", "weekly-opus", "seven_day_opus", "seven-day-opus", "7d_opus", "7d-opus",
+		"weekly_sonnet", "weekly-sonnet", "seven_day_sonnet", "seven-day-sonnet", "7d_sonnet", "7d-sonnet",
+		"weekly_oauth_apps", "weekly-oauth-apps", "seven_day_oauth_apps", "seven-day-oauth-apps",
+		"weekly_cowork", "weekly-cowork", "seven_day_cowork", "seven-day-cowork",
+		"weekly_sessions", "weekly-sessions", "seven_day_sessions", "seven-day-sessions":
 		return 10080, true
 	case "monthly", "thirty_day", "thirty-day", "30d", "month":
 		return 43200, true

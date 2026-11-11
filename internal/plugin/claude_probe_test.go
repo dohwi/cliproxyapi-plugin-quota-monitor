@@ -88,3 +88,21 @@ func TestClaudeProbeEligibilityAndRecovery(t *testing.T) {
 		t.Fatalf("last-good Claude quota lost on failure: %#v", stale)
 	}
 }
+
+// A unified header window and the OAuth usage window it mirrors must share one
+// canonical key, otherwise the dashboard keeps a nameless duplicate row.
+func TestClaudeUnifiedWindowKeysMerge(t *testing.T) {
+	for _, names := range [][]string{
+		{"weekly-sonnet", "7d_sonnet", "seven_day_sonnet"},
+		{"weekly-opus", "7d_opus", "seven_day_opus"},
+		{"weekly", "7d", "seven_day"},
+		{"five-hour", "5h", "five_hour"},
+	} {
+		want := canonicalWindowKey(quotamonitor.QuotaWindow{Name: names[0]})
+		for _, name := range names[1:] {
+			if got := canonicalWindowKey(quotamonitor.QuotaWindow{Name: name}); got != want {
+				t.Errorf("alias %q key %q, want %q", name, got, want)
+			}
+		}
+	}
+}

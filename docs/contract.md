@@ -121,6 +121,17 @@ missing data, and all quota windows are preserved and normalized safely.
   subscription probe. Actual five-hour and weekly exhaustion still disqualify an
   account. Failures retain account-local last-good windows with stale/error
   metadata under the existing scheduling, deadline, and cooldown rules.
+- Passive `anthropic-ratelimit-unified-<window>-<field>` headers are normalized
+  onto the same window names the OAuth usage response uses: `5h` => `five-hour`,
+  `7d` => `weekly`, and `7d_sonnet`/`7d_opus`/`7d_oauth_apps`/`7d_cowork`/`7d_sessions`
+  => `weekly-<model>`. `-utilization` is the documented 0..1 used fraction and is
+  the primary percentage source; `-limit`/`-remaining` counters win when both are
+  present. `-status` accepts `allowed`, `exceeded`, `rate_limited`, and `rejected`,
+  and only the exhausted values mark a window blocked. Windows that are not
+  metered subscription quota (`5m`, `overage`) or that carry a reset deadline but
+  no percentage are not displayed, so a header-only window can never render as a
+  generic "quota" row with an unknown value. Model-scoped weekly windows are never
+  used as the account-wide weekly window for availability.
 - The official provider is displayed as lowercase **claude** in a separate provider card.
   The existing Claude/GPT quota family inside an Antigravity/Gemini card retains
   its Claude icon, tooltips, and accessible labels. The card context distinguishes

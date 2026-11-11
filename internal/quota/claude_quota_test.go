@@ -115,3 +115,78 @@ func TestFetchClaudeQuotaFailures(t *testing.T) {
 		})
 	}
 }
+
+// Unified rate-limit headers report used fraction as "-utilization" and name
+// the windows 5h/7d/7d_sonnet. Every such window must carry a percentage and a
+// canonical name so the dashboard never has to fall back to a generic label.
+func TestClaudeUnifiedUtilizationHeaders(t *testing.T) {
+	adapter := NewAdapter(WithClock(testFixedTime))
+	accounts, err := adapter.ParseAuthFilesJSON([]byte(`[{"provider":"claude","quota":{"observed_at":"2026-03-30T12:00:00Z","signals":{
+		"anthropic-ratelimit-unified-5h-utilization":"0.25",
+		"anthropic-ratelimit-unified-7d-utilization":"0.5",
+		"anthropic-ratelimit-unified-7d_sonnet-utilization":"0.2",
+		"anthropic-ratelimit-unified-7d-reset":"2026-03-31T12:00:00Z"
+	}}}]`))
+	if err != nil || len(accounts) != 1 {
+		t.Fatalf("accounts=%#v err=%v", accounts, err)
+	}
+	byName := map[string]quotamonitorWindow{}
+	for _, w := range accounts[0].Windows {
+		byName[w.Name] = quotamonitorWindow{used: w.UsedPercent, remaining: w.RemainingPercent, minutes: w.WindowMinutes}
+	}
+	for _, want := range []struct {
+		name    string
+		used    float64
+		minutes int
+	}{{"five-hour", 25, 300}, {"weekly", 50, 10080}, {"weekly-sonnet", 20, 10080}} {
+		got, ok := byName[want.name]
+		if !ok {
+			t.Fatalf("window %q missing from %#v", want.name, byName)
+		}
+		if got.used == nil || *got.used != want.used || got.remaining == nil || *got.remaining != 100-want.used || got.minutes == nil || *got.minutes != want.minutes {
+			t.Errorf("window %q = %#v, want used=%v minutes=%d", want.name, got, want.used, want.minutes)
+		}
+	}
+	if len(accounts[0].Windows) != 3 {
+		t.Errorf("windows = %d, want 3 canonical windows: %#v", len(accounts[0].Windows), byName)
+	}
+}
+
+type quotamonitorWindow struct {
+	used      *float64
+	remaining *float64
+	minutes   *int
+}
+
+// The unified status vocabulary is allowed/exceeded/rate_limited/rejected; only
+// the exhausted values may mark a window as blocked.
+func TestClaudeUnifiedStatusVocabulary(t *testing.T) {
+	for _, tc := range []struct {
+		status    string
+		exhausted bool
+		kept      bool
+	}{
+		{"allowed", false, true},
+		{"exceeded", true, true},
+		{"rate_limited", true, true},
+		{"rejected", true, true},
+		{"bogus", false, false},
+	} {
+		if got := claudeUnifiedStatusExhausted(tc.status); got != tc.exhausted {
+			t.Errorf("claudeUnifiedStatusExhausted(%q) = %v, want %v", tc.status, got, tc.exhausted)
+		}
+		if got := claudeUnifiedStatusKnown(tc.status); got != tc.kept {
+			t.Errorf("claudeUnifiedStatusKnown(%q) = %v, want %v", tc.status, got, tc.kept)
+		}
+	}
+}
+
+// Utilization is documented as a 0..1 fraction; a value already scaled to
+// percent must not be divided again.
+func TestClaudeUtilizationPercentUnits(t *testing.T) {
+	for _, tc := range []struct{ in, want float64 }{{0, 0}, {0.2, 20}, {1, 100}, {42, 42}, {150, 100}} {
+		if got := claudeUtilizationPercent(tc.in); got != tc.want {
+			t.Errorf("claudeUtilizationPercent(%v) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

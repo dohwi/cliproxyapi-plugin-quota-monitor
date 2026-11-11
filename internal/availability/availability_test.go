@@ -81,3 +81,23 @@ func TestComputeEmptyWhenNothingMeasurable(t *testing.T) {
 		t.Fatalf("empty fleet produced %+v", got)
 	}
 }
+
+// A model-scoped weekly window (weekly-sonnet) shares the weekly duration but
+// meters one model only, so it must not stand in for the account-wide weekly
+// window when availability is computed.
+func TestModelScopedWeeklyDoesNotReplaceAccountWindow(t *testing.T) {
+	account := quotamonitor.AccountQuota{
+		Provider: "claude", Status: quotamonitor.StatusKnown,
+		Windows: []quotamonitor.QuotaWindow{
+			availWin("five-hour", 300, 80),
+			availWin("weekly-sonnet", 10080, 0),
+		},
+	}
+	entries := Compute([]quotamonitor.AccountQuota{account})
+	if len(entries) != 1 {
+		t.Fatalf("entries = %#v, want one Claude entry", entries)
+	}
+	if entries[0].RemainingPercent != 80 {
+		t.Errorf("remaining = %v, want the 5h window's 80 (model-scoped weekly is not the account window)", entries[0].RemainingPercent)
+	}
+}

@@ -78,11 +78,9 @@ func accountCountsTowardAvailability(a quotamonitor.AccountQuota, windows []quot
 }
 
 func findWindow(windows []quotamonitor.QuotaWindow, minutes int, names ...string) *quotamonitor.QuotaWindow {
-	for i := range windows {
-		if windowMinutes(windows[i]) == minutes {
-			return &windows[i]
-		}
-	}
+	// Exact names win: a model-scoped weekly window (weekly-sonnet) shares the
+	// weekly duration but has its own quota and must not stand in for the
+	// account-wide window.
 	for i := range windows {
 		name := strings.ToLower(strings.TrimSpace(windows[i].Name))
 		for _, n := range names {
@@ -91,7 +89,24 @@ func findWindow(windows []quotamonitor.QuotaWindow, minutes int, names ...string
 			}
 		}
 	}
+	for i := range windows {
+		if windowMinutes(windows[i]) == minutes && !modelScopedWindow(windows[i]) {
+			return &windows[i]
+		}
+	}
 	return nil
+}
+
+// modelScopedWindow reports whether a window meters one model (or app surface)
+// rather than the whole account, e.g. Claude's weekly-sonnet / weekly-opus.
+func modelScopedWindow(w quotamonitor.QuotaWindow) bool {
+	name := strings.ToLower(strings.TrimSpace(w.Name))
+	for _, suffix := range []string{"opus", "sonnet", "oauth-apps", "oauth_apps", "cowork", "sessions"} {
+		if strings.Contains(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // primarySecondaryAvailability serves Claude and Codex: the 5h window decides,
