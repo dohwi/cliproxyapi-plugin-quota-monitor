@@ -27,7 +27,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.4.6"
+	pluginVersion             = "0.4.7"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6

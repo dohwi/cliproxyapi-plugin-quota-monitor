@@ -2259,7 +2259,7 @@ const (
 	// antigravityUserAgent must track the official agy client version: Google omits
 	// the "Gemini Models" group (and its weekly limit) for older versions.
 	// See docs/antigravity-quota.md before changing or lowering it.
-	antigravityUserAgent = "antigravity/cli/1.4.12 (aidev_client; os_type=darwin; arch=arm64)"
+	antigravityUserAgent = "antigravity/cli/1.5.5 (aidev_client; os_type=darwin; arch=arm64)"
 )
 
 var antigravityQuotaURLs = [...]string{
