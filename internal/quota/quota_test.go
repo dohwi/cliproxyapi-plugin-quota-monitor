@@ -1529,7 +1529,7 @@ func assertAntigravityHeaders(t *testing.T, got map[string]string) {
 	if got["Content-Type"] != "application/json" {
 		t.Errorf("inner Content-Type = %q, want application/json", got["Content-Type"])
 	}
-	if got["User-Agent"] != antigravityUserAgent || !strings.Contains(antigravityUserAgent, "antigravity/cli/1.4.12") {
+	if got["User-Agent"] != antigravityUserAgent || !strings.Contains(antigravityUserAgent, "antigravity/cli/1.5.5") {
 		t.Errorf("inner User-Agent = %q, want %q", got["User-Agent"], antigravityUserAgent)
 	}
 }

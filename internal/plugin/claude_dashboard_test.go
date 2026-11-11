@@ -56,6 +56,25 @@ assert(fallback.includes('Claude · 5시간 제한'),'existing AG fallback perce
 const withOverage={provider:'claude',status:'known',operational:{status:'active'},windows:[{name:'5h',window_minutes:300,remaining_percent:95},{name:'7d',window_minutes:10080,remaining_percent:99},{name:'overage',remaining_percent:0}]};
 assert(ctx.displayedQuotaWindows(withOverage).length===2,'disabled billing overage is not a subscription window');
 assert(ctx.getAvailabilityState(withOverage).key==='active','disabled overage must not imply exhaustion');
+// Passive unified headers name the same windows 5h/7d/7d_sonnet. Every one of
+// them must render with its own label and percentage instead of the generic
+// "쿼터" fallback, and unmetered rows (5m) must not become a quota row.
+const unified={provider:'claude',status:'known',operational:{status:'active'},windows:[
+ {name:'5h',window_minutes:300,remaining_percent:60,reset_after_seconds:3600},
+ {name:'7d',window_minutes:10080,remaining_percent:44,reset_after_seconds:3600},
+ {name:'7d_sonnet',window_minutes:10080,remaining_percent:44,reset_after_seconds:3600},
+ {name:'5m',window_minutes:5,remaining_percent:80},
+ {name:'7d_opus',window_minutes:10080,reset_after_seconds:3600}]};
+const unifiedShown=ctx.displayedQuotaWindows(unified);
+assert(unifiedShown.map(w=>w.name).join(',')==='5h,7d,7d_sonnet','only metered subscription rows are displayed');
+const unifiedHTML=ctx.renderQuotaGroups(unifiedShown,'claude',{key:'active'});
+['5시간 제한','주간 제한','Sonnet · 주간 제한'].forEach(label=>assert(unifiedHTML.includes(label),'unified window label '+label));
+assert(!unifiedHTML.includes('>쿼터<'),'no generic quota fallback label for unified windows');
+assert(unifiedHTML.includes('44%') && unifiedHTML.includes('60%'),'unified percentages rendered');
+assert(ctx.claudeWindowKind({name:'7d_sonnet'})==='weekly-sonnet','7d_sonnet maps to weekly-sonnet');
+assert(ctx.claudeWindowKind({name:'5m'})===null,'5m is not a subscription window');
+assert(ctx.claudeWindowKind({name:'7d_opus'})==='weekly-opus','7d_opus maps to weekly-opus');
+assert(ctx.claudeWindowKind({name:'mystery'})===null,'unknown names have no kind');
 function flatten(n){return n._html+' '+n.className+' '+JSON.stringify(n.attrs)+' '+n.children.map(flatten).join(' ');}
 ctx.renderAccounts([withOverage]);
 const overageCard=flatten(ids.accountsList);

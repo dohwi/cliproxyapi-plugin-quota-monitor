@@ -12,7 +12,7 @@ weekly limit (for example 97.02%) for the same account.
 client version in the `User-Agent` header**. The plugin sent
 `antigravity/cli/1.0.13 (...)`, and Google answered with only the
 `Claude and GPT models` group. The `Gemini Models` group was omitted entirely,
-without any error. The official client sends `1.4.12`.
+without any error. The official client sends `1.4.12` (pinned to `1.5.5` today).
 
 Verified against 6 live accounts through the CLIProxyAPI management
 `/api-call` route (same account, same project, only the header changed):
@@ -23,6 +23,7 @@ Verified against 6 live accounts through the CLIProxyAPI management
 | `antigravity/cli/1.4.12 (aidev_client; ...)` | `Gemini Models`, `Claude and GPT models` |
 | `antigravity/cli/1.4.12 (...)` + `X-Goog-Api-Client` | both groups |
 | `antigravity/1.4.12 linux/amd64` (wrong format) | `Claude and GPT models` |
+| `antigravity/cli/1.5.5 (aidev_client; os_type=darwin; arch=arm64)` | both groups (re-verified 2026-11-12) |
 
 The `1.4.12` response matched `agy`: Gemini weekly 97.02%, Gemini 5-hour 100%,
 Claude/GPT weekly 0%, Claude/GPT 5-hour 100%.
@@ -42,8 +43,8 @@ Claude/GPT weekly 0%, Claude/GPT 5-hour 100%.
 ## Fix
 
 `antigravityUserAgent` in `internal/quota/quota.go` is pinned to the official
-client version (`1.4.12`). A unit test asserts the version string. Released as
-v0.3.5.
+client version (`1.5.5`). A unit test asserts the version string. Released as
+v0.3.5; the pin was bumped to `1.5.5` in v0.4.6.
 
 ## If it happens again
 
@@ -63,7 +64,7 @@ renders the groups from `retrieveUserQuotaSummary` and shows per group a
 
 The official updater publishes the stable client version in plain text:
 `GET https://antigravity-cli-auto-updater-974169037036.us-central1.run.app`
-returns `... Stable Version: 1.4.12. Rolled out to 100%`.
+returns `... Stable Version: 1.5.5. Rolled out to 100%`.
 
 - `scripts/check-antigravity-client-version.sh` compares it with the pinned
   `antigravityUserAgent` (exit 0 in sync, 1 drift, 2 lookup failed).

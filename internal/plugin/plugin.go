@@ -27,7 +27,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.4.5"
+	pluginVersion             = "0.4.7"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -2096,8 +2096,10 @@ func canonicalWindowKey(w quotamonitor.QuotaWindow) string {
 	switch name {
 	case "5h", "5_hour", "5_hours", "five_hours":
 		name = "five_hour"
-	case "7d":
+	case "7d", "7_day", "7_days", "week":
 		name = "weekly"
+	case "7d_sonnet", "7d_opus", "7d_oauth_apps", "7d_cowork", "7d_sessions":
+		name = "weekly" + strings.TrimPrefix(name, "7d")
 	}
 	minutes := 0
 	if w.WindowMinutes != nil {

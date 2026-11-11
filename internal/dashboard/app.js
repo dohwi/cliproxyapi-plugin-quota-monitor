@@ -801,9 +801,32 @@ function displayedQuotaWindows(acc) {
   var windows = acc && Array.isArray(acc.windows) ? acc.windows : [];
   // Disabled pay-as-you-go overage is not an exhausted subscription window.
   if (getProviderKey(acc && acc.provider) === 'claude') {
-    return windows.filter(function(w) { return !/^overage(?:[-_ ]|$)/i.test(String(w && w.name || '')); });
+    // Only metered subscription rows are displayed. Passive unified headers also
+    // carry short-lived (5m) and billing (overage) rows, and a header-only row
+    // with a reset deadline but no percentage says nothing about remaining quota.
+    return windows.filter(function(w) {
+      return !/^overage(?:[-_ ]|$)/i.test(String(w && w.name || '')) &&
+             claudeWindowKind(w) !== null && effectiveUsed(w) !== null;
+    });
   }
   return windows;
+}
+
+// claudeWindowKind maps a Claude window name onto its canonical kind, or null
+// when the window is not a subscription quota row. Passive unified headers use
+// 5h/7d/7d_sonnet while the OAuth usage response uses five_hour/seven_day, so
+// both spellings must resolve to one kind.
+function claudeWindowKind(w) {
+  var low = String(w && w.name || '').trim().toLowerCase().replace(/_/g, '-');
+  if (/^seven-day(?=-|$)/.test(low)) low = 'weekly' + low.slice('seven-day'.length);
+  if (/^(5h|5-hour|5-hours|five-hour|five-hours)$/.test(low)) return 'five-hour';
+  if (/^(7d|7-day|7-days|week|weekly)$/.test(low)) return 'weekly';
+  var model = /^(?:7d|7-day|weekly)-(opus|sonnet|oauth-apps|cowork|sessions)$/.exec(low);
+  if (model) return 'weekly-' + model[1];
+  var minutes = Number(w && w.window_minutes);
+  if (minutes === 300) return 'five-hour';
+  if (minutes === 10080) return 'weekly';
+  return null;
 }
 
 function quotaWindowRole(w, provider) {
@@ -1798,11 +1821,7 @@ function groupQuotaWindows(windows, provider) {
       kind = duration ? family+'-'+duration : family;
       group = 'antigravity';
     } else if (key === 'claude') {
-      low = low.replace(/_/g, '-').replace(/^seven-day(?=-|$)/, 'weekly');
-      if (/^(5h|5-hour|5-hours|five-hours)$/.test(low)) low = 'five-hour';
-      if (low === '7d') low = 'weekly';
-      kind = /^(five-hour|weekly(?:-(?:opus|sonnet|oauth-apps|cowork|sessions))?)$/.test(low) ? low :
-             (Number(w.window_minutes)===300 ? 'five-hour' : (Number(w.window_minutes)===10080 ? low || 'weekly' : null));
+      kind = claudeWindowKind(w);
       group = 'claude';
       if (kind) { add('claude', t('grp.claude'), kind, w); return; }
     } else if (key === 'codex') {
