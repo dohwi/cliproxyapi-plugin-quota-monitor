@@ -74,7 +74,7 @@ ctx.scheduleNextPoll(900000);
 assert(timers.get(ctx.pollTimer).ms === 2000, 'snapshot polling stays enabled and fast during POST');
 resolve({ok:true,status:200,json:async()=>({refreshed:true,count:2})});
 await firstRefreshPromise;
-assert(!ctx.isManualRefreshing && btn.disabled && btn.attrs['aria-label'].includes('30s'), 'success starts 30-second cooldown');
+assert(!ctx.isManualRefreshing && btn.disabled && /30(s|초)/.test(btn.attrs['aria-label']), 'success starts 30-second cooldown');
 assert(snapshots >= 3 && el('manualRefreshStatus').textContent === '갱신 완료', 'completion reloads snapshot with compact notice');
 const successNoticeTimer = ctx.manualRefreshStatusTimer;
 assert(timers.get(successNoticeTimer).ms === 3000, 'success disappears after three seconds');
