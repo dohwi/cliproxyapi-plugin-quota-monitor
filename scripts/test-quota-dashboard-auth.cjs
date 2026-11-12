@@ -72,7 +72,7 @@ const accounts = [{ account_key: 'k1', provider: 'codex', account: 'a@example.co
 
     // Explicit refresh is an authenticated POST.
     await page.click('#fullRefreshBtn');
-    await page.waitForFunction(() => /seconds|Refresh|refresh|\d+s/i.test(document.getElementById('fullRefreshBtn').textContent));
+    await page.waitForFunction(() => /seconds|Refresh|refresh|\d+s/i.test(document.getElementById('fullRefreshBtn').getAttribute('aria-label') || ''));
     const refresh = seen.find(r => r.url.includes('/data/refresh'));
     assert(refresh, 'refresh request sent');
     assert.equal(refresh.method, 'POST');
