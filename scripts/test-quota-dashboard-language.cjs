@@ -73,6 +73,17 @@ const hangul = s => /[가-힣]/.test(s);
         await page.setViewportSize({ width: 1280, height: 900 });
         if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, `lang-${locale}-${lang}.png`), fullPage: true });
       }
+      // The header refresh icon shares the language toggle's styling but must never switch language.
+      for (const lang of [wantInitial, target]) {
+        await switchLang(page, lang);
+        await page.evaluate(() => { window.__before = [document.documentElement.lang, localStorage.getItem('cpa_plugin_lang')]; });
+        await page.click('#fullRefreshBtn');
+        await page.waitForTimeout(300);
+        const st = await page.evaluate(() => ({ before: window.__before, lang: document.documentElement.lang, stored: localStorage.getItem('cpa_plugin_lang'), label: document.getElementById('fullRefreshBtn').getAttribute('aria-label') }));
+        if (st.lang !== lang || st.stored !== lang) fail.push(`${locale}: refresh click changed language ${lang} -> ${st.lang}/${st.stored}`);
+        if (lang === 'ko' && !hangul(st.label)) fail.push(`${locale}: refresh label not Korean after click: ${st.label}`);
+        if (lang === 'en' && hangul(st.label)) fail.push(`${locale}: refresh label not English after click: ${st.label}`);
+      }
       // reload keeps the explicit choice
       await switchLang(page, 'en');
       await page.reload();

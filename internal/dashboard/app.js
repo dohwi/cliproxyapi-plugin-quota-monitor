@@ -495,7 +495,7 @@ function applyStaticI18n() {
   });
   if (typeof applyTheme === 'function') applyTheme();
   // One toggle button: label/tooltip name the language a click switches to.
-  eachNode('.lang-toggle', function(btn) {
+  eachNode('.lang-toggle:not(.refresh-btn)', function(btn) {
     var label = t(currentLang === 'ko' ? 'lang.toEn' : 'lang.toKo');
     btn.setAttribute('aria-label', label);
     btn.setAttribute('title', label);
@@ -610,7 +610,7 @@ function setLanguage(lang, fromStorage) {
 // Translate the static markup as soon as it is parsed to avoid a flash of Korean.
 try { applyStaticI18n(); } catch (e) {}
 function initLanguageControls() {
-  eachNode('.lang-toggle', function(btn) {
+  eachNode('.lang-toggle:not(.refresh-btn)', function(btn) {
     btn.addEventListener('click', function() { setLanguage(currentLang === 'ko' ? 'en' : 'ko'); });
   });
   // Another plugin dashboard (or tab) changed the shared language: follow it.
