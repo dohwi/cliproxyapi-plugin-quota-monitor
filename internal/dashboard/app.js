@@ -216,7 +216,7 @@ var I18N = {
     'fresh.outdated': ' · 오래된 정보',
     'fresh.title': '계정 상태 확인: {t}',
     'fresh.last': '마지막 확인 {t}',
-    'refresh.all': '전체 갱신',
+    'refresh.all': '전체 갱신', 'refresh.allAria': '전체 갱신',
     'refresh.allCooldown': '전체 갱신 ({s}s)',
     'refresh.running': '갱신 중…',
     'refresh.accountRunning': '계정 갱신 중…',
@@ -362,7 +362,7 @@ var I18N = {
     'fresh.outdated': ' \u00b7 Outdated',
     'fresh.title': 'Account status checked: {t}',
     'fresh.last': 'Last checked {t}',
-    'refresh.all': 'Refresh all',
+    'refresh.all': 'Refresh all', 'refresh.allAria': 'Refresh all',
     'refresh.allCooldown': 'Refresh all ({s}s)',
     'refresh.running': 'Refreshing\u2026',
     'refresh.accountRunning': 'Refreshing account\u2026',
@@ -1151,7 +1151,10 @@ function updateManualRefreshButton() {
   if (!button) return;
   var seconds = Math.max(0, Math.ceil((manualRefreshCooldownUntil - Date.now()) / 1000));
   button.disabled = isManualRefreshing || seconds > 0;
-  button.textContent = isManualRefreshing ? (refreshingAccountKey ? t('refresh.accountRunning') : t('refresh.running')) : seconds > 0 ? t('refresh.allCooldown', { s: seconds }) : t('refresh.all');
+  // The header button is icon-only: the state goes into its label, not its text.
+  button.setAttribute('aria-label', isManualRefreshing ? (refreshingAccountKey ? t('refresh.accountRunning') : t('refresh.running')) : seconds > 0 ? t('refresh.allCooldown', { s: seconds }) : t('refresh.all'));
+  button.title = button.getAttribute('aria-label');
+  if (isManualRefreshing) button.classList.add('is-spinning'); else button.classList.remove('is-spinning');
   button.setAttribute('aria-busy', isManualRefreshing ? 'true' : 'false');
   if (!isManualRefreshing && seconds > 0) {
     manualRefreshButtonTimer = setTimeout(updateManualRefreshButton, 1000);

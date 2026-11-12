@@ -115,7 +115,10 @@
   /* Keep language controls in normal filter flow, below the host's floating tools. */
   .filter-language-field { flex: 0 0 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; }
   .lang-toggle, .theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: var(--filter-control-height); height: var(--filter-control-height); padding: 0; border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); background: var(--filter-control-bg); color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
-  .lang-toggle:hover, .theme-toggle:hover { background: var(--filter-control-hover-bg); color: var(--accent-hover); }
+  .lang-toggle:hover:not(:disabled), .theme-toggle:hover:not(:disabled) { background: var(--filter-control-hover-bg); color: var(--accent-hover); }
+  .lang-toggle:disabled { opacity: .5; cursor: progress; }
+  .lang-toggle.is-spinning svg { animation: qm-spin .9s linear infinite; }
+  @keyframes qm-spin { to { transform: rotate(360deg); } }
   .lang-toggle:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 1px; }
   .lang-toggle svg, .theme-toggle svg { display: block; pointer-events: none; }
   /* Specificity beats .ui-ripple-host { position: relative } so the icon stays pinned to the card corner. */
