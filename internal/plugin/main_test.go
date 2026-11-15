@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestMain isolates the encrypted key store so tests never touch the real
-// per-user config directory.
+// TestMain points the legacy key directory at a temp dir so registration's
+// cleanup of pre-0.6.2 key files never touches the real per-user config directory.
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "quota-monitor-test-")
 	if err != nil {

@@ -50,6 +50,7 @@ jobs:
           - { goos: darwin,  goarch: amd64, runner: macos-15-intel }
           - { goos: darwin,  goarch: arm64, runner: macos-15 }
           - { goos: windows, goarch: amd64, runner: windows-2025 }
+          - { goos: windows, goarch: arm64, runner: windows-11-arm, msystem: CLANGARM64, cc: aarch64-w64-mingw32-gcc }
     defaults:
       run:
         shell: bash
@@ -59,6 +60,30 @@ jobs:
         with:
           go-version: '1.26.11'
           cache-dependency-path: go.mod
+      # cgo needs a C compiler for the target. windows/amd64 uses the runner's x86_64 mingw-w64
+      # gcc; windows/arm64 has none, so it installs llvm-mingw (MSYS2 CLANGARM64) and uses its
+      # aarch64-w64-mingw32-gcc driver.
+      - uses: msys2/setup-msys2@v2
+        if: matrix.goos == 'windows' && matrix.msystem != ''
+        id: msys2
+        with:
+          msystem: ${{ matrix.msystem }}
+          install: mingw-w64-clang-aarch64-gcc-compat
+          update: false
+      - name: Windows toolchain
+        if: matrix.goos == 'windows'
+        run: |
+          cc=gcc
+          if [ -n "${{ matrix.msystem }}" ]; then
+            bin="$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')/clangarm64/bin"
+            cygpath -w "$bin" >> "$GITHUB_PATH"
+            export PATH="$bin:$PATH"
+            cc="${{ matrix.cc }}"
+            echo "CC=$cc" >> "$GITHUB_ENV"
+          fi
+          command -v "$cc" && "$cc" --version | head -1
+          want=x86_64; [ "${{ matrix.goarch }}" = arm64 ] && want=aarch64
+          "$cc" -dumpmachine | grep -q "^$want-" || { echo "$cc does not target $want" >&2; exit 1; }
       - name: Confirm runner platform
         run: |
           echo "GOOS=$(go env GOOS) GOARCH=$(go env GOARCH)"

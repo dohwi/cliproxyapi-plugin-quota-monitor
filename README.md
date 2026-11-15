@@ -59,7 +59,7 @@ mise install
 
 # Native build tools: Ubuntu/Debian
 sudo apt-get update && sudo apt-get install -y build-essential
-# macOS: xcode-select --install      Windows: 64-bit mingw-w64 gcc (e.g. MSYS2 UCRT64) and Git Bash
+# macOS: xcode-select --install      Windows: mingw-w64 gcc (MSYS2 UCRT64 on x64, CLANGARM64 on arm64) and Git Bash
 
 # Run tests and the native ABI smoke test (the script also works where make is missing)
 make verify
@@ -78,7 +78,7 @@ The build writes `artifacts/quota-monitor.so` (`.dylib` on macOS, `.dll` on Wind
 
 Once listed in the [CLIProxyAPI Plugins Store](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store), install `quota-monitor` from the host's plugin page. To install manually, download `quota-monitor_<version>_<os>_<arch>.zip` and `checksums.txt` from the [latest release](https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/releases/latest), verify with `sha256sum -c checksums.txt` (`shasum -a 256 -c` on macOS), and unzip the library into the host's plugin directory.
 
-Every release publishes all five store platforms; the Release workflow refuses to publish unless all of them built and passed the native smoke test:
+Every release publishes all six store platforms; the Release workflow refuses to publish unless all of them built and passed the native smoke test:
 
 | Platform | Asset | Library |
 |---|---|---|
@@ -87,12 +87,13 @@ Every release publishes all five store platforms; the Release workflow refuses t
 | macOS Intel | `quota-monitor_<version>_darwin_amd64.zip` | `quota-monitor.dylib` |
 | macOS Apple silicon | `quota-monitor_<version>_darwin_arm64.zip` | `quota-monitor.dylib` |
 | Windows x64 | `quota-monitor_<version>_windows_amd64.zip` | `quota-monitor.dll` |
+| Windows arm64 | `quota-monitor_<version>_windows_arm64.zip` | `quota-monitor.dll` |
 
 The Linux builds require glibc 2.36 or older (the official Debian bookworm image).
 
 ### Configuration
 
-**No setup is required.** Install the plugin, open its dashboard and sign in with your CLIProxyAPI management key (the same one you use for the management page). The plugin learns the key from that authenticated request, stores it **encrypted** (AES-256-GCM) and starts collecting in the background. After a host restart it restores the key by itself.
+**No setup is required.** Install the plugin, open its dashboard and sign in with your CLIProxyAPI management key (the same one you use for the management page). The plugin learns the key from that authenticated request, keeps it **in memory only** and starts collecting in the background. It never writes the key to disk, so after a host restart background collection waits until you open the dashboard again (or set `QUOTA_MONITOR_MGMT_KEY`).
 
 | Item | Default | How to change |
 |---|---|---|
@@ -100,7 +101,7 @@ The Linux builds require glibc 2.36 or older (the official Debian bookworm image
 | Auth directory | host `auth-dir`, then `/root/.cli-proxy-api` | `auth_dir` in the plugin config, or `QUOTA_MONITOR_AUTH_DIR` |
 | Disable background collection | off | `QUOTA_MONITOR_DISABLE_BACKGROUND=1` |
 
-Where the key is stored: `<user-config-dir>/cliproxyapi/quota-monitor/` (`~/.config/...` on Linux), or `QUOTA_MONITOR_DATA_DIR`. It holds `mgmt-key.enc` (the encrypted key) and `master.key` (the random encryption key), both mode `0600`. This keeps the credential out of `config.yaml`, backups and accidental commits, but it cannot stop another process running as the same OS user, which can read both files. Delete the directory to forget the key.
+The key is not stored anywhere on the server. Versions before 0.6.2 kept an encrypted copy (`mgmt-key.enc` and `master.key` under `<user-config-dir>/cliproxyapi/quota-monitor/` or `QUOTA_MONITOR_DATA_DIR`); 0.6.2 and later delete those two files when the plugin loads.
 
 If the dashboard stays on "Waiting for the management key" or shows a connection error although you signed in, your host probably listens on a port other than the default `8317`. Set `management_url: http://127.0.0.1:<port>/v0` under `plugins.configs.quota-monitor` in `config.yaml` (or `QUOTA_MONITOR_MGMT_URL`).
 

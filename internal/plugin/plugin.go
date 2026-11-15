@@ -28,7 +28,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.6.1"
+	pluginVersion             = "0.6.2"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -611,6 +611,11 @@ func handleRegister(request []byte) []byte {
 	if req.SchemaVersion > 0 && req.SchemaVersion < sv {
 		sv = req.SchemaVersion
 	}
+	purgeLegacyKeyOnce.Do(func() {
+		if err := secret.PurgeLegacy(secret.LegacyDir()); err != nil {
+			log.Printf("quota-monitor: could not remove the key file stored by an older version: %v", err)
+		}
+	})
 	configureFromEnv(req.ConfigYAML)
 	return OKEnvelope(registrationResponse{SchemaVersion: sv, Metadata: metadata{Name: pluginName, Version: pluginVersion, Author: pluginAuthor, GitHubRepository: pluginRepo, Logo: pluginLogo, ConfigFields: pluginConfigFields}, Capabilities: map[string]bool{"management_api": true}})
 }
@@ -618,6 +623,10 @@ func handleRegister(request []byte) []byte {
 const defaultMgmtURL = "http://127.0.0.1:8317/v0"
 
 var learnMu sync.Mutex
+
+// purgeLegacyKeyOnce deletes, once per process, the encrypted key files that
+// versions before 0.6.2 kept on disk. The key now lives only in memory.
+var purgeLegacyKeyOnce sync.Once
 
 // keyFromHeaders extracts the management key the way the host does.
 func keyFromHeaders(h map[string][]string) string {
@@ -638,9 +647,11 @@ func keyFromHeaders(h map[string][]string) string {
 	return get("X-Management-Key")
 }
 
-// learnManagementKey adopts the key from an already host-authenticated request,
-// stores it encrypted and (re)configures the collector. The environment variable
-// always wins so an explicit operator setting is never overridden.
+// learnManagementKey adopts the key from an already host-authenticated request
+// and (re)configures the collector. The key is kept in process memory only and is
+// never written to disk; after a host restart the next authenticated dashboard
+// request teaches it again. The environment variable always wins so an explicit
+// operator setting is never overridden.
 func learnManagementKey(h map[string][]string) {
 	key := keyFromHeaders(h)
 	if !secret.ValidKey(key) || strings.TrimSpace(os.Getenv("QUOTA_MONITOR_MGMT_KEY")) != "" {
@@ -660,9 +671,6 @@ func learnManagementKey(h map[string][]string) {
 	}
 	state.learnedKey = key
 	state.mu.Unlock()
-	if err := secret.Save(secret.DefaultDir(), key); err != nil {
-		log.Printf("quota-monitor: key kept in memory only: %v", err)
-	}
 	configureFromEnv(cfg)
 }
 
@@ -680,11 +688,6 @@ func configureFromEnv(configYAML []byte) {
 	if key == "" {
 		key = state.learnedKey
 	}
-	state.mu.Unlock()
-	if key == "" {
-		key = secret.Load(secret.DefaultDir())
-	}
-	state.mu.Lock()
 	done := stopCollectorLocked()
 	var previousAuthDir string
 	if state.resolver != nil {

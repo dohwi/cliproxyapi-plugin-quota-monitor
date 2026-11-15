@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verifies that a release directory holds exactly the five store platforms for one
+# Verifies that a release directory holds exactly the six store platforms for one
 # version and writes checksums.txt (sha256sum format) next to the zips.
 # Usage: scripts/make-checksums.sh v0.2.0 <dir-with-zips>
 set -euo pipefail
@@ -8,7 +8,7 @@ id="quota-monitor"
 tag="${1:-}"; dir="${2:-}"
 [[ "$tag" =~ ^v[0-9]+(\.[0-9]+)+$ && -d "$dir" ]] || { echo "usage: $0 <tag> <dir>" >&2; exit 2; }
 version="${tag#v}"
-platforms=(darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64)
+platforms=(darwin_amd64 darwin_arm64 linux_amd64 linux_arm64 windows_amd64 windows_arm64)
 
 cd "$dir"
 expected=()

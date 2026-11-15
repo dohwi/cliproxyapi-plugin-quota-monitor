@@ -1,18 +1,41 @@
 package plugin
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"quota-monitor/internal/secret"
 )
 
-func TestLearnManagementKeyFromAuthenticatedRequest(t *testing.T) {
+// filesUnder lists every regular file below dir (relative paths).
+func filesUnder(t *testing.T, dir string) []string {
+	t.Helper()
+	var out []string
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			rel, _ := filepath.Rel(dir, p)
+			out = append(out, rel)
+		}
+		return nil
+	})
+	return out
+}
+
+func TestLearnManagementKeyKeepsItInMemoryOnly(t *testing.T) {
 	t.Setenv("QUOTA_MONITOR_DISABLE_BACKGROUND", "1")
 	t.Setenv("QUOTA_MONITOR_MGMT_KEY", "")
-	secret.Clear(secret.DefaultDir())
+	home := t.TempDir()
+	t.Setenv("QUOTA_MONITOR_DATA_DIR", filepath.Join(home, "data"))
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	t.Setenv("APPDATA", filepath.Join(home, "appdata"))
+	state.mu.Lock()
+	state.learnedKey = ""
+	state.mu.Unlock()
 	configureFromEnv(nil)
 	state.mu.Lock()
 	if state.configured {
@@ -30,38 +53,63 @@ func TestLearnManagementKeyFromAuthenticatedRequest(t *testing.T) {
 	if !ok {
 		t.Fatal("key was not learned / client not configured with default URL")
 	}
-	if got := secret.Load(secret.DefaultDir()); got != "learned-key-123" {
-		t.Fatalf("not persisted: %q", got)
-	}
-	enc, _ := os.ReadFile(filepath.Join(secret.DefaultDir(), "mgmt-key.enc"))
-	if strings.Contains(string(enc), "learned-key-123") {
-		t.Fatal("plaintext on disk")
+
+	// Nothing may be written to disk: not the key, not a master key, not anything.
+	if files := filesUnder(t, home); len(files) != 0 {
+		t.Fatalf("learning the key wrote files: %v", files)
 	}
 
-	// A fresh registration (host restart) restores the key from the encrypted store.
+	// A host restart forgets the key: with no in-memory copy and no env var the
+	// collector stays unconfigured until the next authenticated request.
 	state.mu.Lock()
 	state.learnedKey = ""
 	state.mu.Unlock()
 	configureFromEnv(nil)
 	state.mu.Lock()
-	restored := state.configured && state.client.ManagementKey == "learned-key-123"
+	configured := state.configured
 	state.mu.Unlock()
-	if !restored {
-		t.Fatal("key not restored after re-register")
+	if configured {
+		t.Fatal("key survived a restart without being persisted anywhere")
+	}
+}
+
+func TestRegisterRemovesLegacyEncryptedKey(t *testing.T) {
+	t.Setenv("QUOTA_MONITOR_DISABLE_BACKGROUND", "1")
+	t.Setenv("QUOTA_MONITOR_MGMT_KEY", "")
+	dir := filepath.Join(t.TempDir(), "legacy")
+	t.Setenv("QUOTA_MONITOR_DATA_DIR", dir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"mgmt-key.enc", "master.key"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("old"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	purgeLegacyKeyOnce = sync.Once{}
+	handleRegister([]byte(`{"schema_version":1}`))
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("legacy key directory still present (err %v): %v", err, filesUnder(t, dir))
+	}
+	if secret.LegacyDir() != filepath.Clean(dir) {
+		t.Fatal("legacy dir does not honour QUOTA_MONITOR_DATA_DIR")
 	}
 }
 
 func TestLearnIgnoresResourceRoutesAndEnvWins(t *testing.T) {
 	t.Setenv("QUOTA_MONITOR_DISABLE_BACKGROUND", "1")
 	t.Setenv("QUOTA_MONITOR_MGMT_KEY", "")
-	secret.Clear(secret.DefaultDir())
+	state.mu.Lock()
+	state.learnedKey = ""
+	state.mu.Unlock()
 	configureFromEnv(nil)
 	// Resource (unauthenticated) route must never teach a key.
 	handleManagementHandle([]byte(`{"Method":"GET","Path":"` + resourceBase + `/dashboard","Headers":{"Authorization":["Bearer evil"]}}`))
 	state.mu.Lock()
 	configured := state.configured
+	learned := state.learnedKey
 	state.mu.Unlock()
-	if configured || secret.Load(secret.DefaultDir()) != "" {
+	if configured || strings.Contains(learned, "evil") {
 		t.Fatal("resource route taught a key")
 	}
 	t.Setenv("QUOTA_MONITOR_MGMT_KEY", "env-key")

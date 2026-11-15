@@ -164,7 +164,9 @@ The plugin resolves its settings at registration:
 
 - Management key: `QUOTA_MONITOR_MGMT_KEY` if set; otherwise the key learned from a
   host-authenticated `/v0/management/plugins/quota-monitor/...` request (never from
-  unauthenticated resource routes), restored from an AES-256-GCM encrypted store.
+  unauthenticated resource routes), kept in process memory only and never written to
+  disk. Registration deletes the `mgmt-key.enc` / `master.key` files left by versions
+  before 0.6.2.
   It is sent only as a bearer credential to the loopback endpoint and never
   included in output or errors.
 - `QUOTA_MONITOR_MGMT_URL` or plugin config `management_url` (optional, default

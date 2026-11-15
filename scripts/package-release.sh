@@ -12,7 +12,7 @@ tag="${1:-}"; goos="${2:-}"; goarch="${3:-}"; lib="${4:-}"
 [[ -n "$tag" && -n "$goos" && -n "$goarch" && -n "$lib" ]] || { echo "usage: $0 <tag> <goos> <goarch> <library>" >&2; exit 2; }
 [[ "$tag" =~ ^v[0-9]+(\.[0-9]+)+$ ]] || { echo "tag '$tag' must look like v0.2.0 (store requires dotted numeric versions)" >&2; exit 1; }
 case "$goos/$goarch" in
-  linux/amd64|linux/arm64|darwin/amd64|darwin/arm64|windows/amd64) ;;
+  linux/amd64|linux/arm64|darwin/amd64|darwin/arm64|windows/amd64|windows/arm64) ;;
   *) echo "unsupported platform $goos/$goarch" >&2; exit 1 ;;
 esac
 case "$goos" in linux) ext=so ;; darwin) ext=dylib ;; windows) ext=dll ;; esac
