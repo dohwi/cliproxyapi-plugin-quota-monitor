@@ -369,7 +369,7 @@ setTimeout(() => {
   setTimeout(() => {
     // Check that real failure DOES display the warning banner!
     assert(staleBoxDisplay === 'flex', 'Scenario 2: staleNoticeBox must be flex on real failure, got: ' + staleBoxDisplay);
-    assert(staleBoxText.indexOf('데이터 갱신 실패') !== -1, 'Scenario 2: staleBoxText must mention 데이터 갱신 실패, got: ' + staleBoxText);
+    assert(staleBoxText.indexOf('데이터 갱신에 실패') !== -1, 'Scenario 2: staleBoxText must mention 데이터 갱신에 실패, got: ' + staleBoxText);
     console.log('OK_CACHE_EXPIRED_AND_FAILURE_SEPARATION');
   }, 10);
 }, 10);
