@@ -500,7 +500,7 @@ var I18N = {
     'page.heading': '账号额度',
     'lang.menu': '语言',
     'lang.auto': '跟随 CLIProxyAPI',
-    'unconfigured': '正在等待管理密钥。在此页面用管理密钥登录后即可自动完成设置',
+    'unconfigured': '正在等待管理密钥。在此页面用管理密钥登录后即可自动完成设置。',
     'unconfigured.reason': '等待设置：{r}',
     'retry': '重试',
     'retry.aria': '重新加载数据',
@@ -572,8 +572,8 @@ var I18N = {
     'stale.failed': '刷新失败，正在显示之前的数据。',
     'stale.failedDetail': '刷新失败，正在显示之前的数据（{e}）',
     'stale.failedReason': '刷新失败，正在显示之前的数据（{e}）。',
-    'stale.unconf': '环境未配置，正在显示之前的数据',
-    'stale.unconfDetail': '环境未配置，正在显示之前的数据（{e}）',
+    'stale.unconf': '环境未配置，正在显示之前的数据。',
+    'stale.unconfDetail': '环境未配置，正在显示之前的数据（{e}）。',
     'stale.progress': '正在刷新，暂时显示之前的数据。',
     'unit.d': '{n}天',
     'unit.h': '{n}小时',
@@ -639,7 +639,7 @@ var I18N = {
     'q.fetchFailed': '获取失败',
     'q.disabled': '账号已禁用',
     'q.hintError': '可点击刷新按钮重新获取',
-    'q.hintDisabled': '此账号不检查额度',
+    'q.hintDisabled': '不检测此账号的额度',
     'q.hintPending': '首次检测完成后将在此显示',
     'ag.name': 'Antigravity',
     'credit.reset': '重置积分：{n}',
@@ -651,9 +651,9 @@ var I18N = {
     'credit.zero': '余额 0',
     'live.shown': '正在显示{n}个账号',
     'live.shown.one': '正在显示1个账号',
-    'empty.accounts': '没有已登记的账号，或没有符合当前筛选条件的账号。',
+    'empty.accounts': '没有账号，或没有符合当前筛选条件的账号。',
     'card.account': '账号',
-    'card.current': ' \u00b7 最近15分钟内上报了 Token 的已完成请求所用的账号（并非正在进行的实时请求）'
+    'card.current': ' \u00b7 最近 15 分钟内有已完成的请求（已上报 Token）使用了此账号（并非正在进行中的请求）'
   }
 };
 var currentLang = resolveLang(readLangPref());
@@ -858,8 +858,9 @@ var LANG_CHECK_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidde
 function initLangMenu(buttons, opts) {
   var menu = null, owner = null;
   function label(b) {
-    var name = LANG_NAMES[resolveLang(readLangPref())] || '';
-    var text = opts.t('lang.menu') + ': ' + name;
+    var shown = resolveLang(readLangPref()), name = LANG_NAMES[shown] || '';
+    // Full-width colon in Chinese, ASCII colon + space elsewhere.
+    var text = opts.t('lang.menu') + (shown === 'zh-CN' ? '：' : ': ') + name;
     b.setAttribute('aria-label', text); b.title = text;
     b.setAttribute('aria-haspopup', 'menu');
     b.setAttribute('aria-expanded', menu && owner === b ? 'true' : 'false');
