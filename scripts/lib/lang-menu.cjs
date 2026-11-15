@@ -1,7 +1,7 @@
 'use strict';
 // Browser helpers for the shared language menu (initLangMenu in app.js).
 // target: a Playwright Page or Frame; button: selector of a language icon button.
-const LABELS = { en: 'Language: English', ko: '언어: 한국어', 'zh-CN': '语言: 简体中文' };
+const LABELS = { en: 'Language: English', ko: '언어: 한국어', 'zh-CN': '语言：简体中文' };
 
 async function openMenu(target, button) {
   await target.click(button);
