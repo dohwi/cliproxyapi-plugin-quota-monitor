@@ -2010,7 +2010,7 @@ assert(html.indexOf('refreshAllAccounts') !== -1, 'explicit refresh action prese
 // No auto-refresh interval select.
 assert(html.indexOf('autoRefreshSelect') === -1, 'autoRefreshSelect must be absent');
 // localStorage: language and theme-mode preferences, plus read-only access to the host's own entries.
-assert((html.match(/localStorage/g)||[]).length === (html.match(/localStorage\.(?:getItem\((?:LANG_KEY|LANG_HOST_KEY|HOST_LANG_KEY|THEME_KEY|name)\)|setItem\((?:LANG_KEY, lang|LANG_HOST_KEY, host|THEME_KEY, mode)\))/g)||[]).length, 'localStorage only for language/theme prefs and read-only host entries');
+assert((html.match(/localStorage/g)||[]).length === (html.match(/localStorage\.(?:getItem\((?:k|THEME_KEY|name)\)|setItem\((?:k, v|THEME_KEY, mode)\))/g)||[]).length, 'localStorage only for language/theme prefs and read-only host entries');
 // Keep the compact toolbar action label.
 assert(html.indexOf('전체 갱신') !== -1, 'full refresh action label present');
 // Current account uses the border instead of a redundant visible badge.

@@ -6,10 +6,11 @@ import (
 	"testing"
 )
 
-// The dashboard follows the console language ("last action wins"): the console's
-// <html lang> (same-origin parent) or its persisted cli-proxy-language entry wins
-// over an older plugin choice, an explicit plugin toggle wins until the console
-// language changes again, and the console's own entry is never written.
+// The dashboard follows the console language while the shared preference is 'auto' (the
+// default): the console's <html lang> (same-origin parent) or its persisted cli-proxy-language
+// entry, live. A pinned preference (en/ko/zh-CN) wins until "Follow CLIProxyAPI" is chosen again.
+// Nothing is written by following, the console's own entry is never written, and the old
+// cpa_plugin_lang / cpa_plugin_lang_host keys are ignored.
 func TestDashboardFollowsHostLanguage(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node not available")
@@ -32,21 +33,22 @@ function load(opts) {
   let observer = null;
   const parentRoot = el();
   if (typeof opts.parentLang === 'string') parentRoot.attrs.lang = opts.parentLang;
-  const win = { addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }, matchMedia() { return { matches: false, addEventListener() {} }; } };
+  const win = { addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }, removeEventListener() {}, matchMedia() { return { matches: false, addEventListener() {} }; } };
   if (opts.parentLang === null) win.parent = { get document() { throw new Error('cross-origin'); } };
   else if (opts.parentLang !== undefined) win.parent = { document: { documentElement: parentRoot } };
   else win.parent = win;
-  const doc = { title: '', documentElement: el(), hidden: false, getElementById() { return el(); }, addEventListener() {},
+  const doc = { title: '', documentElement: el(), hidden: false, getElementById() { return el(); }, addEventListener() {}, removeEventListener() {},
     querySelectorAll() { return []; }, querySelector() { return null; }, createElement: el, createDocumentFragment: el };
   const ctx = {
     console, Date, Math, JSON, Promise, Object, Array, String, Number, isNaN, isFinite, setTimeout() { return 0; }, clearTimeout() {},
     navigator: { language: opts.nav || 'en-US', languages: [opts.nav || 'en-US'] },
     localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { writes.push(k); store[k] = String(v); }, removeItem: k => { writes.push('-' + k); delete store[k]; } },
     sessionStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
-    MutationObserver: function(fn) { this.observe = (target, o) => { observer = { fn, target, o }; }; },
+    MutationObserver: function(fn) { this.observe = (target, o) => { if (o.attributeFilter && o.attributeFilter.join() === 'lang') observer = { fn, target, o }; }; },
     document: doc, window: win, fetch() { return new Promise(() => {}); },
   };
   win.document = doc;
+  win.MutationObserver = ctx.MutationObserver; // in a browser window === globalThis
   vm.createContext(ctx);
   vm.runInContext(src, ctx);
   ctx.initLanguageControls();
@@ -61,58 +63,46 @@ function load(opts) {
 function assert(c, m) { if (!c) { console.error('FAIL: ' + m); process.exit(1); } }
 const zustand = l => JSON.stringify({ state: { language: l }, version: 0 });
 
-// Host ko, plugin chose en while the host was ko: the plugin choice stands.
-let p = load({ parentLang: 'ko', store: { cpa_plugin_lang: 'en', cpa_plugin_lang_host: 'ko' } });
-assert(p.lang === 'en', 'saved en made under host ko stays en, got ' + p.lang);
-// The host then switched to en: still en; then to ko: follows to ko and shares it.
-p.setParentLang('en');
-assert(p.lang === 'en' && p.store.cpa_plugin_lang_host === 'en', 'host changed to en -> en');
-p.setParentLang('ko');
-assert(p.lang === 'ko' && p.store.cpa_plugin_lang === 'ko' && p.store.cpa_plugin_lang_host === 'ko', 'host changed to ko -> ko, written for other pages');
+// Console zh-CN at load → Chinese; then ko live → Korean; zh-TW → Simplified.
+let p = load({ parentLang: 'zh-CN', store: {} });
+assert(p.lang === 'zh-CN', 'console zh-CN -> zh-CN, got ' + p.lang);
+assert(p.ctx.document.documentElement.attrs.lang === 'zh-CN' && p.ctx.document.title === '各账号剩余额度', 'html lang/title in Chinese');
 assert(p.observer && p.observer.o.attributeFilter.join() === 'lang', 'observes parent lang attribute only');
-// Host language changed since the saved choice: host wins at load.
-p = load({ parentLang: 'en', store: { cpa_plugin_lang: 'ko', cpa_plugin_lang_host: 'ko' } });
-assert(p.lang === 'en', 'host changed since saved choice -> host wins');
-// Saved choice without a recorded host language: host wins.
-p = load({ parentLang: 'ko-KR', store: { cpa_plugin_lang: 'en' } });
-assert(p.lang === 'ko', 'no LANG_HOST_KEY -> host wins');
-// Non-Korean host languages map to en.
-p = load({ parentLang: 'zh-CN', store: {} });
-assert(p.lang === 'en', 'zh-CN -> en');
-// The plugin toggle records the host language it was made under.
-p = load({ parentLang: 'ko', store: {} });
-assert(p.lang === 'ko', 'host ko -> ko');
-p.ctx.setLanguage('en');
-assert(p.store.cpa_plugin_lang === 'en' && p.store.cpa_plugin_lang_host === 'ko', 'toggle writes LANG_KEY and LANG_HOST_KEY=host');
-// No host at all: saved choice, else browser language.
-p = load({ store: { cpa_plugin_lang: 'ko' }, nav: 'en-US' });
-assert(p.lang === 'ko', 'no host -> saved');
-p = load({ store: {}, nav: 'ko-KR' });
-assert(p.lang === 'ko', 'no host, no saved -> navigator');
-// Cross-origin parent: fall back to the host's stored entry (zustand JSON or bare string).
-p = load({ parentLang: null, store: { 'cli-proxy-language': zustand('ko'), cpa_plugin_lang: 'en', cpa_plugin_lang_host: 'en' } });
-assert(p.lang === 'ko', 'zustand JSON host entry parsed, got ' + p.lang);
-p = load({ store: { 'cli-proxy-language': JSON.stringify({ language: 'ko' }) } });
-assert(p.lang === 'ko', '{language} JSON parsed');
+p.setParentLang('ko');
+assert(p.lang === 'ko', 'console ko live -> ko');
+p.setParentLang('zh-TW');
+assert(p.lang === 'zh-CN', 'console zh-TW -> zh-CN');
+p.setParentLang('ru');
+assert(p.lang === 'en', 'console ru -> en');
+assert(p.writes.length === 0, 'following the console writes nothing: ' + p.writes);
+// Old keys are ignored: everyone starts on auto.
+p = load({ parentLang: 'ko', store: { cpa_plugin_lang: 'en', cpa_plugin_lang_host: 'ko' } });
+assert(p.lang === 'ko', 'old cpa_plugin_lang ignored, got ' + p.lang);
+// A pinned preference wins over the console, also after console changes.
+p = load({ parentLang: 'zh-CN', store: { cpa_plugin_language: 'en' } });
+assert(p.lang === 'en', 'pinned en wins over console zh-CN');
+p.setParentLang('ko');
+assert(p.lang === 'en', 'pinned en survives a console change');
+// Another plugin page switches the shared preference back to auto.
+p.storageEvent('cpa_plugin_language', 'auto');
+assert(p.lang === 'ko', 'auto via storage event follows the console again');
+p.storageEvent('cpa_plugin_language', 'zh-CN');
+assert(p.lang === 'zh-CN', 'pinned zh-CN via storage event');
+p.storageEvent('cpa_plugin_language', 'bogus');
+assert(p.lang === 'ko', 'invalid stored value -> auto');
+// No parent at all: the console's stored entry (zustand JSON, {language}, bare string), else browser.
+p = load({ store: { 'cli-proxy-language': zustand('zh-CN') }, nav: 'en-US' });
+assert(p.lang === 'zh-CN', 'zustand JSON host entry parsed, got ' + p.lang);
+p = load({ parentLang: null, store: { 'cli-proxy-language': JSON.stringify({ language: 'ko' }) } });
+assert(p.lang === 'ko', '{language} JSON parsed (cross-origin parent)');
 p = load({ store: { 'cli-proxy-language': 'ko' }, nav: 'en-US' });
 assert(p.lang === 'ko', 'bare string host entry parsed');
-// Live: the host's stored entry changes in another frame/tab.
-p.storageEvent('cli-proxy-language', zustand('en'));
-assert(p.lang === 'en' && p.store.cpa_plugin_lang === 'en', 'storage event for host key -> follow');
-// Same host value again is ignored, so a later plugin choice is not overridden.
-p.ctx.setLanguage('ko');
-p.storageEvent('cli-proxy-language', zustand('en'));
-assert(p.lang === 'ko', 'unchanged host language does not override the plugin toggle');
-// Another plugin page changed the shared choice.
-p.storageEvent('cpa_plugin_lang', 'en');
-assert(p.lang === 'en', 'shared LANG_KEY storage event followed');
-// Never written or removed: the host's own entry.
-for (const r of [p]) assert(!r.writes.some(k => /cli-proxy-language/.test(k)), 'cli-proxy-language never written');
-p = load({ parentLang: 'ko', store: { 'cli-proxy-language': zustand('ko') } });
-p.ctx.setLanguage('en'); p.setParentLang('en'); p.setParentLang('ko');
-assert(!p.writes.some(k => /cli-proxy-language/.test(k)), 'cli-proxy-language never written (parent case)');
-// <html lang> and title follow the chosen language.
-assert(p.ctx.document.documentElement.attrs.lang === 'ko' && p.ctx.document.title === '계정별 남은 쿼터', 'html lang/title follow');
+p.storageEvent('cli-proxy-language', zustand('zh-HK'));
+assert(p.lang === 'zh-CN', 'storage event for the console key -> follow');
+p = load({ store: {}, nav: 'ko-KR' });
+assert(p.lang === 'ko', 'no console -> browser language');
+// Never written or removed: the console's own entry.
+assert(!p.writes.some(k => /cli-proxy-language/.test(k)), 'cli-proxy-language never written');
 console.log('OK_HOST_LANG');
 `
 	out, err := nodeDashboardCmdRaw(t, "node", script).CombinedOutput()
@@ -131,7 +121,7 @@ const vm = require('vm');
 const src = process.argv[1].match(/<script>([\s\S]*?)<\/script>/)[1];
 const el = () => ({ attrs: {}, style: {}, classList: { add() {}, remove() {}, toggle() {} }, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute() { return null; }, removeAttribute() {}, addEventListener() {} });
 const ctx = { console, JSON, Object, Array, String, Number, Math, Date, Promise, isNaN, isFinite, setTimeout() {}, clearTimeout() {},
-  localStorage: { getItem: k => k === 'cpa_plugin_lang' ? 'ko' : null, setItem() {} },
+  localStorage: { getItem: k => k === 'cpa_plugin_language' ? 'ko' : null, setItem() {} },
   document: { documentElement: el(), getElementById: el, addEventListener() {}, querySelectorAll() { return []; }, createElement: el },
   window: { addEventListener() {} }, fetch() { return new Promise(() => {}); } };
 vm.createContext(ctx); vm.runInContext(src, ctx);
@@ -147,6 +137,9 @@ const reason = ctx.reasonText({ reason: 'auth_files_failed' });
 eq(reason(), '인증 파일 목록을 가져오지 못했습니다', 'reason resolved lazily (ko)');
 ctx.setLanguage('en');
 eq(reason(), 'Could not list the auth files', 'reason re-resolved after a language switch');
+ctx.setLanguage('zh-CN');
+eq(reason(), '无法获取认证文件列表', 'reason re-resolved in Chinese');
+ctx.setLanguage('en');
 eq(ctx.fetchErrorText({ name: 'AbortError' }), 'Request timed out', 'abort');
 eq(ctx.fetchErrorText({ status: 502 }), 'API request failed (502)', 'http status');
 eq(ctx.fetchErrorText(new TypeError('Failed to fetch')), 'Cannot reach the server', 'network error');

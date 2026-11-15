@@ -1,6 +1,7 @@
 // Reproduce the host's fixed top-right tools even when testing standalone HTML.
 // No management UI DOM or CSS is changed by the plugin to avoid this overlap.
 const assert = require('node:assert/strict');
+const { LABELS } = require('./lang-menu.cjs');
 
 // The dashboard keeps one header row: brand on the left, language/theme on the
 // right. The console draws its own floating buttons over the iframe's top edge,
@@ -39,11 +40,6 @@ module.exports = async function verifyLanguagePlacement(page, panelSelector) {
   assert(!result.hostOverlap && result.reachable, 'language button must remain unobstructed by the console floating buttons');
   assert(result.clearsHost, 'the header row starts below --dashboard-top-offset');
   assert(result.height >= 30 && result.height <= result.expectedHeight + 1, `language switch shares filter control height: ${result.height} vs ${result.expectedHeight}`);
-  assert(result.square, 'language toggle is a single square icon button');
-  assert.equal(result.label, result.lang === 'en' ? 'Switch to Korean' : 'English로 전환', 'toggle label names its target language');
-};
-
-module.exports.switchTo = async (page, lang) => {
-  if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('#languageToggle');
-  await page.waitForFunction(l => document.documentElement.lang === l, lang);
+  assert(result.square, 'language button is a single square icon button');
+  assert.equal(result.label, LABELS[result.lang], 'menu button label names the shown language');
 };

@@ -125,23 +125,63 @@ var POLL_MAX_MS = 900000;              // 15m cap
 
 // Req 4: Memoize static provider SVG
 // ── i18n ────────────────────────────────────────────────────────────────────
-// The language preference (LANG_KEY) is shared with the other CLIProxyAPI plugin dashboards so
-// one choice applies to all of them. LANG_HOST_KEY records the console language at the moment
-// LANG_KEY was written, so a later console language change wins over an older plugin choice.
-// Order: console language (if it changed since the saved choice) → saved choice → browser
-// language (ko* → ko, else en) → en. The console's own entry (HOST_LANG_KEY) is never written.
-var LANG_KEY = 'cpa_plugin_lang';
-var LANG_HOST_KEY = 'cpa_plugin_lang_host';
+// Shared language core (identical in every dohwi CLIProxyAPI plugin; tests extract it
+// between the markers and run it under node). Glue for this page follows the I18N table.
+// @lang-core-begin
+// Language preference shared by every dohwi plugin page (same origin):
+//   'auto' (default) follows the CLIProxyAPI console language; 'en' | 'ko' | 'zh-CN' pin one.
+// The console's own entry (cli-proxy-language) is read, never written or removed.
+// Older plugin versions used cpa_plugin_lang / cpa_plugin_lang_host; they are ignored on
+// purpose so every page starts on 'auto' again.
+var LANG_PREF_KEY = 'cpa_plugin_language';
 var HOST_LANG_KEY = 'cli-proxy-language';
+var LANGS = ['en', 'ko', 'zh-CN'];
+// Native names; never translated.
+var LANG_NAMES = { en: 'English', ko: '한국어', 'zh-CN': '简体中文' };
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function hostDoc() { try { if (window.parent && window.parent !== window) return window.parent.document; } catch (e) {} return null; }
+// hostLangRaw: the console language as the console stores it, '' when unknown.
+// Same-origin parent <html lang> first, then its persisted store: zustand JSON
+// {"state":{"language":"ko"}}, {"language":"ko"} or (older builds) the bare string.
+function hostLangRaw() {
+  try { var d = hostDoc(), v = d && d.documentElement.getAttribute('lang'); if (v && String(v).trim()) return String(v).trim(); } catch (e) {}
+  var raw = lsGet(HOST_LANG_KEY);
+  if (!raw) return '';
+  var j;
+  try { j = JSON.parse(raw); } catch (e) { return String(raw).trim(); }
+  if (typeof j === 'string') return j.trim();
+  var l = j && ((j.state && j.state.language) || j.language);
+  return typeof l === 'string' ? l.trim() : '';
+}
+// normLang maps any BCP 47 tag to a page language: ko* → ko, zh* (zh-CN, zh-TW, zh-Hant…)
+// → zh-CN, everything else (en, ru, tr, vi…) → en. '' stays ''.
+function normLang(raw) {
+  var s = String(raw || '').trim().toLowerCase();
+  if (!s) return '';
+  if (/^ko(\b|-|_)/.test(s) || s === 'ko') return 'ko';
+  if (/^zh(\b|-|_)/.test(s) || s === 'zh') return 'zh-CN';
+  return 'en';
+}
+function readLangPref() { var v = lsGet(LANG_PREF_KEY); return v === 'auto' || LANGS.indexOf(v) >= 0 ? v : 'auto'; }
+function browserLang() {
+  var n = '';
+  try { n = (navigator.languages && navigator.languages[0]) || navigator.language || ''; } catch (e) {}
+  return normLang(n) || 'en';
+}
+// resolveLang: the language a preference shows right now.
+function resolveLang(pref) { return pref && pref !== 'auto' ? pref : (normLang(hostLangRaw()) || browserLang()); }
+function writeLangPref(pref) { lsSet(LANG_PREF_KEY, pref === 'auto' || LANGS.indexOf(pref) >= 0 ? pref : 'auto'); }
+// Intl locale for dates and numbers.
+function intlLocale(lang) { return lang === 'ko' ? 'ko-KR' : lang === 'zh-CN' ? 'zh-CN' : 'en-US'; }
+// @lang-core-end
 var THEME_KEY = 'cpa_plugin_theme';
-var SUPPORTED_LANGS = ['ko', 'en'];
 var I18N = {
   ko: {
     'page.title': '계정별 남은 쿼터',
     'page.heading': '계정 쿼터',
-    'lang.label': '언어',
-    'lang.toEn': 'English로 전환',
-    'lang.toKo': '한국어로 전환',
+    'lang.menu': '언어',
+    'lang.auto': 'CLIProxyAPI 설정 따르기',
     'unconfigured': '관리 키를 확인하는 중입니다. 이 페이지에서 관리 키로 로그인하면 자동으로 설정됩니다',
     'unconfigured.reason': '설정 대기 중: {r}',
     'retry': '다시 시도',
@@ -298,9 +338,8 @@ var I18N = {
   en: {
     'page.title': 'Remaining quota by account',
     'page.heading': 'Account Quota',
-    'lang.label': 'Language',
-    'lang.toEn': 'Switch to English',
-    'lang.toKo': 'Switch to Korean',
+    'lang.menu': 'Language',
+    'lang.auto': 'Follow CLIProxyAPI',
     'unconfigured': 'Waiting for the management key. Sign in with it on this page and setup completes automatically',
     'unconfigured.reason': 'Waiting for setup: {r}',
     'retry': 'Retry',
@@ -455,72 +494,175 @@ var I18N = {
     'empty.accounts': 'No accounts are registered, or none match the current filters.',
     'card.account': 'Account',
     'card.current': ' \u00b7 Account of a completed request with tokens reported in the last 15 minutes (not a live in-flight request)'
+  },
+  'zh-CN': {
+    'page.title': '各账号剩余额度',
+    'page.heading': '账号额度',
+    'lang.menu': '语言',
+    'lang.auto': '跟随 CLIProxyAPI',
+    'unconfigured': '正在等待管理密钥。在此页面用管理密钥登录后即可自动完成设置',
+    'unconfigured.reason': '等待设置：{r}',
+    'retry': '重试',
+    'retry.aria': '重新加载数据',
+    'toolbar.aria': '仪表盘控件',
+    'filter.provider': '提供商',
+    'filter.providerAria': '提供商筛选',
+    'filter.endpoint': '端点',
+    'filter.endpointAria': '端点筛选',
+    'filter.status': '状态',
+    'filter.statusAria': '状态筛选',
+    'filter.reset': '重置筛选',
+    'filter.resetAria': '重置额度筛选',
+    'all': '全部',
+    'all.count': '全部（{n}）',
+    'fleet.aria': '整体可用率',
+    'legend.aria': '剩余额度颜色说明',
+    'legend.high': '充足（60% 以上）',
+    'legend.med': '适中（30–59%）',
+    'legend.warn': '偏低（10–29%）',
+    'legend.low': '告急（低于 10%）',
+    'fleet.antigravity_gemini': 'Antigravity \u00b7 Gemini',
+    'fleet.antigravity_claude': 'Antigravity \u00b7 Claude/GPT',
+    'fleet.count': '{n}个账号',
+    'fleet.count.one': '{n}个账号',
+    'fleet.chipCount': '{n}个',
+    'accounts.aria': '账号列表',
+    'st.active': '正常',
+    'st.pending': '待检测',
+    'st.limited': '受限',
+    'st.warning': '警告',
+    'st.error': '错误',
+    'st.disabled': '已禁用',
+    'st.stale': '数据过时',
+    'st.unknown': '未知',
+    'ep.unknown': '端点未知',
+    'av.weekly': '周限额',
+    'av.limitReached': '已达上限',
+    'av.runningLow': '即将用尽',
+    'av.delayed': '数据延迟',
+    'av.unavailable': '不可用',
+    'av.unknown': '状态未知',
+    'err.noData': '数据不可用',
+    'auth.title': '需要管理密钥',
+    'auth.desc': '额度数据需要管理认证。管理密钥仅保存在此标签页的会话中，不会写入地址栏或服务器。',
+    'auth.label': '管理密钥',
+    'auth.submit': '确认',
+    'auth.empty': '请输入管理密钥。',
+    'auth.invalid': '管理密钥无效或访问被拒绝，请重新输入。',
+    'theme.system': '跟随系统', 'theme.light': '浅色', 'theme.dark': '暗色',
+    'theme.label': '主题：{mode}（点击切换为{next}）',
+    'err.load': '数据加载失败：{e}',
+    'err.api': 'API 请求失败（{s}）',
+    'err.empty': '无数据',
+    'err.timeout': '请求超时',
+    'err.network': '无法连接到服务器',
+    'err.unknown': '未知错误',
+    'err.management_key_missing': '尚无管理密钥：请在此页面用管理密钥登录一次（或设置 QUOTA_MONITOR_MGMT_KEY）',
+    'err.management_url_invalid': '管理 URL 无效（仅允许回环 http/https 地址）',
+    'err.plugin_stopped': '插件已停止',
+    'err.not_configured': '尚未配置',
+    'err.auth_files_failed': '无法获取认证文件列表',
+    'err.auth_directory_unavailable': '无法读取认证文件目录',
+    'err.usage_unavailable': '无法读取最近用量',
+    'err.canceled': '采集已取消',
+    'err.configuration_changed': '设置已更改，将重新开始采集',
+    'err.account_refresh_failed': '账号刷新失败',
+    'err.refresh_failed': '刷新失败',
+    'err.internal_error': '内部错误',
+    'stale.failed': '刷新失败，正在显示之前的数据。',
+    'stale.failedDetail': '刷新失败，正在显示之前的数据（{e}）',
+    'stale.failedReason': '刷新失败，正在显示之前的数据。（{e}）',
+    'stale.unconf': '环境未配置，正在显示之前的数据',
+    'stale.unconfDetail': '环境未配置，正在显示之前的数据（{e}）',
+    'stale.progress': '正在刷新，暂时显示之前的数据。',
+    'unit.d': '{n}天',
+    'unit.h': '{n}小时',
+    'unit.m': '{n}分钟',
+    'unit.s': '{n}秒',
+    'reset.unknown': '重置时间未知',
+    'reset.reached': '已到重置时间 \u00b7 等待更新',
+    'reset.in': '{t}后重置',
+    'rel.now': '刚刚',
+    'rel.s': '{n}秒前',
+    'rel.m': '{n}分钟前',
+    'rel.h': '{n}小时前',
+    'rel.d': '{n}天前',
+    'fresh.noneTitle': '此账号尚无检测时间',
+    'fresh.none': '尚未检测',
+    'fresh.previous': ' \u00b7 之前的数据',
+    'fresh.outdated': ' \u00b7 信息已过时',
+    'fresh.title': '账号状态检测时间：{t}',
+    'fresh.last': '上次检测：{t}',
+    'refresh.all': '刷新全部', 'refresh.allAria': '刷新全部',
+    'refresh.allCooldown': '刷新全部（{s}秒）',
+    'refresh.running': '刷新中\u2026',
+    'refresh.accountRunning': '正在刷新账号\u2026',
+    'refresh.card': '刷新',
+    'refresh.cardCooldown': '刷新（{s}秒）',
+    'refresh.cardAria': '刷新 {name} 的额度',
+    'refresh.done': '刷新完成',
+    'refresh.noAbort': '此浏览器无法安全地发起刷新请求，请换用其他浏览器重试。',
+    'refresh.rate': '刷新请求间隔为30秒，请稍后重试。',
+    'refresh.busy': '另一项采集正在进行，请稍后重试。',
+    'refresh.removed': '该账号已从列表中移除，请使用“刷新全部”确认。',
+    'refresh.unsupported': '该账号不支持单独刷新。',
+    'refresh.config': '请检查插件配置。',
+    'refresh.incomplete': '刷新未完成，已保留之前的数据，请稍后重试。',
+    'refresh.partial': '采集仅部分完成（最多128个账号），请稍后重试。',
+    'refresh.staleSuffix': '（部分数据来自之前的采集，请稍后重试）',
+    'refresh.timeout': '刷新请求超时，服务器可能仍在采集。请稍后查看并重试。',
+    'refresh.failed': '刷新请求失败，已保留之前的数据，请稍后重试。',
+    'flash.default': '服务器数据已变更',
+    'flash.aria': ' \u00b7 已因服务器更新而变更',
+    'flash.lock': '锁定状态已因服务器更新而变更',
+    'flash.reset': '重置基准已因服务器更新而变更',
+    'flash.quota': '额度值已因服务器更新而变更',
+    'flash.credit': '积分已因服务器更新而变更',
+    'grp.antigravity': 'Antigravity 额度',
+    'grp.claude': 'Claude 额度',
+    'grp.limits': '请求限额',
+    'grp.unknown': '未知',
+    'grp.default': '额度分组',
+    'q.weekly': '周限额',
+    'q.fiveHour': '5 小时限额',
+    'q.oauthApps': 'OAuth 应用',
+    'q.default': '额度',
+    'q.locked': '已锁定',
+    'q.lockedAria': '{title}已锁定',
+    'q.lockNote': '当前账号已锁定',
+    'q.weeklyLeft': '周剩余',
+    'q.fiveLeft': '5 小时剩余',
+    'q.notProvided': '未提供',
+    'q.leftAria': '{label}：剩余 {v}',
+    'q.familyAria': '{f} 额度',
+    'q.none': '无额度',
+    'q.fetchFailed': '获取失败',
+    'q.disabled': '已禁用的账号',
+    'q.hintError': '可点击刷新按钮重新获取',
+    'q.hintDisabled': '此账号不检查额度',
+    'q.hintPending': '首次检测完成后将在此显示',
+    'ag.name': 'Antigravity',
+    'credit.reset': '重置券：{n}张',
+    'credit.expiry': '最早到期：{d}',
+    'credit.api': 'API 积分',
+    'credit.unlimited': '无限制',
+    'credit.balance': '余额 {n}',
+    'credit.available': '可用',
+    'credit.zero': '余额 0',
+    'live.shown': '正在显示{n}个账号',
+    'live.shown.one': '正在显示1个账号',
+    'empty.accounts': '没有已登记的账号，或没有符合当前筛选条件的账号。',
+    'card.account': '账号',
+    'card.current': ' \u00b7 最近15分钟内上报了 Token 的已完成请求所用的账号（并非正在进行的实时请求）'
   }
 };
-var currentLang = 'ko';
+var currentLang = resolveLang(readLangPref());
 var lastFleetEntries = null;
 
-function normalizeLang(value) {
-  var v = String(value || '').toLowerCase();
-  if (v.indexOf('ko') === 0) return 'ko';
-  if (v.indexOf('en') === 0) return 'en';
-  return null;
-}
-function readStoredLang() {
-  try { return normalizeLang(localStorage.getItem(LANG_KEY)); } catch (e) { return null; }
-}
-function readLangHost() {
-  try { return localStorage.getItem(LANG_HOST_KEY) || ''; } catch (e) { return ''; }
-}
-// Only the shared plugin entries are written; the host's own HOST_LANG_KEY is read-only here.
-function writeLangPrefs(lang, host) {
-  try { localStorage.setItem(LANG_KEY, lang); localStorage.setItem(LANG_HOST_KEY, host); } catch (e) {}
-}
-function writeStoredLang(lang) {
-  writeLangPrefs(lang, hostLangRaw());
-}
-// The console's language: the same-origin parent's <html lang>, else its persisted store
-// (zustand JSON {"state":{"language":"ko"}} or, in older builds, the bare string), else ''.
-function hostLangRaw() {
-  try {
-    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
-      var attr = window.parent.document.documentElement.getAttribute('lang');
-      if (attr) return String(attr);
-    }
-  } catch (e) {} // cross-origin parent
-  try {
-    var raw = localStorage.getItem(HOST_LANG_KEY);
-    if (!raw) return '';
-    var value = raw;
-    try {
-      var parsed = JSON.parse(raw);
-      value = parsed && typeof parsed === 'object' ? ((parsed.state && parsed.state.language) || parsed.language || '') : parsed;
-    } catch (e) {}
-    return typeof value === 'string' ? value : '';
-  } catch (e) { return ''; }
-}
-function uiLang(raw) {
-  if (!raw) return '';
-  return /^ko\b/i.test(String(raw)) ? 'ko' : 'en';
-}
-// "Last action wins": a host language the stored choice was not made under overrides it.
-function detectLang() {
-  var host = hostLangRaw(), stored = readStoredLang();
-  if (host && (!stored || readLangHost() !== host)) return uiLang(host);
-  if (stored) return stored;
-  try {
-    var nav = typeof navigator !== 'undefined' ? navigator : null;
-    var list = nav && (nav.languages && nav.languages.length ? nav.languages : [nav.language]);
-    if (list && list[0]) return normalizeLang(list[0]) || 'en';
-  } catch (e) {}
-  return 'en';
-}
-currentLang = detectLang();
-
 function t(key, params) {
-  var table = I18N[currentLang] || I18N.ko;
+  var table = I18N[currentLang] || I18N.en;
   var s = table[key];
-  if (s == null) s = I18N.ko[key];
+  if (s == null) s = I18N.en[key];
   if (s == null) return key;
   // A function param is resolved at render time, so text kept for a later language
   // switch (setI18nText) re-translates server reasons too.
@@ -531,7 +673,7 @@ function t(key, params) {
 // are shown from the dictionary (err.<code>); anything else falls back to the raw text.
 function errKey(code) {
   var c = String(code || '');
-  return /^[a-z][a-z0-9_]*$/.test(c) && Object.prototype.hasOwnProperty.call(I18N.ko, 'err.' + c) ? 'err.' + c : '';
+  return /^[a-z][a-z0-9_]*$/.test(c) && Object.prototype.hasOwnProperty.call(I18N.en, 'err.' + c) ? 'err.' + c : '';
 }
 function serverText(code, message) {
   var key = errKey(code) || errKey(message);
@@ -576,13 +718,8 @@ function applyStaticI18n() {
     if (el && el._i18n) el.textContent = t(el._i18n.key, el._i18n.params);
   });
   if (typeof applyTheme === 'function') applyTheme();
-  // One toggle button: label/tooltip name the language a click switches to.
-  eachNode('.lang-toggle:not(.refresh-btn)', function(btn) {
-    var label = t(currentLang === 'ko' ? 'lang.toEn' : 'lang.toKo');
-    btn.setAttribute('aria-label', label);
-    btn.setAttribute('title', label);
-    btn.setAttribute('data-current-lang', currentLang);
-  });
+  // Language menu buttons: "Language: <shown language>" (see initLangMenu).
+  if (langMenu) langMenu.refresh();
 }
 // Theme: system (default) | light | dark, chosen with the toggle next to the language button.
 // "system" follows the host Management Center (light | dark; its white variant counts as light; its auto
@@ -675,11 +812,11 @@ function initThemeControls() {
   } catch (e) {}
 }
 
-function setLanguage(lang, fromStorage) {
-  var next = normalizeLang(lang);
-  if (!next || next === currentLang) return;
-  currentLang = next;
-  if (!fromStorage) writeStoredLang(next);
+// Show a page language (already resolved: 'en' | 'ko' | 'zh-CN'); the stored preference is
+// written by the menu, never here.
+function setLanguage(lang) {
+  if (LANGS.indexOf(lang) < 0 || lang === currentLang) return;
+  currentLang = lang;
   applyStaticI18n();
   if (lastFleetEntries) renderFleetAvailability(lastFleetEntries);
   if (cachedAccounts.length > 0) {
@@ -689,38 +826,130 @@ function setLanguage(lang, fromStorage) {
   updateFilterTitles();
   updateManualRefreshButton();
 }
-// Translate the static markup as soon as it is parsed to avoid a flash of Korean.
+var langMenu = null;
+// Translate the static markup as soon as it is parsed to avoid a flash of another language.
 try { applyStaticI18n(); } catch (e) {}
 function initLanguageControls() {
-  eachNode('.lang-toggle:not(.refresh-btn)', function(btn) {
-    btn.addEventListener('click', function() { setLanguage(currentLang === 'ko' ? 'en' : 'ko'); });
+  if (typeof document === 'undefined' || !document.querySelectorAll) return;
+  // The header refresh icon shares the .lang-toggle styling; it never opens the menu.
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.lang-toggle:not(.refresh-btn)'));
+  langMenu = initLangMenu(buttons, {
+    t: t,
+    onSelect: function(pref) { setLanguage(resolveLang(pref)); }
   });
-  // Another plugin dashboard (or tab) changed the shared language: follow it.
-  if (typeof window !== 'undefined' && window.addEventListener) {
-    window.addEventListener('storage', function(e) {
-      if (!e) return;
-      if (e.key === LANG_KEY) setLanguage(e.newValue, true);
-      else if (e.key === HOST_LANG_KEY) followHostLang();
-    });
-    // The console switched its language while this page is open (same-origin parent).
-    try {
-      if (window.parent && window.parent !== window && typeof MutationObserver !== 'undefined') {
-        new MutationObserver(followHostLang).observe(window.parent.document.documentElement, { attributes: true, attributeFilter: ['lang'] });
-      }
-    } catch (e) {}
-  }
+  watchLanguage(function() { return currentLang; }, setLanguage);
   applyStaticI18n();
 }
-// The console language changed: it wins over any earlier plugin choice. Writing the shared
-// LANG_KEY lets other open plugin pages follow too.
-var lastHostLang = hostLangRaw();
-function followHostLang() {
-  var h = hostLangRaw();
-  if (!h || h === lastHostLang) return;
-  lastHostLang = h;
-  var next = uiLang(h);
-  writeLangPrefs(next, h);
-  setLanguage(next, true);
+
+// ---- live follow: call once after the page applied its first language ----
+// onChange(newLang) is called only when the resolved language actually changes.
+function watchLanguage(getLang, onChange) {
+  function check() { var next = resolveLang(readLangPref()); if (next !== getLang()) onChange(next); }
+  try { window.addEventListener('storage', function (e) { if (!e || e.key === null || e.key === LANG_PREF_KEY || e.key === HOST_LANG_KEY) check(); }); } catch (e) {}
+  try { var d = hostDoc(); if (d && window.MutationObserver) new MutationObserver(check).observe(d.documentElement, { attributes: true, attributeFilter: ['lang'] }); } catch (e) {}
+  return check;
+}
+
+// ---- language menu (popover) ----
+// buttons: the page's language icon buttons (header and auth gate).
+// opts.t(key): translation; uses 'lang.menu' and 'lang.auto'.
+// opts.onSelect(pref): called after the preference was written.
+var LANG_CHECK_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function initLangMenu(buttons, opts) {
+  var menu = null, owner = null;
+  function label(b) {
+    var name = LANG_NAMES[resolveLang(readLangPref())] || '';
+    var text = opts.t('lang.menu') + ': ' + name;
+    b.setAttribute('aria-label', text); b.title = text;
+    b.setAttribute('aria-haspopup', 'menu');
+    b.setAttribute('aria-expanded', menu && owner === b ? 'true' : 'false');
+  }
+  function paintButtons() { for (var i = 0; i < buttons.length; i++) if (buttons[i]) label(buttons[i]); }
+  function items() { return menu ? Array.prototype.slice.call(menu.querySelectorAll('.lang-menu-item')) : []; }
+  function close(focusOwner) {
+    if (!menu) return;
+    var b = owner;
+    menu.parentNode && menu.parentNode.removeChild(menu);
+    menu = null; owner = null;
+    document.removeEventListener('pointerdown', onOutside, true);
+    window.removeEventListener('resize', onWinChange);
+    window.removeEventListener('scroll', onWinChange, true);
+    paintButtons();
+    if (focusOwner && b) b.focus();
+  }
+  function onOutside(e) { if (menu && !menu.contains(e.target) && e.target !== owner && !(owner && owner.contains(e.target))) close(false); }
+  function onWinChange() { close(false); }
+  function addItem(pref, text, sub) {
+    var it = document.createElement('button');
+    it.type = 'button'; it.className = 'lang-menu-item';
+    it.setAttribute('role', 'menuitemradio');
+    it.setAttribute('aria-checked', readLangPref() === pref ? 'true' : 'false');
+    it.setAttribute('data-pref', pref);
+    if (pref !== 'auto') it.setAttribute('lang', pref);
+    it.tabIndex = -1;
+    var check = document.createElement('span'); check.className = 'lang-menu-check'; check.innerHTML = LANG_CHECK_SVG; // static constant only
+    var main = document.createElement('span'); main.className = 'lang-menu-label'; main.textContent = text;
+    it.appendChild(check); it.appendChild(main);
+    if (sub) { var s = document.createElement('span'); s.className = 'lang-menu-sub'; s.textContent = sub; it.appendChild(s); }
+    it.addEventListener('click', function () { select(pref); });
+    menu.appendChild(it);
+  }
+  function select(pref) {
+    writeLangPref(pref);
+    close(true);
+    opts.onSelect(pref);
+    paintButtons();
+  }
+  function place(b) {
+    var r = b.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    var w = menu.offsetWidth, h = menu.offsetHeight, gap = 6, m = 8;
+    var left = Math.min(Math.max(m, r.right - w), Math.max(m, vw - w - m));
+    var top = r.bottom + gap;
+    if (top + h > vh - m && r.top - gap - h >= m) top = r.top - gap - h;
+    menu.style.left = Math.round(left) + 'px';
+    menu.style.top = Math.round(top) + 'px';
+  }
+  function open(b, focusWhich) {
+    close(false);
+    owner = b;
+    menu = document.createElement('div');
+    menu.className = 'lang-menu'; menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', opts.t('lang.menu'));
+    addItem('auto', opts.t('lang.auto'), LANG_NAMES[normLang(hostLangRaw()) || browserLang()]);
+    var sep = document.createElement('div'); sep.className = 'lang-menu-sep'; sep.setAttribute('role', 'separator'); menu.appendChild(sep);
+    for (var i = 0; i < LANGS.length; i++) addItem(LANGS[i], LANG_NAMES[LANGS[i]], '');
+    menu.addEventListener('keydown', onKey);
+    document.body.appendChild(menu);
+    place(b);
+    paintButtons();
+    var list = items(), idx = 0;
+    for (var j = 0; j < list.length; j++) if (list[j].getAttribute('aria-checked') === 'true') idx = j;
+    if (focusWhich === 'last') idx = list.length - 1;
+    if (list[idx]) list[idx].focus();
+    document.addEventListener('pointerdown', onOutside, true);
+    window.addEventListener('resize', onWinChange);
+    window.addEventListener('scroll', onWinChange, true);
+  }
+  function onKey(e) {
+    var list = items(), i = list.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); close(true); }
+    else if (e.key === 'Tab') { close(false); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); list[(i + 1) % list.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); list[(i - 1 + list.length) % list.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); list[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); list[list.length - 1].focus(); }
+  }
+  for (var i = 0; i < buttons.length; i++) (function (b) {
+    if (!b) return;
+    b.addEventListener('click', function () { if (menu && owner === b) close(true); else open(b); });
+    b.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); open(b); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); open(b, 'last'); }
+    });
+  })(buttons[i]);
+  paintButtons();
+  // Call after a language change so labels follow.
+  return { refresh: paintButtons, close: function () { close(false); } };
 }
 
 var _iconCache = {};
@@ -740,7 +969,7 @@ function esc(str) {
 
 function formatNum(n) {
   if (n == null || isNaN(n)) return '0';
-  return Number(n).toLocaleString(currentLang === 'en' ? 'en-US' : 'ko-KR');
+  return Number(n).toLocaleString(intlLocale(currentLang));
 }
 
 function fmtPct(x) {
@@ -1065,9 +1294,11 @@ function humanizeSeconds(sec) {
   if (sec == null || isNaN(sec)) return '—';
   var s = Math.round(sec);
   if (s <= 0) return t('unit.s', { n: 0 });
-  if (s >= 86400) { var d = Math.floor(s/86400); var rh = Math.floor((s%86400)/3600); return t('unit.d', { n: d })+(rh>0?' '+t('unit.h', { n: rh }):''); }
-  if (s >= 3600)  { var h = Math.floor(s/3600);  var m = Math.floor((s%3600)/60);   return t('unit.h', { n: h })+(m>0?' '+t('unit.m', { n: m }):''); }
-  if (s >= 60)    { var mn = Math.floor(s/60); var rs = s%60; return t('unit.m', { n: mn })+(rs>0?' '+t('unit.s', { n: rs }):''); }
+  // Chinese writes compound durations without a space: 2小时59分钟.
+  var sp = currentLang === 'zh-CN' ? '' : ' ';
+  if (s >= 86400) { var d = Math.floor(s/86400); var rh = Math.floor((s%86400)/3600); return t('unit.d', { n: d })+(rh>0?sp+t('unit.h', { n: rh }):''); }
+  if (s >= 3600)  { var h = Math.floor(s/3600);  var m = Math.floor((s%3600)/60);   return t('unit.h', { n: h })+(m>0?sp+t('unit.m', { n: m }):''); }
+  if (s >= 60)    { var mn = Math.floor(s/60); var rs = s%60; return t('unit.m', { n: mn })+(rs>0?sp+t('unit.s', { n: rs }):''); }
   return t('unit.s', { n: s });
 }
 
@@ -1125,7 +1356,17 @@ function formatResetExpiryEn(ts) {
   } catch(e) {}
   return '—';
 }
+// Chinese: 2026年10月4日 15:05:29 (Intl, 24-hour clock).
+function formatResetExpiryZh(ts) {
+  if (!ts) return '—';
+  try {
+    var d = new Date(ts);
+    if (!isNaN(d.getTime())) return new Intl.DateTimeFormat(intlLocale('zh-CN'), { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(d);
+  } catch(e) {}
+  return '—';
+}
 function formatResetExpiry(ts) {
+  if (currentLang === 'zh-CN') return formatResetExpiryZh(ts);
   return currentLang === 'en' ? formatResetExpiryEn(ts) : formatResetExpiryKo(ts);
 }
 function formatTimestamp(ts) {
