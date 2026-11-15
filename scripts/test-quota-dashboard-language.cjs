@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Browser regression for the English/Korean switch: detection, toggle, no stray Korean in English,
-// persistence and overflow at 1440/768/390/320px. Install Playwright or set PLAYWRIGHT_MODULE;
+// Browser regression for the en/ko/zh-CN language menu: detection, menu choice, no stray Korean
+// in English or Chinese, persistence and overflow at 1440/768/390/320px. Install Playwright or set PLAYWRIGHT_MODULE;
 // BROWSER_EXECUTABLE selects a system browser; SCREENSHOT_DIR captures pages.
 const fs = require('fs'), path = require('path');
-const switchLang = (async (page, lang) => { if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('#languageToggle'); await page.waitForFunction(l => document.documentElement.lang === l, lang); });
+const { pickLanguage } = require('./lib/lang-menu.cjs');
+const switchLang = async (page, lang) => { if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await pickLanguage(page, '#languageToggle', lang); };
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { seedKey } = require('./lib/seed-key.cjs');
 const root = path.resolve(__dirname, '..');
@@ -23,7 +24,8 @@ const hangul = s => /[가-힣]/.test(s);
   const browser = await chromium.launch({ headless: true, executablePath: process.env.BROWSER_EXECUTABLE || undefined, args: ['--no-sandbox'] });
   const fail = [];
   try {
-    for (const locale of ['en-US', 'ko-KR']) {
+    const LOCALES = { 'en-US': 'en', 'ko-KR': 'ko', 'zh-CN': 'zh-CN' };
+    for (const locale of Object.keys(LOCALES)) {
       const ctx = await browser.newContext({ locale, reducedMotion: 'reduce' });
       await seedKey(ctx);
       const page = await ctx.newPage();
@@ -41,29 +43,24 @@ const hangul = s => /[가-힣]/.test(s);
       await page.goto(url);
       await page.waitForSelector('.account-card');
       const initial = await page.evaluate(() => document.documentElement.lang);
-      const wantInitial = locale === 'en-US' ? 'en' : 'ko';
+      const wantInitial = LOCALES[locale];
       if (initial !== wantInitial) fail.push(`${locale}: initial lang ${initial} != ${wantInitial}`);
 
-      // switch to the opposite language
-      const target = wantInitial === 'en' ? 'ko' : 'en';
-      await switchLang(page, target);
-      const pressed = await page.locator('#languageToggle').getAttribute('data-current-lang');
-      if (pressed !== target) fail.push(`${locale}: aria-pressed ${pressed} != ${target}`);
-
-      for (const lang of [target, wantInitial]) {
-        if (lang !== target) await switchLang(page, lang);
+      for (const lang of ['en', 'ko', 'zh-CN']) {
+        await switchLang(page, lang);
         const text = await page.evaluate(() => document.body.innerText + '\n' + [...document.querySelectorAll('[aria-label],[title]')].map(e => (e.getAttribute('aria-label') || '') + ' ' + (e.title || '')).join('\n') + '\n' + document.title);
-        const stray = text.split('\n').filter(l => (lang === 'en' ? hangul(l) : false) && !/한국어|^\s*가(\s+A)?\s*$/.test(l));
-        if (lang === 'en' && stray.length) fail.push(`${locale}: Korean left in EN UI: ${JSON.stringify(stray.slice(0, 6))}`);
-        if (lang === 'ko' && /Retry|Refresh|Weekly limit|Resets in/.test(text)) fail.push(`${locale}: English left in KO UI`);
+        const stray = text.split('\n').filter(l => (lang !== 'ko' ? hangul(l) : false) && !/한국어|^\s*가(\s+A)?\s*$/.test(l));
+        if (stray.length) fail.push(`${locale}: Korean left in ${lang} UI: ${JSON.stringify(stray.slice(0, 6))}`);
+        if (lang !== 'en' && /Retry|Refresh|Weekly limit|Resets in|Just now/.test(text)) fail.push(`${locale}: English left in ${lang} UI`);
+        if (lang === 'zh-CN' && !/后重置/.test(text)) fail.push(`${locale}: zh-CN countdown missing: ${text.slice(0, 200)}`);
         for (const width of [1440, 768, 390, 320]) {
           await page.setViewportSize({ width, height: 900 });
           await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
           const over = await page.evaluate(() => {
             const out = [];
             if (document.documentElement.scrollWidth > innerWidth + 1) out.push('page-h-scroll');
-            document.querySelectorAll('.account-card, .toolbar, .page-heading, .lang-toggle, .fleet-chip, .quota-lock-state, .ag-family-section, .quota-value-row').forEach(e => {
-              if (e.scrollWidth > e.clientWidth + 1) out.push(e.className.toString().slice(0, 40) + ' ' + e.scrollWidth + '>' + e.clientWidth + ' text=' + JSON.stringify(e.textContent.trim().replace(/\s+/g,' ').slice(0,40)) + ' fonts=' + document.fonts.status + ' suit=' + document.fonts.check('600 12px SUIT') + ' lang=' + document.documentElement.lang);
+            document.querySelectorAll('.account-card, .toolbar, .page-heading, .lang-toggle, .fleet-chip, .quota-lock-state, .ag-family-section, .quota-value-row, .filter-field label, .filter-reset-button, .ui-select-trigger, .pct-legend li, .card-freshness, .quota-value-reset, .ag-limit-reset').forEach(e => {
+              if (e.scrollWidth > e.clientWidth + 1) out.push(e.className.toString().slice(0, 40) + ' ' + e.scrollWidth + '>' + e.clientWidth + ' text=' + JSON.stringify(e.textContent.trim().replace(/\s+/g,' ').slice(0,40)) + ' fonts=' + document.fonts.status + ' lang=' + document.documentElement.lang);
             });
             return out;
           });
@@ -73,27 +70,27 @@ const hangul = s => /[가-힣]/.test(s);
         await page.setViewportSize({ width: 1280, height: 900 });
         if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, `lang-${locale}-${lang}.png`), fullPage: true });
       }
-      // The header refresh icon shares the language toggle's styling but must never switch language.
-      for (const lang of [wantInitial, target]) {
+      // The header refresh icon shares the language button's styling but must never open the menu or switch language.
+      for (const lang of ['en', 'zh-CN']) {
         await switchLang(page, lang);
-        await page.evaluate(() => { window.__before = [document.documentElement.lang, localStorage.getItem('cpa_plugin_lang')]; });
+        await page.evaluate(() => { window.__before = [document.documentElement.lang, localStorage.getItem('cpa_plugin_language')]; });
         await page.click('#fullRefreshBtn');
         await page.waitForTimeout(300);
-        const st = await page.evaluate(() => ({ before: window.__before, lang: document.documentElement.lang, stored: localStorage.getItem('cpa_plugin_lang'), label: document.getElementById('fullRefreshBtn').getAttribute('aria-label') }));
-        if (st.lang !== lang || st.stored !== lang) fail.push(`${locale}: refresh click changed language ${lang} -> ${st.lang}/${st.stored}`);
-        if (lang === 'ko' && !hangul(st.label)) fail.push(`${locale}: refresh label not Korean after click: ${st.label}`);
+        const st = await page.evaluate(() => ({ before: window.__before, lang: document.documentElement.lang, stored: localStorage.getItem('cpa_plugin_language'), menu: !!document.querySelector('.lang-menu'), label: document.getElementById('fullRefreshBtn').getAttribute('aria-label') }));
+        if (st.lang !== lang || st.stored !== lang || st.menu) fail.push(`${locale}: refresh click changed language ${lang} -> ${st.lang}/${st.stored} menu=${st.menu}`);
+        if (lang === 'zh-CN' && !/刷新/.test(st.label)) fail.push(`${locale}: refresh label not Chinese after click: ${st.label}`);
         if (lang === 'en' && hangul(st.label)) fail.push(`${locale}: refresh label not English after click: ${st.label}`);
       }
       // reload keeps the explicit choice
       await switchLang(page, 'en');
       await page.reload();
       await page.waitForSelector('.account-card');
-      const after = await page.evaluate(() => [document.documentElement.lang, localStorage.getItem('cpa_plugin_lang')]);
+      const after = await page.evaluate(() => [document.documentElement.lang, localStorage.getItem('cpa_plugin_language')]);
       if (after[0] !== 'en' || after[1] !== 'en') fail.push(`${locale}: not persisted ${after}`);
       if (errors.length) fail.push(`${locale}: page errors ${errors}`);
       await ctx.close();
     }
   } finally { await browser.close(); }
   if (fail.length) { console.log('FAIL\n' + fail.join('\n')); process.exit(1); }
-  console.log('PASS: lang detect, toggle, no stray Korean in EN, persistence, no overflow @1440/768/390/320');
+  console.log('PASS: lang detect (en/ko/zh-CN), menu choice, no stray Korean in en/zh-CN, persistence, no overflow @1440/768/390/320');
 })();

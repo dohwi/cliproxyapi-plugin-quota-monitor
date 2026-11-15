@@ -2,7 +2,8 @@
 // Regenerates the README previews (docs/assets/quota-{desktop,mobile}.{en,ko}.png) from synthetic
 // fixtures only. Install Playwright or set PLAYWRIGHT_MODULE; BROWSER_EXECUTABLE selects a browser.
 const fs = require('node:fs');
-const switchLang = (async (page, lang) => { if ((await page.evaluate(() => document.documentElement.lang)) !== lang) await page.click('#languageToggle'); await page.waitForFunction(l => document.documentElement.lang === l, lang); });
+const { pickLanguage } = require('./lib/lang-menu.cjs');
+const switchLang = (page, lang) => pickLanguage(page, '#languageToggle', lang);
 const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { seedKey } = require('./lib/seed-key.cjs');

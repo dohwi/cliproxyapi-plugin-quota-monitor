@@ -92,7 +92,7 @@
   body {
     background-color: var(--bg-body);
     color: var(--text);
-    font-family: 'Manrope', 'SUIT', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: 'Manrope', 'SUIT', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
     line-height: 1.45;
     padding: 0 14px 16px;
     font-variant-numeric: tabular-nums;
@@ -794,6 +794,42 @@
   :root[data-theme='dark'] .value-flash.flash-danger { background-color: #381f1f; color: #f08a8a !important; }
   :root[data-theme='dark'] .value-flash.flash-neutral { background-color: #232832; }
   :root[data-theme='dark'] .ag-family-lock-title .ag-lock-limit, :root[data-theme='dark'] .quota-lock-title > span { color: #c4cbd6; }
+
+  /* Simplified Chinese: system CJK fonts before SUIT (Hangul) so Han glyphs and full-width
+     punctuation come from one Chinese face; Manrope still draws Latin and digits. */
+  :lang(zh-CN) body, body:lang(zh-CN) { font-family: 'Manrope', "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", 'SUIT', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+  /* Language menu: --lm-* mapped to this page's theme tokens (dark values follow automatically).
+     This page draws no shadows (flat cards, the filter popover has only a border), so the
+     shared menu keeps its CSS verbatim with a transparent shadow colour. */
+  :root { --lm-bg: var(--surface); --lm-text: var(--text); --lm-line: var(--filter-control-border); --lm-muted: var(--muted); --lm-hover: var(--filter-control-hover-bg); --lm-ring: var(--filter-control-focus); --lm-accent: var(--accent); --lm-shadow: transparent; }
+  /* @lang-menu-css-begin */
+  /* dohwi plugins: language menu popover (reference). Map the --lm-* values to the
+     plugin's own theme tokens (light and dark) instead of hard-coding colours. */
+  .lang-menu {
+    position: fixed; z-index: 1000; min-width: 196px; max-width: calc(100vw - 16px);
+    padding: 6px; border-radius: 12px;
+    background: var(--lm-bg); color: var(--lm-text);
+    border: 1px solid var(--lm-line);
+    box-shadow: 0 12px 32px var(--lm-shadow), 0 2px 6px var(--lm-shadow);
+    font: inherit; font-size: 13.5px; line-height: 1.3;
+    animation: lang-menu-in .12s ease-out;
+  }
+  @keyframes lang-menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .lang-menu { animation: none; } }
+  .lang-menu-item {
+    display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px;
+    width: 100%; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 8px;
+    background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  .lang-menu-item:hover, .lang-menu-item:focus-visible { background: var(--lm-hover); outline: none; }
+  .lang-menu-item:focus-visible { box-shadow: 0 0 0 2px var(--lm-ring); }
+  .lang-menu-check { display: inline-flex; width: 16px; height: 16px; color: var(--lm-accent); visibility: hidden; }
+  .lang-menu-item[aria-checked="true"] .lang-menu-check { visibility: visible; }
+  .lang-menu-item[aria-checked="true"] .lang-menu-label { font-weight: 600; }
+  .lang-menu-sub { color: var(--lm-muted); font-size: 12px; white-space: nowrap; }
+  .lang-menu-sep { height: 1px; margin: 4px 6px; background: var(--lm-line); }
+  /* @lang-menu-css-end */
 
   /* Theme switch: no colour animation anywhere, everything changes in one step (see swapTheme in app.js). */
   :root[data-theme-switching] *, :root[data-theme-switching] *::before, :root[data-theme-switching] *::after { transition: none !important; }

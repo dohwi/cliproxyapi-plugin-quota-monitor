@@ -37,8 +37,9 @@ func nodeDashboardCmdHTML(t *testing.T, node, script, html string) *exec.Cmd {
 }
 
 // koDefaultHTML makes the legacy Korean-text contract tests start in Korean:
-// the shipped default is English (covered by i18n_test.go), but these tests
-// assert Korean strings with a mocked localStorage that returns nothing.
+// the shipped fallback is English (covered by i18n_test.go and lang_core_test.go),
+// but these tests assert Korean strings with no console, no stored preference and no
+// navigator, so the browser-language fallback is switched to Korean here.
 func koDefaultHTML(html string) string {
-	return strings.Replace(html, "  } catch (e) {}\n  return 'en';\n}\ncurrentLang = detectLang();", "  } catch (e) {}\n  return 'ko';\n}\ncurrentLang = detectLang();", 1)
+	return strings.Replace(html, "  return normLang(n) || 'en';\n}", "  return normLang(n) || 'ko';\n}", 1)
 }

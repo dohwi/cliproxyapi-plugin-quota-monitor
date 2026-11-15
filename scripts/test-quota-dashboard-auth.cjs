@@ -5,6 +5,7 @@
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname, '..');
+const { pickLanguage } = require('./lib/lang-menu.cjs');
 const html = require('./lib/dashboard-html.cjs').readDashboardHTML(root);
 const GOOD = 'good-management-key', STORE = 'cpa_quota_monitor_mgmt_key', PREFIX = '/v0/management/plugins/quota-monitor/data/';
 const accounts = [{ account_key: 'k1', provider: 'codex', account: 'a@example.com', status: 'ok', windows: [{ name: 'primary', remaining_percent: 61, reset_after_seconds: 3600 }], endpoint: 'direct', refresh_supported: true }];
@@ -35,17 +36,21 @@ const accounts = [{ account_key: 'k1', provider: 'codex', account: 'a@example.co
     assert.equal(await page.locator('#dashboardContent').isHidden(), true, 'dashboard hidden behind the gate');
     assert.equal(await page.locator('#authKeyInput').getAttribute('type'), 'password');
 
-    // The gate shows no dashboard title/subtitle, and offers its own language switch.
+    // The gate shows no dashboard title/subtitle, and offers its own language menu.
     assert.equal(await page.locator('#pageHeading').isHidden(), true, 'page title and subtitle hidden behind the gate');
-    assert.equal(await page.locator('#authLanguageToggle').isVisible(), true, 'language toggle inside the gate');
+    assert.equal(await page.locator('#authLanguageToggle').isVisible(), true, 'language button inside the gate');
     assert.match(await page.locator('#authGateTitle').innerText(), /Management key required/);
-    await page.click('#authLanguageToggle');
+    await pickLanguage(page, '#authLanguageToggle', 'ko');
     assert.match(await page.locator('#authGateTitle').innerText(), /관리 키/, 'gate switches to Korean');
     assert.match(await page.locator('#authForm button[type=submit]').innerText(), /확인/);
-    assert.equal(await page.evaluate(() => localStorage.getItem('cpa_plugin_lang')), 'ko', 'choice persisted as the shared language preference');
-    await page.click('#authLanguageToggle');
-    assert.match(await page.locator('#authGateTitle').innerText(), /Management key required/, 'and back to English');
-    assert.equal(await page.locator('#authLanguageToggle').getAttribute('aria-label'), 'Switch to Korean');
+    assert.equal(await page.evaluate(() => localStorage.getItem('cpa_plugin_language')), 'ko', 'choice persisted as the shared language preference');
+    await pickLanguage(page, '#authLanguageToggle', 'zh-CN');
+    assert.match(await page.locator('#authGateTitle').innerText(), /需要管理密钥/, 'gate switches to Chinese');
+    await pickLanguage(page, '#authLanguageToggle', 'auto');
+    await page.waitForFunction(() => document.documentElement.lang === 'en');
+    assert.match(await page.locator('#authGateTitle').innerText(), /Management key required/, 'and back to English (auto, browser en-US)');
+    assert.equal(await page.locator('#authLanguageToggle').getAttribute('aria-label'), 'Language: English');
+    assert.equal(await page.evaluate(() => localStorage.getItem('cpa_plugin_language')), 'auto');
 
     await page.click('#authForm button[type=submit]');
     assert.match(await page.locator('#authMessage').innerText(), /Enter the management key/);

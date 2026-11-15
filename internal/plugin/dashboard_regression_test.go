@@ -1189,7 +1189,16 @@ console.log('OK_RESET_COUNTDOWN_ACCENT_REGRESSION');
 }
 
 func TestDashboardCompactFilterAndNoVisualShadows(t *testing.T) {
-	lower := strings.ToLower(dashboard.HTML)
+	// The shared language-menu CSS (identical in every dohwi plugin) is kept verbatim; this
+	// page maps its --lm-shadow to transparent, so only that marked block may name box-shadow.
+	page := dashboard.HTML
+	if a, b := strings.Index(page, "/* @lang-menu-css-begin */"), strings.Index(page, "/* @lang-menu-css-end */"); a >= 0 && b > a {
+		page = page[:a] + page[b:]
+	}
+	if !strings.Contains(dashboard.HTML, "--lm-shadow: transparent;") {
+		t.Error("language menu must map --lm-shadow to transparent (no visual shadows)")
+	}
+	lower := strings.ToLower(page)
 	for _, forbidden := range []string{"box-shadow", "text-shadow", "drop-shadow", "filter:drop-shadow", "filter: drop-shadow", "accountsearch", "debounceapplyfilters", "searchdebouncetimer"} {
 		if strings.Contains(lower, forbidden) {
 			t.Errorf("dashboard.HTML contains forbidden dashboard token %q", forbidden)
