@@ -69,7 +69,7 @@ func TestDashboardRegressionTokens(t *testing.T) {
 // TestRegressionDashboardHTMLFeatures verifies all standard Dashboard HTML features.
 func TestRegressionDashboardHTMLFeatures(t *testing.T) {
 	for _, required := range []string{
-		"<title>계정별 남은 쿼터</title>",
+		"<title>Remaining quota by account</title>",
 		`<h1 data-i18n="page.heading">계정 쿼터</h1>`,
 		"전체",
 		"Active",

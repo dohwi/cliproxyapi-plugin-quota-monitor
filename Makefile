@@ -21,7 +21,7 @@ LIB := artifacts/quota-monitor.$(LIB_EXT)
 SMOKE := artifacts/native-smoke$(SMOKE_EXE)
 SHA256 := $(shell command -v sha256sum >/dev/null 2>&1 && echo sha256sum || echo "shasum -a 256")
 
-.PHONY: verify-i18n release-check verify build native-smoke clean verify-layout
+.PHONY: verify-i18n verify-host release-check verify build native-smoke clean verify-layout
 
 verify:
 	go test -race -count=1 -timeout=120s ./...
@@ -41,6 +41,10 @@ verify-layout:
 
 verify-i18n:
 	node scripts/test-quota-dashboard-language.cjs
+
+# Console simulation: follows the host language, hash-based CSP with zero violations, 88px clearance.
+verify-host:
+	node scripts/test-quota-dashboard-host.cjs
 
 # Usage: make release-check TAG=v0.1.0
 release-check:

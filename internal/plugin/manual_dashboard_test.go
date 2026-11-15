@@ -129,7 +129,7 @@ assert(calls.filter(c => c.url.includes('/data/refresh')).length === postCount, 
 for (const forbidden of ['manualRefreshKey','manualRefreshDialog','manualRefreshPassword']) assert(!html.includes(forbidden), 'no per-refresh credential dialog remains');
 assert(html.indexOf('id="fullRefreshBtn"') !== -1 && html.indexOf('id="fullRefreshBtn"') < html.indexOf('id="resetFiltersBtn"'), 'full refresh is a header action, before the body filters');
 for (const forbidden of ['postMessage','localStorage.setItem(KEY','localStorage.setItem(HOST']) assert(!script.includes(forbidden), 'no message bridge, no persistent key storage, host entries never written');
-assert((script.match(/localStorage/g)||[]).length === (script.match(/localStorage\.(?:getItem\((?:LANG_KEY|THEME_KEY|name)\)|setItem\((?:LANG_KEY, lang|THEME_KEY, mode)\))/g)||[]).length && script.includes("var LANG_KEY = 'cpa_plugin_lang';"), 'localStorage is limited to language/theme prefs and read-only host entries');
+assert((script.match(/localStorage/g)||[]).length === (script.match(/localStorage\.(?:getItem\((?:LANG_KEY|LANG_HOST_KEY|HOST_LANG_KEY|THEME_KEY|name)\)|setItem\((?:LANG_KEY, lang|LANG_HOST_KEY, host|THEME_KEY, mode)\))/g)||[]).length && script.includes("var LANG_KEY = 'cpa_plugin_lang';"), 'localStorage is limited to language/theme prefs and read-only host entries');
 console.log('OK_MANUAL_REFRESH');
 `
 	// Top-level await is wrapped to keep compatibility with Node CommonJS -e.
