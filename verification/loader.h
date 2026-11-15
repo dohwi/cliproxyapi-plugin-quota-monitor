@@ -9,7 +9,10 @@
 typedef HMODULE lib_handle;
 static lib_handle lib_open(const char *path) { return LoadLibraryA(path); }
 static void *lib_sym(lib_handle h, const char *name) { return (void *)GetProcAddress(h, name); }
-static int lib_close(lib_handle h) { return FreeLibrary(h) ? 0 : -1; }
+/* Like the CLIProxyAPI host (pluginhost/loader_windows.go), never FreeLibrary a Go
+ * DLL: the Go runtime and its threads stay resident and unloading it can crash the
+ * process (seen on windows/arm64). The process exit releases the module. */
+static int lib_close(lib_handle h) { (void)h; return 0; }
 static const char *lib_error(void) {
     static char buf[128];
     snprintf(buf, sizeof(buf), "windows error %lu", (unsigned long)GetLastError());
