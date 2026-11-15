@@ -59,7 +59,7 @@ mise install
 
 # 네이티브 빌드 도구: Ubuntu/Debian
 sudo apt-get update && sudo apt-get install -y build-essential
-# macOS: xcode-select --install      Windows: 64비트 mingw-w64 gcc(예: MSYS2 UCRT64)와 Git Bash
+# macOS: xcode-select --install      Windows: mingw-w64 gcc(x64는 MSYS2 UCRT64, arm64는 CLANGARM64)와 Git Bash
 
 # 테스트와 네이티브 ABI 스모크 테스트 (make가 없는 환경에서도 스크립트로 실행 가능)
 make verify
@@ -78,7 +78,7 @@ make build
 
 [CLIProxyAPI Plugins Store](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store)에 등록되면 호스트의 플러그인 페이지에서 `quota-monitor`를 설치할 수 있습니다. 수동 설치는 [최신 릴리스](https://github.com/dohwi/cliproxyapi-plugin-quota-monitor/releases/latest)에서 `quota-monitor_<version>_<os>_<arch>.zip`과 `checksums.txt`를 받아 `sha256sum -c checksums.txt`(macOS는 `shasum -a 256 -c`)로 확인한 뒤, 라이브러리를 호스트의 플러그인 디렉터리에 풉니다.
 
-모든 릴리스는 스토어가 요구하는 5개 플랫폼을 함께 게시합니다. Release 워크플로는 5개가 모두 빌드되고 네이티브 스모크 테스트를 통과해야만 게시합니다.
+모든 릴리스는 스토어가 요구하는 6개 플랫폼을 함께 게시합니다. Release 워크플로는 6개가 모두 빌드되고 네이티브 스모크 테스트를 통과해야만 게시합니다.
 
 | 플랫폼 | 에셋 | 라이브러리 |
 |---|---|---|
@@ -87,12 +87,13 @@ make build
 | macOS Intel | `quota-monitor_<version>_darwin_amd64.zip` | `quota-monitor.dylib` |
 | macOS Apple silicon | `quota-monitor_<version>_darwin_arm64.zip` | `quota-monitor.dylib` |
 | Windows x64 | `quota-monitor_<version>_windows_amd64.zip` | `quota-monitor.dll` |
+| Windows arm64 | `quota-monitor_<version>_windows_arm64.zip` | `quota-monitor.dll` |
 
 Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)가 필요합니다.
 
 ### 설정
 
-**별도 설정이 필요 없습니다.** 플러그인을 설치하고 대시보드를 열어 CLIProxyAPI 관리 키(관리 페이지에 쓰는 것과 같은 키)로 로그인하세요. 플러그인이 인증된 요청에서 키를 받아 **암호화**(AES-256-GCM)해 저장하고 백그라운드 수집을 시작합니다. 호스트를 재시작해도 스스로 키를 복원합니다.
+**별도 설정이 필요 없습니다.** 플러그인을 설치하고 대시보드를 열어 CLIProxyAPI 관리 키(관리 페이지에 쓰는 것과 같은 키)로 로그인하세요. 플러그인은 인증된 요청에서 키를 받아 **메모리에만** 두고 백그라운드 수집을 시작합니다. 키를 디스크에 쓰지 않으므로, 호스트를 재시작하면 대시보드를 다시 열 때까지(또는 `QUOTA_MONITOR_MGMT_KEY`를 지정할 때까지) 백그라운드 수집이 멈춥니다.
 
 | 항목 | 기본값 | 변경 방법 |
 |---|---|---|
@@ -100,7 +101,7 @@ Linux 빌드는 glibc 2.36 이하(공식 Debian bookworm 이미지)가 필요합
 | 인증 디렉터리 | 호스트 `auth-dir` → `/root/.cli-proxy-api` | 플러그인 설정의 `auth_dir` 또는 `QUOTA_MONITOR_AUTH_DIR` |
 | 백그라운드 수집 끄기 | 꺼짐 | `QUOTA_MONITOR_DISABLE_BACKGROUND=1` |
 
-키 저장 위치는 `<user-config-dir>/cliproxyapi/quota-monitor/`(Linux는 `~/.config/...`) 또는 `QUOTA_MONITOR_DATA_DIR`입니다. 암호화된 키 `mgmt-key.enc`와 무작위 암호화 키 `master.key`가 `0600` 권한으로 저장됩니다. `config.yaml`, 백업, 실수로 한 커밋에 키가 남지 않게 해 주지만, 같은 OS 사용자로 실행되는 다른 프로세스는 두 파일을 모두 읽을 수 있어 막지 못합니다. 키를 잊게 하려면 이 디렉터리를 삭제하세요.
+서버에는 키를 어디에도 저장하지 않습니다. 0.6.2 이전 버전은 암호화한 키를 `<user-config-dir>/cliproxyapi/quota-monitor/` 또는 `QUOTA_MONITOR_DATA_DIR`에 `mgmt-key.enc`, `master.key`로 저장했는데, 0.6.2부터는 플러그인이 로드될 때 이 두 파일을 지웁니다.
 
 로그인했는데도 대시보드가 "관리 키를 확인하는 중입니다"에 머물거나 연결 오류가 나면, 호스트가 기본 포트 `8317`이 아닌 다른 포트를 쓰는 경우입니다. `config.yaml`의 `plugins.configs.quota-monitor`에 `management_url: http://127.0.0.1:<포트>/v0`를 지정하세요(또는 `QUOTA_MONITOR_MGMT_URL`).
 
