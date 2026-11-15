@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	quotamonitor "quota-monitor/internal/quota"
@@ -17,7 +18,7 @@ func refreshSingleAccount(key string) (int, map[string]any) {
 	st.mu.Lock()
 	fail := func(code int, message string) (int, map[string]any) {
 		st.mu.Unlock()
-		return code, map[string]any{"error": message}
+		return code, map[string]any{"error": message, "code": strings.ReplaceAll(message, " ", "_")}
 	}
 	if !st.configured || st.client == nil {
 		return fail(503, "not configured")
@@ -111,7 +112,7 @@ func refreshSingleAccount(key string) (int, map[string]any) {
 	st.mu.Unlock()
 	body := map[string]any{"refreshed": result.err == nil, "count": 1, "generation": result.generation, "reason": result.category, "truncated": result.truncated, "stale": result.err != nil}
 	if result.err != nil {
-		body["error"] = "account refresh failed"
+		body["error"], body["code"] = "account refresh failed", "account_refresh_failed"
 	}
 	return 200, body
 }

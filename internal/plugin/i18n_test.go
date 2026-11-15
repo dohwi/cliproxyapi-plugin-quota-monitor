@@ -9,7 +9,7 @@ import (
 	"quota-monitor/internal/dashboard"
 )
 
-// The dashboard persists the language and theme-mode preferences (localStorage, LANG_KEY and THEME_KEY)
+// The dashboard persists the language and theme-mode preferences (localStorage, LANG_KEY + LANG_HOST_KEY and THEME_KEY)
 // and, for the current tab only, the management key (sessionStorage, KEY_STORAGE). "System" theme follows
 // the host (cli-proxy-theme). It may read, never write, the host's own entries (management key and theme).
 // The management key must never be written to localStorage.
@@ -27,9 +27,13 @@ func TestDashboardStorageContract(t *testing.T) {
 	// The host Management Center's own entries (auth, theme) are read through one reader and never written or
 	// removed here; only the shared language and the theme-mode preference are written.
 	total := strings.Count(html, "localStorage")
-	allowed := regexp.MustCompile(`localStorage\.(?:getItem\((?:LANG_KEY|THEME_KEY|name)\)|setItem\((?:LANG_KEY, lang|THEME_KEY, mode)\))`).FindAllString(html, -1)
-	if total != len(allowed) || total != 5 {
-		t.Fatalf("localStorage references = %d (allowed accessors = %d, want exactly 5)", total, len(allowed))
+	allowed := regexp.MustCompile(`localStorage\.(?:getItem\((?:LANG_KEY|LANG_HOST_KEY|HOST_LANG_KEY|THEME_KEY|name)\)|setItem\((?:LANG_KEY, lang|LANG_HOST_KEY, host|THEME_KEY, mode)\))`).FindAllString(html, -1)
+	if total != len(allowed) || total != 8 {
+		t.Fatalf("localStorage references = %d (allowed accessors = %d, want exactly 8)", total, len(allowed))
+	}
+	// The console's own language entry is read, never written or removed.
+	if regexp.MustCompile(`localStorage\.(?:setItem|removeItem)\(HOST_LANG_KEY`).MatchString(html) || !strings.Contains(html, "var HOST_LANG_KEY = 'cli-proxy-language';") {
+		t.Fatal("host language key must exist and stay read-only")
 	}
 	sessionTotal := strings.Count(html, "sessionStorage")
 	sessionAllowed := regexp.MustCompile(`sessionStorage\.(?:getItem\(KEY_STORAGE\)|setItem\(KEY_STORAGE, key\)|removeItem\(KEY_STORAGE\))`).FindAllString(html, -1)

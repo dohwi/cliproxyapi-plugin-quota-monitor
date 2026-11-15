@@ -20,7 +20,7 @@ Management HTTP access is restricted to loopback URLs; redirects and environment
 
 ## Response hardening
 
-The dashboard page is served with a strict `Content-Security-Policy` (`default-src 'none'`; scripts and styles inline only, fonts/connect `'self'`, framing only by the same origin (the management console embeds the page in an iframe), `base-uri 'none'`, `form-action 'none'`), plus `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `X-Frame-Options: SAMEORIGIN`. Fonts and JSON responses are `nosniff`. The page loads no external origin.
+The dashboard page is served with a strict `Content-Security-Policy` (`default-src 'none'`; inline scripts allowed only by their `sha256` hash (no `'unsafe-inline'` for scripts, no inline event handlers), inline styles only, fonts/connect `'self'`, framing only by the same origin (the management console embeds the page in an iframe), `base-uri 'none'`, `form-action 'none'`), plus `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `X-Frame-Options: SAMEORIGIN`. Fonts and JSON responses are `nosniff`. The page loads no external origin.
 
 ## Data handling
 

@@ -125,10 +125,14 @@ var POLL_MAX_MS = 900000;              // 15m cap
 
 // Req 4: Memoize static provider SVG
 // ── i18n ────────────────────────────────────────────────────────────────────
-// The language preference is the only value this page persists (LANG_KEY). The key is
-// shared with the other CLIProxyAPI plugin dashboards so one choice applies to all of them.
-// Order: saved choice → browser language (ko* → ko, else en) → en.
+// The language preference (LANG_KEY) is shared with the other CLIProxyAPI plugin dashboards so
+// one choice applies to all of them. LANG_HOST_KEY records the console language at the moment
+// LANG_KEY was written, so a later console language change wins over an older plugin choice.
+// Order: console language (if it changed since the saved choice) → saved choice → browser
+// language (ko* → ko, else en) → en. The console's own entry (HOST_LANG_KEY) is never written.
 var LANG_KEY = 'cpa_plugin_lang';
+var LANG_HOST_KEY = 'cpa_plugin_lang_host';
+var HOST_LANG_KEY = 'cli-proxy-language';
 var THEME_KEY = 'cpa_plugin_theme';
 var SUPPORTED_LANGS = ['ko', 'en'];
 var I18N = {
@@ -141,7 +145,7 @@ var I18N = {
     'unconfigured': '관리 키를 확인하는 중입니다. 이 페이지에서 관리 키로 로그인하면 자동으로 설정됩니다',
     'unconfigured.reason': '설정 대기 중: {r}',
     'retry': '다시 시도',
-    'retry.aria': '데이터 다시 시도',
+    'retry.aria': '데이터 갱신 다시 시도',
     'toolbar.aria': '대시보드 컨트롤',
     'filter.provider': '프로바이더',
     'filter.providerAria': 'Provider 필터',
@@ -192,9 +196,23 @@ var I18N = {
     'err.api': 'API 호출 실패 ({s})',
     'err.empty': '데이터 없음',
     'err.timeout': '요청 시간 초과',
-    'stale.failed': '데이터 갱신 실패로 이전 데이터를 표시 중입니다.',
-    'stale.failedDetail': '데이터 갱신 실패로 이전 데이터를 표시 중입니다 ({e})',
-    'stale.failedReason': '데이터 갱신 실패로 이전 데이터를 표시 중입니다. ({e})',
+    'err.network': '서버에 연결할 수 없습니다',
+    'err.unknown': '알 수 없는 오류',
+    'err.management_key_missing': '관리 키가 아직 없습니다. 이 페이지에서 관리 키로 한 번 로그인하세요(또는 QUOTA_MONITOR_MGMT_KEY 설정)',
+    'err.management_url_invalid': '관리 URL이 올바르지 않습니다(루프백 http/https 주소만 허용)',
+    'err.plugin_stopped': '플러그인이 중지되었습니다',
+    'err.not_configured': '설정되지 않았습니다',
+    'err.auth_files_failed': '인증 파일 목록을 가져오지 못했습니다',
+    'err.auth_directory_unavailable': '인증 파일 폴더를 읽을 수 없습니다',
+    'err.usage_unavailable': '최근 사용 기록을 가져오지 못했습니다',
+    'err.canceled': '수집이 취소되었습니다',
+    'err.configuration_changed': '설정이 변경되어 수집을 다시 시작합니다',
+    'err.account_refresh_failed': '계정 갱신에 실패했습니다',
+    'err.refresh_failed': '갱신에 실패했습니다',
+    'err.internal_error': '내부 오류',
+    'stale.failed': '데이터 갱신에 실패해 이전 데이터를 표시 중입니다.',
+    'stale.failedDetail': '데이터 갱신에 실패해 이전 데이터를 표시 중입니다 ({e})',
+    'stale.failedReason': '데이터 갱신에 실패해 이전 데이터를 표시 중입니다. ({e})',
     'stale.unconf': '환경 미설정으로 이전 데이터를 표시 중입니다',
     'stale.unconfDetail': '환경 미설정으로 이전 데이터를 표시 중입니다 ({e})',
     'stale.progress': '데이터 갱신 중입니다. 이전 데이터를 표시 중입니다.',
@@ -338,6 +356,20 @@ var I18N = {
     'err.api': 'API request failed ({s})',
     'err.empty': 'No data',
     'err.timeout': 'Request timed out',
+    'err.network': 'Cannot reach the server',
+    'err.unknown': 'Unknown error',
+    'err.management_key_missing': 'Management key not available yet: sign in on this page with the management key once (or set QUOTA_MONITOR_MGMT_KEY)',
+    'err.management_url_invalid': 'The management URL is invalid (only loopback http/https addresses are allowed)',
+    'err.plugin_stopped': 'The plugin was stopped',
+    'err.not_configured': 'Not configured',
+    'err.auth_files_failed': 'Could not list the auth files',
+    'err.auth_directory_unavailable': 'Cannot read the auth files directory',
+    'err.usage_unavailable': 'Could not read recent usage',
+    'err.canceled': 'Collection was canceled',
+    'err.configuration_changed': 'Settings changed; collection restarts',
+    'err.account_refresh_failed': 'Account refresh failed',
+    'err.refresh_failed': 'Refresh failed',
+    'err.internal_error': 'Internal error',
     'stale.failed': 'Refresh failed. Showing previous data.',
     'stale.failedDetail': 'Refresh failed. Showing previous data ({e})',
     'stale.failedReason': 'Refresh failed. Showing previous data. ({e})',
@@ -437,11 +469,44 @@ function normalizeLang(value) {
 function readStoredLang() {
   try { return normalizeLang(localStorage.getItem(LANG_KEY)); } catch (e) { return null; }
 }
-function writeStoredLang(lang) {
-  try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+function readLangHost() {
+  try { return localStorage.getItem(LANG_HOST_KEY) || ''; } catch (e) { return ''; }
 }
+// Only the shared plugin entries are written; the host's own HOST_LANG_KEY is read-only here.
+function writeLangPrefs(lang, host) {
+  try { localStorage.setItem(LANG_KEY, lang); localStorage.setItem(LANG_HOST_KEY, host); } catch (e) {}
+}
+function writeStoredLang(lang) {
+  writeLangPrefs(lang, hostLangRaw());
+}
+// The console's language: the same-origin parent's <html lang>, else its persisted store
+// (zustand JSON {"state":{"language":"ko"}} or, in older builds, the bare string), else ''.
+function hostLangRaw() {
+  try {
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      var attr = window.parent.document.documentElement.getAttribute('lang');
+      if (attr) return String(attr);
+    }
+  } catch (e) {} // cross-origin parent
+  try {
+    var raw = localStorage.getItem(HOST_LANG_KEY);
+    if (!raw) return '';
+    var value = raw;
+    try {
+      var parsed = JSON.parse(raw);
+      value = parsed && typeof parsed === 'object' ? ((parsed.state && parsed.state.language) || parsed.language || '') : parsed;
+    } catch (e) {}
+    return typeof value === 'string' ? value : '';
+  } catch (e) { return ''; }
+}
+function uiLang(raw) {
+  if (!raw) return '';
+  return /^ko\b/i.test(String(raw)) ? 'ko' : 'en';
+}
+// "Last action wins": a host language the stored choice was not made under overrides it.
 function detectLang() {
-  var stored = readStoredLang();
+  var host = hostLangRaw(), stored = readStoredLang();
+  if (host && (!stored || readLangHost() !== host)) return uiLang(host);
   if (stored) return stored;
   try {
     var nav = typeof navigator !== 'undefined' ? navigator : null;
@@ -457,8 +522,25 @@ function t(key, params) {
   var s = table[key];
   if (s == null) s = I18N.ko[key];
   if (s == null) return key;
-  if (params) s = s.replace(/\{(\w+)\}/g, function(m, k) { return params[k] != null ? String(params[k]) : m; });
+  // A function param is resolved at render time, so text kept for a later language
+  // switch (setI18nText) re-translates server reasons too.
+  if (params) s = s.replace(/\{(\w+)\}/g, function(m, k) { var v = typeof params[k] === 'function' ? params[k]() : params[k]; return v != null ? String(v) : m; });
   return s;
+}
+// Server errors carry a stable snake_case code next to the English message. Known codes
+// are shown from the dictionary (err.<code>); anything else falls back to the raw text.
+function errKey(code) {
+  var c = String(code || '');
+  return /^[a-z][a-z0-9_]*$/.test(c) && Object.prototype.hasOwnProperty.call(I18N.ko, 'err.' + c) ? 'err.' + c : '';
+}
+function serverText(code, message) {
+  var key = errKey(code) || errKey(message);
+  if (key) return t(key);
+  return message ? String(message) : String(code || '');
+}
+// A response's reason: reason_code (stable) when present, else reason (a code or a message).
+function reasonText(data) {
+  return function() { return serverText(data && data.reason_code, data && data.reason); };
 }
 // Count-aware lookup: English has a '.one' variant where grammar needs it.
 function tn(key, n, params) {
@@ -489,7 +571,7 @@ function applyStaticI18n() {
     var trigger = document.getElementById(select.id + 'Trigger');
     if (trigger) trigger.setAttribute('aria-label', select.getAttribute('aria-label') || '');
   });
-  ['staleNoticeText', 'unconfiguredText'].forEach(function(id) {
+  ['staleNoticeText', 'unconfiguredText', 'errorText'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el && el._i18n) el.textContent = t(el._i18n.key, el._i18n.params);
   });
@@ -616,10 +698,29 @@ function initLanguageControls() {
   // Another plugin dashboard (or tab) changed the shared language: follow it.
   if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('storage', function(e) {
-      if (e && e.key === LANG_KEY) setLanguage(e.newValue, true);
+      if (!e) return;
+      if (e.key === LANG_KEY) setLanguage(e.newValue, true);
+      else if (e.key === HOST_LANG_KEY) followHostLang();
     });
+    // The console switched its language while this page is open (same-origin parent).
+    try {
+      if (window.parent && window.parent !== window && typeof MutationObserver !== 'undefined') {
+        new MutationObserver(followHostLang).observe(window.parent.document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+      }
+    } catch (e) {}
   }
   applyStaticI18n();
+}
+// The console language changed: it wins over any earlier plugin choice. Writing the shared
+// LANG_KEY lets other open plugin pages follow too.
+var lastHostLang = hostLangRaw();
+function followHostLang() {
+  var h = hostLangRaw();
+  if (!h || h === lastHostLang) return;
+  lastHostLang = h;
+  var next = uiLang(h);
+  writeLangPrefs(next, h);
+  setLanguage(next, true);
 }
 
 var _iconCache = {};
@@ -924,12 +1025,14 @@ function sortAccountsByEndpoint(accounts) {
   return arr;
 }
 
-function showError(msg) {
+// key/params are kept on the text node so a later language switch re-translates it.
+function showError(key, params) {
   var el = document.getElementById('errorBox');
   if (!el) return;
   el.innerHTML = '';
   var span = document.createElement('span');
-  span.textContent = msg || t('err.noData');
+  span.id = 'errorText';
+  setI18nText(span, key || 'err.noData', params);
   el.appendChild(span);
   var btn = document.createElement('button');
   btn.type = 'button';
@@ -940,6 +1043,15 @@ function showError(msg) {
   btn.onclick = function() { loadDashboard(false); };
   el.appendChild(btn);
   el.style.display = 'block';
+}
+
+// Fetch failures: a timeout, an HTTP status, or a network error; never a raw browser message
+// when a translated one exists.
+function fetchErrorText(err) {
+  if (err && err.name === 'AbortError') return t('err.timeout');
+  if (err && err.status) return t('err.api', { s: err.status });
+  if (err && err.name === 'TypeError') return t('err.network');
+  return err && err.message ? String(err.message) : t('err.unknown');
 }
 
 function clearError() {
@@ -1446,7 +1558,7 @@ function loadDashboard(isInitial) {
       }
       applyFilters();
     } else {
-      showError(t('err.load', { e: errText || 'unknown' }));
+      showError('err.load', { e: errText || function() { return t('err.unknown'); } });
       renderAccounts([]);
     }
     scheduleNextPoll(POLL_FALLBACK_STALE_MS);
@@ -1456,12 +1568,12 @@ function loadDashboard(isInitial) {
     .then(function(res) {
       clearFetchTimer();
       if (res.status === 401 || res.status === 403) throw authError();
-      if (!res.ok) throw new Error(t('err.api', { s: res.status }));
+      if (!res.ok) { var apiErr = new Error('api'); apiErr.status = res.status; throw apiErr; }
       return res.json().then(function(data) { noteKeyAccepted(); return data; });
     })
     .then(function(data) {
       if (!data) {
-        handleFailure(t('err.empty'));
+        handleFailure(function() { return t('err.empty'); });
         return null;
       }
       // Resource data is deliberately snapshot-only. The first privileged
@@ -1480,7 +1592,7 @@ function loadDashboard(isInitial) {
       var unconfBox = document.getElementById('unconfiguredBox');
       var unconfText = document.getElementById('unconfiguredText');
       if (data.configured === false) {
-        if (unconfText) setI18nText(unconfText, data.reason ? 'unconfigured.reason' : 'unconfigured', { r: data.reason });
+        if (unconfText) setI18nText(unconfText, data.reason ? 'unconfigured.reason' : 'unconfigured', { r: reasonText(data) });
         if (unconfBox) unconfBox.style.display = 'block';
 
         if (cachedAccounts.length > 0) {
@@ -1488,7 +1600,7 @@ function loadDashboard(isInitial) {
           var staleBox = document.getElementById('staleNoticeBox');
           var staleText = document.getElementById('staleNoticeText');
           if (staleBox) {
-            if (staleText) setI18nText(staleText, data.reason ? 'stale.unconfDetail' : 'stale.unconf', { e: data.reason });
+            if (staleText) setI18nText(staleText, data.reason ? 'stale.unconfDetail' : 'stale.unconf', { e: reasonText(data) });
             staleBox.style.display = 'flex';
           }
           applyFilters();
@@ -1502,7 +1614,7 @@ function loadDashboard(isInitial) {
       }
 
       if (data.error) {
-        handleFailure(data.error);
+        handleFailure(function() { return serverText(data.code, data.error); });
         return;
       }
 
@@ -1556,7 +1668,7 @@ function loadDashboard(isInitial) {
         if (isRealFailure) {
           var sText = document.getElementById('staleNoticeText');
           var showReason = data.reason && data.reason !== 'cache_expired';
-          if (sText) setI18nText(sText, showReason ? 'stale.failedReason' : 'stale.failed', { e: data.reason });
+          if (sText) setI18nText(sText, showReason ? 'stale.failedReason' : 'stale.failed', { e: reasonText(data) });
           sBox.style.display = 'flex';
         } else {
           sBox.style.display = 'none';
@@ -1577,8 +1689,7 @@ function loadDashboard(isInitial) {
       clearFetchTimer();
       if (err && err.authRequired) { dropKeyAndPrompt(); return; }
       if (requestEpoch !== snapshotEpoch) { scheduleNextPoll(POLL_IN_PROGRESS_MS); return; }
-      var msg = err && err.message ? err.message : (err && err.name === 'AbortError' ? t('err.timeout') : 'unknown');
-      handleFailure(msg);
+      handleFailure(function() { return fetchErrorText(err); });
     })
     .finally(function() {
       finishFetch();
@@ -2313,6 +2424,9 @@ document.addEventListener('DOMContentLoaded', function() {
   initLoadingState();
   initFilterControls();
   initManualRefreshControls();
+  // Bound here, not with an inline onclick: the CSP allows only hashed script blocks.
+  var staleRetry = document.getElementById('staleRetryBtn');
+  if (staleRetry && staleRetry.addEventListener) staleRetry.addEventListener('click', function() { loadDashboard(false); });
   startResetCountdownTick();
 
   document.addEventListener('visibilitychange', function() {
