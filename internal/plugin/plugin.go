@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -27,7 +28,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.4.10"
+	pluginVersion             = "0.5.0"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -439,13 +440,15 @@ func startCollectorLocked() {
 }
 
 func runBackgroundCollector(ctx context.Context, expectedGen uint64, done chan struct{}) {
+	// done is closed even after a panic, so Shutdown/reconfigure never hang on it.
 	defer close(done)
+	defer recoverLog("background collector")
 
 	// Immediate complete collection on startup
 	if ctx.Err() != nil {
 		return
 	}
-	success := executeBackgroundCollection(ctx, expectedGen)
+	success := safeBackgroundCollection(ctx, expectedGen)
 	callTestCollectorHook(expectedGen, success)
 
 	for {
@@ -469,9 +472,16 @@ func runBackgroundCollector(ctx context.Context, expectedGen uint64, done chan s
 			return
 		}
 
-		success = executeBackgroundCollection(ctx, expectedGen)
+		success = safeBackgroundCollection(ctx, expectedGen)
 		callTestCollectorHook(expectedGen, success)
 	}
+}
+
+// safeBackgroundCollection keeps the collector loop alive when one round
+// panics; the round counts as a failure and is retried after the backoff.
+func safeBackgroundCollection(ctx context.Context, expectedGen uint64) (ok bool) {
+	defer recoverLog("background collection")
+	return executeBackgroundCollection(ctx, expectedGen)
 }
 
 func executeBackgroundCollection(ctx context.Context, expectedGen uint64) bool {
@@ -488,6 +498,36 @@ func executeBackgroundCollection(ctx context.Context, expectedGen uint64) bool {
 
 const missingKeyReason = "Management key not available yet: open this dashboard and sign in with the management key once (or set QUOTA_MONITOR_MGMT_KEY)"
 
+const pluginStoppedReason = "plugin stopped"
+
+// errorBody is the JSON error shape: the human English message stays in "error"
+// (existing clients read it) and "code" is a stable snake_case key the dashboard
+// translates.
+func errorBody(code, message string) map[string]string {
+	return map[string]string{"error": message, "code": code}
+}
+
+var snakeCode = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// reasonCode maps a snapshot reason (a collection category or a configuration
+// message) to a stable code. Categories already are codes. The "reason" field
+// itself keeps its old value for existing API clients.
+func reasonCode(reason string) string {
+	switch {
+	case reason == "":
+		return ""
+	case reason == missingKeyReason:
+		return "management_key_missing"
+	case reason == pluginStoppedReason:
+		return "plugin_stopped"
+	case strings.HasPrefix(reason, "management URL"):
+		return "management_url_invalid"
+	case snakeCode.MatchString(reason):
+		return reason
+	}
+	return "" // unknown free text: the dashboard shows the message itself
+}
+
 var state = &stateData{reason: missingKeyReason, probeDue: make(map[string]time.Time), current: make(map[string]currentChoice)}
 
 func Shutdown() {
@@ -503,7 +543,7 @@ func Shutdown() {
 	st.snapshotComplete = false
 	st.inProgress = false
 	st.progress = collectionProgress{}
-	st.reason = "plugin stopped"
+	st.reason = pluginStoppedReason
 	if st.client != nil {
 		st.client.CloseIdleConnections()
 	}
@@ -769,8 +809,14 @@ const resourceBase = "/v0/resource/plugins/quota-monitor"
 var resourceDashboard = resourceRoute{
 	Path:        "/dashboard",
 	Menu:        "Quota Monitor", // matches the plugin store name; the host registers it once, so it cannot follow the page language
-	Description: "OAuth 계정별 남은 쿼터 및 상태 모니터",
+	Description: resourceDescription,
 }
+
+// resourceDescription is shown verbatim by the host as the collapsed-sidebar
+// tooltip. It is one plain string registered once at host start, with no locale
+// support (upstream issue #4485 was closed "not planned"), so it carries English
+// first, then Korean.
+const resourceDescription = "Remaining quota and status per OAuth account · OAuth 계정별 남은 쿼터·상태"
 
 // /v0/resource/... is unauthenticated, so it only serves the static page shell and
 // fonts. Quota data and the refresh action live under /v0/management/....
@@ -1085,7 +1131,7 @@ type managementResponse struct {
 func handleManagementHandle(raw []byte) []byte {
 	var req managementRequest
 	if json.Unmarshal(raw, &req) != nil {
-		return mgmtResponse(400, map[string]string{"error": "bad request"})
+		return mgmtResponse(400, errorBody("bad_request", "bad request"))
 	}
 	method, path := strings.ToUpper(strings.TrimSpace(req.Method)), strings.TrimRight(strings.TrimSpace(req.Path), "/")
 	// Only /v0/management/... requests are authenticated by the host, so only
@@ -1104,11 +1150,11 @@ func handleManagementHandle(raw []byte) []byte {
 		// cooldown; it requires a confirmation query so a stray call never fans out
 		// upstream work. Snapshot GETs remain read-only.
 		if values := req.Query["confirm"]; len(values) != 1 || values[0] != "1" {
-			return mgmtResponseNoStore(400, map[string]string{"error": "explicit confirmation required"})
+			return mgmtResponseNoStore(400, errorBody("confirmation_required", "explicit confirmation required"))
 		}
 		if values, present := req.Query["account_key"]; present {
 			if len(values) != 1 || strings.TrimSpace(values[0]) == "" || len(values[0]) > 512 {
-				return mgmtResponseNoStore(400, map[string]string{"error": "invalid account key"})
+				return mgmtResponseNoStore(400, errorBody("invalid_account_key", "invalid account key"))
 			}
 			code, body := refreshSingleAccount(values[0])
 			return mgmtResponseNoStore(code, body)
@@ -1120,14 +1166,14 @@ func handleManagementHandle(raw []byte) []byte {
 		at := now()
 		if !st.lastResourceRefreshAt.IsZero() && at.Sub(st.lastResourceRefreshAt) < forceCooldown {
 			st.mu.Unlock()
-			return mgmtResponseNoStore(429, map[string]string{"error": "refresh cooldown"})
+			return mgmtResponseNoStore(429, errorBody("refresh_cooldown", "refresh cooldown"))
 		}
 		st.lastResourceRefreshAt = at
 		st.mu.Unlock()
 		result, _ := collectManagementSnapshot(true)
 		body := map[string]any{"refreshed": result.err == nil, "count": len(result.accounts), "stale": result.stale, "generation": result.generation, "truncated": result.truncated, "reason": result.category}
 		if result.err != nil {
-			body["error"] = "refresh failed"
+			body["error"], body["code"] = "refresh failed", "refresh_failed"
 		}
 		return mgmtResponseNoStore(200, body)
 	}
@@ -1135,7 +1181,7 @@ func handleManagementHandle(raw []byte) []byte {
 	if method == "POST" && path == mgmtBase+"/refresh" {
 		if values, present := req.Query["account_key"]; present {
 			if len(values) != 1 || strings.TrimSpace(values[0]) == "" || len(values[0]) > 512 {
-				return mgmtResponse(400, map[string]string{"error": "invalid account key"})
+				return mgmtResponse(400, errorBody("invalid_account_key", "invalid account key"))
 			}
 			code, body := refreshSingleAccount(values[0])
 			return mgmtResponse(code, body)
@@ -1143,12 +1189,12 @@ func handleManagementHandle(raw []byte) []byte {
 		result, _ := collectManagementSnapshot(true)
 		body := map[string]any{"refreshed": result.err == nil, "count": len(result.accounts), "stale": result.stale, "generation": result.generation, "truncated": result.truncated, "reason": result.category}
 		if result.err != nil {
-			body["error"] = "refresh failed"
+			body["error"], body["code"] = "refresh failed", "refresh_failed"
 		}
 		return mgmtResponse(200, body)
 	}
 	if method != "GET" {
-		return mgmtResponse(404, map[string]string{"error": "not found"})
+		return mgmtResponse(404, errorBody("not_found", "not found"))
 	}
 	switch path {
 	// Dashboard is reachable both as a management API route and as a
@@ -1169,9 +1215,9 @@ func handleManagementHandle(raw []byte) []byte {
 			shouldWarm := st.configured && len(st.last) == 0 && st.flight == nil
 			st.mu.Unlock()
 			if shouldWarm {
-				go func() {
+				safeGo("dashboard warm-up", func() {
 					_ = collectManagement(false)
-				}()
+				})
 			}
 		}
 		return dashboardResponse()
@@ -1180,7 +1226,7 @@ func handleManagementHandle(raw []byte) []byte {
 		configured, _ := body["configured"].(bool)
 		body["configured"], body["accounts"], body["stale"] = configured, len(result.accounts), result.stale
 		if result.err != nil {
-			body["reason"] = "quota lookup failed"
+			body["reason"], body["reason_code"] = "quota lookup failed", result.category
 		}
 		if len(result.accounts) > 0 {
 			body["count"] = len(result.accounts)
@@ -1193,14 +1239,14 @@ func handleManagementHandle(raw []byte) []byte {
 		// Management API retains its authenticated contract, including internal auth_index fields.
 		body := map[string]any{"configured": configured, "accounts": result.accounts, "stale": result.stale, "generation": result.generation, "truncated": result.truncated, "availability": availability.Compute(result.accounts), "overview": snapshot["overview"]}
 		if reason != "" {
-			body["reason"] = reason
+			body["reason"], body["reason_code"] = reason, reasonCode(reason)
 		}
 		if result.err != nil {
-			body["reason"] = result.category
+			body["reason"], body["reason_code"] = result.category, result.category
 		}
 		return mgmtResponse(200, body)
 	default:
-		return mgmtResponse(404, map[string]string{"error": "not found"})
+		return mgmtResponse(404, errorBody("not_found", "not found"))
 	}
 }
 
@@ -1261,6 +1307,7 @@ func resourceSnapshot() map[string]any {
 	body := map[string]any{
 		"configured":             configured,
 		"reason":                 reason,
+		"reason_code":            reasonCode(reason),
 		"accounts":               sanitizeAccountsWithSelection(accounts, current),
 		"availability":           availability.Compute(accounts),
 		"overview":               overview.Build(accounts, stale),
@@ -1494,7 +1541,7 @@ func collectAccounts(ctx context.Context, force bool) collectionResult {
 
 	started := time.Now()
 	defer cancel()
-	result, attempts := runCollection(workCtx, client, resolver, previous, due, force, publishBaseline, publishAccount)
+	result, attempts := runCollectionSafe(workCtx, client, resolver, previous, due, force, publishBaseline, publishAccount)
 	result.generation = generation
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -1551,6 +1598,20 @@ func collectAccounts(ctx context.Context, force bool) collectionResult {
 	}
 	close(flight.done)
 	return copyResult(result)
+}
+
+// runCollectionSafe turns a panic during collection into a failed result, so the
+// caller still finalizes and releases the flight instead of leaving every later
+// collection waiting on a flight that never completes.
+func runCollectionSafe(ctx context.Context, client *quotamonitor.Client, resolver *authdir.Resolver, previous []quotamonitor.AccountQuota, due map[string]time.Time, force bool, onBaseline func([]quotamonitor.AccountQuota, int), onAccount func(quotamonitor.AccountQuota)) (result collectionResult, attempts map[string]probeSchedule) {
+	defer func() {
+		if v := recover(); v != nil {
+			logPanic("collection", v)
+			result = collectionResult{stale: true, err: errors.New("collection failed"), category: "internal_error"}
+			attempts = nil
+		}
+	}()
+	return runCollection(ctx, client, resolver, previous, due, force, onBaseline, onAccount)
 }
 
 func runCollection(ctx context.Context, client *quotamonitor.Client, resolver *authdir.Resolver, previous []quotamonitor.AccountQuota, due map[string]time.Time, force bool, onBaseline func([]quotamonitor.AccountQuota, int), onAccount func(quotamonitor.AccountQuota)) (collectionResult, map[string]probeSchedule) {
@@ -1757,6 +1818,117 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 	var wg sync.WaitGroup
 	var mu sync.Mutex // attempts and shared optional-detail budget only
 	detailJobs := 0
+	// probeJob probes one account. A panic inside it is recovered per job, so the
+	// worker keeps draining jobs (the enqueue loop never blocks on dead workers)
+	// and the collection completes; that account keeps its last-good values.
+	probeJob := func(i int) {
+		defer recoverLog("collection worker")
+		a := &accounts[i] // unique index per job; no shared account writes
+		attempt := probeSchedule{LastAttempt: now()}
+		probeCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
+		defer cancel() // also on panic; the explicit cancel below ends the probe early
+		var wins []quotamonitor.QuotaWindow
+		var err error
+		if strings.EqualFold(a.Provider, "codex") {
+			var plan string
+			var api *quotamonitor.APICredits
+			var reset *quotamonitor.ResetCredits
+			wins, plan, api, reset, err = client.FetchCodexUsage(probeCtx, *a)
+			if plan != "" {
+				a.PlanType = plan
+			}
+			if api != nil {
+				a.APICredits = mergeAPICredits(a.APICredits, api)
+			}
+			if reset != nil {
+				a.ResetCredits = mergeResetCredits(a.ResetCredits, reset)
+			}
+		} else if strings.EqualFold(a.Provider, "claude") {
+			var reset *quotamonitor.ResetCredits
+			wins, reset, err = client.FetchClaudeUsage(probeCtx, *a)
+			if err == nil {
+				// Claude inventory is a complete snapshot, not partial WHAM
+				// enrichment. Unknown inventory must not reconfirm old rights;
+				// failed/skipped probes still retain last-good data as stale.
+				a.ResetCredits = mergeResetCredits(nil, reset)
+			}
+		} else {
+			wins, err = client.FetchActiveQuota(probeCtx, *a)
+		}
+		cancel()
+		if err == nil && len(wins) > 0 {
+			attempt.LastSuccess = now()
+			anchorWindowResets(wins, attempt.LastSuccess)
+			a.Windows = mergeWindows(a.Windows, wins)
+			a.Source, a.Status = "active", quotamonitor.StatusKnown
+			a.LastSuccessAt = clonePtr(&attempt.LastSuccess)
+			a.ObservedAt = clonePtr(&attempt.LastSuccess)
+			a.FetchedAt = attempt.LastSuccess
+			a.Stale, a.Error, a.ErrorKind, a.RetryAfter = false, "", "", nil
+			if a.Operational != nil {
+				hasAvailableQuota := false
+				isExhausted := false
+				for _, w := range a.Windows {
+					if strings.EqualFold(a.Provider, "claude") && isClaudeBillingWindow(w) {
+						continue
+					}
+					if w.RemainingPercent != nil && *w.RemainingPercent > 0 {
+						hasAvailableQuota = true
+					}
+					if (w.LimitReached != nil && *w.LimitReached) ||
+						(w.Allowed != nil && !*w.Allowed) ||
+						(w.UsedPercent != nil && *w.UsedPercent >= 100) ||
+						(w.RemainingPercent != nil && *w.RemainingPercent <= 0) {
+						isExhausted = true
+					}
+				}
+				if hasAvailableQuota && !isExhausted {
+					f := false
+					a.Operational.Unavailable = &f
+					a.Operational.Status = "active"
+					a.Operational.NextRetryAfter = nil
+				}
+			}
+		} else {
+			a.ErrorKind = "active"
+			var ae *quotamonitor.APICallError
+			if errors.As(err, &ae) && ae.Kind == "auth" {
+				a.ErrorKind = "auth"
+			}
+			// Account-local failure: keep last-good values and mark only this
+			// account stale/error. No global or sibling stale propagation.
+			if len(a.Windows) > 0 || a.LastSuccessAt != nil {
+				a.Status, a.Stale, a.Error = quotamonitor.StatusStale, true, "quota lookup failed"
+			} else {
+				a.Status, a.Error = quotamonitor.StatusError, "quota lookup failed"
+			}
+		}
+		detail := !attempt.LastSuccess.IsZero() && ctx.Err() == nil && strings.EqualFold(a.Provider, "codex") && a.ResetCredits != nil && a.ResetCredits.AvailableCount != nil && *a.ResetCredits.AvailableCount > 0
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			attempts[a.AccountKey] = attempt
+			if detail {
+				if detailJobs < maxResetDetailJobs {
+					detailJobs++
+				} else {
+					detail = false
+					truncated = true
+				}
+			}
+		}()
+		if detail {
+			detailCtx, detailCancel := context.WithTimeout(ctx, fetchTimeout)
+			expiry, detailErr := client.FetchCodexResetCreditsExpiry(detailCtx, *a)
+			detailCancel()
+			if detailErr == nil && expiry != nil {
+				a.ResetCredits.NearestExpiry = expiry
+			}
+		}
+		if onAccount != nil {
+			onAccount(*a)
+		}
+	}
 	for worker := 0; worker < collectionWorkers; worker++ {
 		wg.Add(1)
 		go func() {
@@ -1769,108 +1941,7 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 					if !ok || ctx.Err() != nil {
 						return
 					}
-					a := &accounts[i] // unique index per job; no shared account writes
-					attempt := probeSchedule{LastAttempt: now()}
-					probeCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
-					var wins []quotamonitor.QuotaWindow
-					var err error
-					if strings.EqualFold(a.Provider, "codex") {
-						var plan string
-						var api *quotamonitor.APICredits
-						var reset *quotamonitor.ResetCredits
-						wins, plan, api, reset, err = client.FetchCodexUsage(probeCtx, *a)
-						if plan != "" {
-							a.PlanType = plan
-						}
-						if api != nil {
-							a.APICredits = mergeAPICredits(a.APICredits, api)
-						}
-						if reset != nil {
-							a.ResetCredits = mergeResetCredits(a.ResetCredits, reset)
-						}
-					} else if strings.EqualFold(a.Provider, "claude") {
-						var reset *quotamonitor.ResetCredits
-						wins, reset, err = client.FetchClaudeUsage(probeCtx, *a)
-						if err == nil {
-							// Claude inventory is a complete snapshot, not partial WHAM
-							// enrichment. Unknown inventory must not reconfirm old rights;
-							// failed/skipped probes still retain last-good data as stale.
-							a.ResetCredits = mergeResetCredits(nil, reset)
-						}
-					} else {
-						wins, err = client.FetchActiveQuota(probeCtx, *a)
-					}
-					cancel()
-					if err == nil && len(wins) > 0 {
-						attempt.LastSuccess = now()
-						anchorWindowResets(wins, attempt.LastSuccess)
-						a.Windows = mergeWindows(a.Windows, wins)
-						a.Source, a.Status = "active", quotamonitor.StatusKnown
-						a.LastSuccessAt = clonePtr(&attempt.LastSuccess)
-						a.ObservedAt = clonePtr(&attempt.LastSuccess)
-						a.FetchedAt = attempt.LastSuccess
-						a.Stale, a.Error, a.ErrorKind, a.RetryAfter = false, "", "", nil
-						if a.Operational != nil {
-							hasAvailableQuota := false
-							isExhausted := false
-							for _, w := range a.Windows {
-								if strings.EqualFold(a.Provider, "claude") && isClaudeBillingWindow(w) {
-									continue
-								}
-								if w.RemainingPercent != nil && *w.RemainingPercent > 0 {
-									hasAvailableQuota = true
-								}
-								if (w.LimitReached != nil && *w.LimitReached) ||
-									(w.Allowed != nil && !*w.Allowed) ||
-									(w.UsedPercent != nil && *w.UsedPercent >= 100) ||
-									(w.RemainingPercent != nil && *w.RemainingPercent <= 0) {
-									isExhausted = true
-								}
-							}
-							if hasAvailableQuota && !isExhausted {
-								f := false
-								a.Operational.Unavailable = &f
-								a.Operational.Status = "active"
-								a.Operational.NextRetryAfter = nil
-							}
-						}
-					} else {
-						a.ErrorKind = "active"
-						var ae *quotamonitor.APICallError
-						if errors.As(err, &ae) && ae.Kind == "auth" {
-							a.ErrorKind = "auth"
-						}
-						// Account-local failure: keep last-good values and mark only this
-						// account stale/error. No global or sibling stale propagation.
-						if len(a.Windows) > 0 || a.LastSuccessAt != nil {
-							a.Status, a.Stale, a.Error = quotamonitor.StatusStale, true, "quota lookup failed"
-						} else {
-							a.Status, a.Error = quotamonitor.StatusError, "quota lookup failed"
-						}
-					}
-					mu.Lock()
-					attempts[a.AccountKey] = attempt
-					detail := !attempt.LastSuccess.IsZero() && ctx.Err() == nil && strings.EqualFold(a.Provider, "codex") && a.ResetCredits != nil && a.ResetCredits.AvailableCount != nil && *a.ResetCredits.AvailableCount > 0
-					if detail {
-						if detailJobs < maxResetDetailJobs {
-							detailJobs++
-						} else {
-							detail = false
-							truncated = true
-						}
-					}
-					mu.Unlock()
-					if detail {
-						detailCtx, detailCancel := context.WithTimeout(ctx, fetchTimeout)
-						expiry, detailErr := client.FetchCodexResetCreditsExpiry(detailCtx, *a)
-						detailCancel()
-						if detailErr == nil && expiry != nil {
-							a.ResetCredits.NearestExpiry = expiry
-						}
-					}
-					if onAccount != nil {
-						onAccount(*a)
-					}
+					probeJob(i)
 				}
 			}
 		}()
@@ -2347,7 +2418,7 @@ func mgmtResponseNoStore(status int, body any) []byte {
 func mgmtResponseWithCache(status int, body any, noStore bool) []byte {
 	b, err := marshalJSON(body)
 	if err != nil {
-		b = []byte(`{"error":"response encoding failed"}`)
+		b = []byte(`{"error":"response encoding failed","code":"internal_error"}`)
 	}
 	headers := map[string][]string{"Content-Type": {"application/json"}, "X-Content-Type-Options": {"nosniff"}}
 	if noStore {
@@ -2357,11 +2428,14 @@ func mgmtResponseWithCache(status int, body any, noStore bool) []byte {
 }
 
 // dashboardSecurityHeaders hardens the self-contained page. The page is a single
-// HTML document with inline script/style, so script-src must allow 'unsafe-inline';
-// everything else is locked down: no external origins, framing only by the same origin (the management console embeds this page), no sniffing,
-// no referrer, no base-tag or form-target hijacking.
+// HTML document with inline scripts: script-src allows exactly those blocks by
+// their sha256 hash (no 'unsafe-inline', no inline event handlers). style-src keeps
+// 'unsafe-inline' because the page uses style attributes. Everything else is
+// locked down: no external origins, framing only by the same origin (the
+// management console embeds this page), no sniffing, no referrer, no base-tag or
+// form-target hijacking.
 var dashboardSecurityHeaders = map[string][]string{
-	"Content-Security-Policy": {"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"},
+	"Content-Security-Policy": {"default-src 'none'; script-src " + dashboard.ScriptSources + "; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"},
 	"X-Content-Type-Options":  {"nosniff"},
 	"Referrer-Policy":         {"no-referrer"},
 	"X-Frame-Options":         {"SAMEORIGIN"},
@@ -2373,7 +2447,7 @@ var (
 )
 
 // dashboardResponse returns the fully encoded dashboard envelope. The page body,
-// status and headers are compile-time constants (embedded assets, static CSP):
+// status and headers are compile-time constants (embedded assets, CSP hashed from them):
 // nothing in the response depends on the request, language, key or plugin
 // state, so it is built once. The result is read-only; HandleMethod's caller
 // copies it into C memory and must never mutate it.

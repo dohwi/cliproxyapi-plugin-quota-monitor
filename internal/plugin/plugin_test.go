@@ -284,7 +284,7 @@ func TestRoutesAndMetadata(t *testing.T) {
 		t.Fatalf("expected dashboard plus three hidden font resources, got %d: %s", len(menuEnv.Result.Resources), s)
 	}
 	res := menuEnv.Result.Resources[0]
-	if res.Path != "/dashboard" || res.Menu != "Quota Monitor" || res.Description != "OAuth 계정별 남은 쿼터 및 상태 모니터" {
+	if res.Path != "/dashboard" || res.Menu != "Quota Monitor" || res.Description != "Remaining quota and status per OAuth account · OAuth 계정별 남은 쿼터·상태" {
 		t.Fatalf("unexpected dashboard resource: %#v", res)
 	}
 	for _, want := range []string{"/assets/manrope-variable.woff2", "/assets/suit-regular.woff2", "/assets/suit-semibold.woff2"} {
@@ -335,7 +335,7 @@ func TestDashboardHTMLFeatures(t *testing.T) {
 	// - compact numeric quota percentages
 	// - single accounts fetch only
 	for _, required := range []string{
-		"<title>계정별 남은 쿼터</title>",
+		"<title>Remaining quota by account</title>",
 		`<h1 data-i18n="page.heading">계정 쿼터</h1>`,
 		"전체",
 		"Active",
@@ -2010,7 +2010,7 @@ assert(html.indexOf('refreshAllAccounts') !== -1, 'explicit refresh action prese
 // No auto-refresh interval select.
 assert(html.indexOf('autoRefreshSelect') === -1, 'autoRefreshSelect must be absent');
 // localStorage: language and theme-mode preferences, plus read-only access to the host's own entries.
-assert((html.match(/localStorage/g)||[]).length === (html.match(/localStorage\.(?:getItem\((?:LANG_KEY|THEME_KEY|name)\)|setItem\((?:LANG_KEY, lang|THEME_KEY, mode)\))/g)||[]).length, 'localStorage only for language/theme prefs and read-only host entries');
+assert((html.match(/localStorage/g)||[]).length === (html.match(/localStorage\.(?:getItem\((?:LANG_KEY|LANG_HOST_KEY|HOST_LANG_KEY|THEME_KEY|name)\)|setItem\((?:LANG_KEY, lang|LANG_HOST_KEY, host|THEME_KEY, mode)\))/g)||[]).length, 'localStorage only for language/theme prefs and read-only host entries');
 // Keep the compact toolbar action label.
 assert(html.indexOf('전체 갱신') !== -1, 'full refresh action label present');
 // Current account uses the border instead of a redundant visible badge.
