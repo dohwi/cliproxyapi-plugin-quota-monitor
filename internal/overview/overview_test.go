@@ -67,6 +67,19 @@ func TestBuildCodexWeeklyOnlyAcrossPositionalNames(t *testing.T) {
 	}
 }
 
+func TestAntigravityOverviewPrefersReportedPeriod(t *testing.T) {
+	account := quotamonitor.AccountQuota{Provider: "antigravity", Windows: []quotamonitor.QuotaWindow{
+		{Name: "Gemini Models / Five Hour Limit Remaining", WindowMinutes: summaryTestMinutes(10080), RemainingPercent: summaryTestPercent(80)},
+		{Name: "Claude and GPT models / Weekly Limit Remaining", WindowMinutes: summaryTestMinutes(300), RemainingPercent: summaryTestPercent(60)},
+	}}
+	out := Build([]quotamonitor.AccountQuota{account}, false)
+	for i, want := range map[int]string{3: "weekly", 4: "five-hour"} {
+		if len(out[i].Limits) != 1 || out[i].Limits[0].Name != want {
+			t.Fatalf("%s: expected only %s; got %+v", out[i].Family, want, out[i].Limits)
+		}
+	}
+}
+
 func TestOverviewWindowRemaining(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

@@ -89,8 +89,55 @@ func TestClaudeProbeEligibilityAndRecovery(t *testing.T) {
 	}
 }
 
-// A unified header window and the OAuth usage window it mirrors must share one
-// canonical key, otherwise the dashboard keeps a nameless duplicate row.
+func TestClaudeProbeExplicitlyAbsentWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, want string
+		count            int
+	}{
+		{"weekly only", `{"five_hour":null,"seven_day":{"utilization":25}}`, "weekly", 1},
+		{"five hours only", `{"five_hour":{"utilization":10},"seven_day":null}`, "five-hour", 1},
+		{"neither window", `{"five_hour":null,"seven_day":null}`, "", 0},
+		{"partial response", `{"seven_day":{"utilization":25}}`, "weekly", 2},
+		{"unknown utilization", `{"five_hour":{"utilization":null},"seven_day":{"utilization":25}}`, "weekly", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, status := tc.body, http.StatusOK
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(quotamonitor.APICallResponse{StatusCode: status, Body: body})
+			}))
+			defer server.Close()
+			old := time.Now().Add(-time.Minute)
+			used := 100.0
+			account := quotamonitor.AccountQuota{Provider: "claude", AccountKey: "c", AuthIndex: "1", ObservedAt: &old, Windows: []quotamonitor.QuotaWindow{
+				{Name: "5h", UsedPercent: &used}, {Name: "7d", UsedPercent: &used},
+			}}
+			client := quotamonitor.NewClient(server.URL, "fixture-key")
+			got := probeActive(client, []quotamonitor.AccountQuota{account}, nil)
+			if len(got[0].Windows) != tc.count || (tc.count > 0 && got[0].Windows[0].Name != tc.want) || got[0].LastSuccessAt == nil {
+				t.Fatalf("expected %d window(s) starting with %s, got %+v", tc.count, tc.want, got[0].Windows)
+			}
+			for _, at := range []time.Time{old, got[0].LastSuccessAt.Add(time.Second)} {
+				account.ObservedAt = &at
+				merged := applyLastGoodWindows([]quotamonitor.AccountQuota{account}, got)[0]
+				if len(merged.Windows) != tc.count {
+					t.Fatalf("older/partial passive signal resurrected an absent window: %+v", merged.Windows)
+				}
+			}
+			status = http.StatusBadGateway
+			stale := probeActive(client, []quotamonitor.AccountQuota{account}, got)[0]
+			if !stale.Stale || len(stale.Windows) != tc.count || len(stale.ClaudeAbsentWindows) != len(got[0].ClaudeAbsentWindows) {
+				t.Fatalf("failed probe changed known window presence: %+v", stale)
+			}
+			status, body = http.StatusOK, `{"five_hour":{"utilization":15},"seven_day":{"utilization":25}}`
+			recovered := probeActive(client, []quotamonitor.AccountQuota{account}, got)[0]
+			if len(recovered.Windows) != 2 || len(recovered.ClaudeAbsentWindows) != 0 || recovered.Stale {
+				t.Fatalf("a later measured window must restore the row: %+v", recovered)
+			}
+		})
+	}
+}
+
+// A unified header window and its OAuth equivalent use the same merge key.
 func TestClaudeUnifiedWindowKeysMerge(t *testing.T) {
 	for _, names := range [][]string{
 		{"weekly-sonnet", "7d_sonnet", "seven_day_sonnet"},
@@ -98,9 +145,13 @@ func TestClaudeUnifiedWindowKeysMerge(t *testing.T) {
 		{"weekly", "7d", "seven_day"},
 		{"five-hour", "5h", "five_hour"},
 	} {
-		want := canonicalWindowKey(quotamonitor.QuotaWindow{Name: names[0]})
+		minutes := 10080
+		if names[0] == "five-hour" {
+			minutes = 300
+		}
+		want := claudeMergeKey(quotamonitor.QuotaWindow{Name: names[0], WindowMinutes: &minutes})
 		for _, name := range names[1:] {
-			if got := canonicalWindowKey(quotamonitor.QuotaWindow{Name: name}); got != want {
+			if got := claudeMergeKey(quotamonitor.QuotaWindow{Name: name}); got != want {
 				t.Errorf("alias %q key %q, want %q", name, got, want)
 			}
 		}

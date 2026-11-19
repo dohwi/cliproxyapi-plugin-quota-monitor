@@ -19,6 +19,13 @@ For Codex, a reported window duration takes precedence over the `primary` or
 `secondary` slot name. Accounts with only a weekly window have no 5-hour row;
 their weekly value also contributes to the fleet availability indicator. The
 reset countdown is not used to infer the window duration.
+For official Claude accounts, an explicit `null` for `five_hour` or `seven_day`
+clears the corresponding cached window. Partial or failed responses do not
+clear it. For Antigravity, a reported period takes precedence over the bucket
+label. A missing bucket stays visibly unreported in the card, because a partial
+provider response does not establish that the account has no such limit.
+For all supported providers, fleet availability excludes unmeasured windows
+and uses a measured weekly quota when no measured 5-hour quota is available.
 This is quota utilization, not an estimate of remaining tokens or money.
 
 ## Explicit refresh

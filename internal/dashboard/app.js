@@ -1207,7 +1207,12 @@ function displayedCodexWindows(windows) {
 }
 
 function quotaWindowRole(w, provider) {
-  if (getProviderKey(provider) === 'codex') return codexWindowRole(w);
+  var providerKey = getProviderKey(provider);
+  if (providerKey === 'codex') return codexWindowRole(w);
+  if (providerKey === 'antigravity' && w && w.window_minutes != null && w.window_minutes !== '') {
+    var period = Number(w.window_minutes);
+    return period === 10080 ? 'long' : (period === 300 ? 'short' : 'other');
+  }
   var name = String(w && w.name || '').toLowerCase();
   var kind = String(w && w.kind || '').toLowerCase();
   var limitName = String(w && w.limit_name || '').toLowerCase();

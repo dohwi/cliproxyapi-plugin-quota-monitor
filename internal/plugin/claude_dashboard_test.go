@@ -70,6 +70,17 @@ assert(unifiedShown.map(w=>w.name).join(',')==='5h,7d,7d_sonnet','only metered s
 const unifiedHTML=ctx.renderQuotaGroups(unifiedShown,'claude',{key:'active'});
 ['5시간 제한','주간 제한','Sonnet · 주간 제한'].forEach(label=>assert(unifiedHTML.includes(label),'unified window label '+label));
 assert(!unifiedHTML.includes('>쿼터<'),'no generic quota fallback label for unified windows');
+const weeklyOnly={provider:'claude',status:'known',windows:[{name:'five-hour',window_minutes:300,reset_after_seconds:300},{name:'weekly',window_minutes:10080,remaining_percent:45}]};
+const weeklyHTML=ctx.renderQuotaGroups(ctx.displayedQuotaWindows(weeklyOnly),'claude',{key:'active'});
+assert(!weeklyHTML.includes('5시간 제한') && weeklyHTML.includes('주간 제한') && weeklyHTML.includes('45%'),'weekly-only Claude renders only measured weekly quota');
+weeklyOnly.windows[1].remaining_percent=0;
+const weeklyLock=ctx.renderQuotaLock(weeklyOnly,ctx.getAvailabilityState(weeklyOnly));
+assert(weeklyLock.includes('주간 제한') && !weeklyLock.includes('5시간'),'weekly-only Claude lock has no 5h label or context');
+const agWeeklyOnly=[{name:'Gemini Models / Five Hour Limit Remaining',window_minutes:10080,remaining_percent:80}];
+assert(ctx.findAGWindow(agWeeklyOnly,'gemini','short')===null,'reported weekly period must override conflicting display name');
+assert(ctx.findAGWindow(agWeeklyOnly,'gemini','long')===agWeeklyOnly[0],'weekly bucket is not lost to its display name');
+const agWeeklyHTML=ctx.renderAGFamilySection('gemini',agWeeklyOnly);
+assert(agWeeklyHTML.includes('제공되지 않음') && (agWeeklyHTML.match(/80%/g)||[]).length===1,'unreported Antigravity 5h is an explicit placeholder, not a quota value');
 assert(unifiedHTML.includes('44%') && unifiedHTML.includes('60%'),'unified percentages rendered');
 assert(ctx.claudeWindowKind({name:'7d_sonnet'})==='weekly-sonnet','7d_sonnet maps to weekly-sonnet');
 assert(ctx.claudeWindowKind({name:'5m'})===null,'5m is not a subscription window');

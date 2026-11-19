@@ -198,6 +198,11 @@ type AccountQuota struct {
 	LastSuccessAt *time.Time         `json:"last_success_at,omitempty"`
 	Stale         bool               `json:"stale,omitempty"`
 	ErrorKind     string             `json:"error_kind,omitempty"`
+
+	// ClaudeAbsentWindows records explicit OAuth nulls for the base 5h/7d slots.
+	// It suppresses last-good rows without exposing synthetic windows to clients.
+	ClaudeAbsentWindows []string `json:"-"`
+
 	// Endpoint is a safe allowlisted enum (direct|warp1|warp2|unknown) derived
 	// from proxy_url in the raw auth file via EndpointResolver.
 	// URL/host/IP/token details are never stored.
@@ -1196,6 +1201,16 @@ func claudeUnifiedWindowName(window string) string {
 	return window
 }
 
+// ClaudeWindowName returns an allowlisted subscription window or an empty string.
+func ClaudeWindowName(raw string) string {
+	name := claudeUnifiedWindowName(strings.ToLower(strings.TrimSpace(raw)))
+	switch name {
+	case "five-hour", "weekly", "weekly-opus", "weekly-sonnet", "weekly-oauth-apps", "weekly-cowork", "weekly-sessions":
+		return name
+	}
+	return ""
+}
+
 // claudeUnifiedStatusExhausted reports whether a unified status value means the
 // window has no quota left. Anything else (allowed, unknown) makes no claim.
 func claudeUnifiedStatusExhausted(v string) bool {
@@ -1854,11 +1869,17 @@ func ParseAntigravityQuota(data []byte) ([]QuotaWindow, error) {
 // is already a percentage (not a fraction); null windows are not zero usage.
 // Extra-usage billing and unknown response fields are deliberately not retained.
 func ParseClaudeQuota(data []byte) ([]QuotaWindow, error) {
+	windows, _, err := parseClaudeQuota(data)
+	return windows, err
+}
+
+func parseClaudeQuota(data []byte) ([]QuotaWindow, []string, error) {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(data, &root); err != nil || root == nil {
-		return nil, &APICallError{Kind: "parse"}
+		return nil, nil, &APICallError{Kind: "parse"}
 	}
 	out := make([]QuotaWindow, 0, 7)
+	var absent []string
 	for _, spec := range []struct {
 		key, name string
 		minutes   int
@@ -1872,7 +1893,13 @@ func ParseClaudeQuota(data []byte) ([]QuotaWindow, error) {
 		{"seven_day_sessions", "weekly-sessions", 10080},
 	} {
 		raw, ok := root[spec.key]
-		if !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		if !ok {
+			continue
+		}
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if spec.key == "five_hour" || spec.key == "seven_day" {
+				absent = append(absent, spec.name)
+			}
 			continue
 		}
 		var usage struct {
@@ -1880,7 +1907,7 @@ func ParseClaudeQuota(data []byte) ([]QuotaWindow, error) {
 			ResetsAt    *string  `json:"resets_at"`
 		}
 		if err := json.Unmarshal(raw, &usage); err != nil {
-			return nil, &APICallError{Kind: "parse"}
+			return nil, nil, &APICallError{Kind: "parse"}
 		}
 		if usage.Utilization == nil {
 			continue
@@ -1897,7 +1924,7 @@ func ParseClaudeQuota(data []byte) ([]QuotaWindow, error) {
 		normalizeWindow(&w)
 		out = append(out, w)
 	}
-	return out, nil
+	return out, absent, nil
 }
 
 // ParseCodexPlanType extracts a canonical plan from known WHAM/account,
@@ -2315,9 +2342,11 @@ func ParseAntigravityModelQuota(data []byte) ([]QuotaWindow, error) {
 		}
 		mins := 300
 		if raw := objectValue(b, "window", "windowType", "window_type"); raw != nil {
-			if m, ok := windowMinutesForName(fmt.Sprint(raw)); ok && (m == 300 || m == 10080) {
-				mins = m
+			m, ok := windowMinutesForName(fmt.Sprint(raw))
+			if !ok || (m != 300 && m != 10080) {
+				continue // An explicit different/unknown period is not a 5h quota.
 			}
+			mins = m
 		}
 		r := float64(n * 100)
 		cur := found[mins]
@@ -2576,6 +2605,12 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 // call. Unsupported inventory queries fall back once to ordinary usage within
 // the same deadline. Authentication/rate-limit/server failures never retry.
 func (c *Client) FetchClaudeUsage(ctx context.Context, account AccountQuota) ([]QuotaWindow, *ResetCredits, error) {
+	windows, _, reset, err := c.FetchClaudeUsageWithWindowPresence(ctx, account)
+	return windows, reset, err
+}
+
+// FetchClaudeUsageWithWindowPresence also reports base windows explicitly set to null.
+func (c *Client) FetchClaudeUsageWithWindowPresence(ctx context.Context, account AccountQuota) ([]QuotaWindow, []string, *ResetCredits, error) {
 	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	headers := map[string]string{
@@ -2589,21 +2624,21 @@ func (c *Client) FetchClaudeUsage(ctx context.Context, account AccountQuota) ([]
 		r, err = c.APICall(callCtx, account.AuthIndex, http.MethodGet, claudeQuotaURL, headers, "")
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	body := []byte(r.Body)
-	windows, err := ParseClaudeQuota(body)
+	windows, absent, err := parseClaudeQuota(body)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	if len(windows) == 0 {
-		return nil, nil, &APICallError{Kind: "empty"}
+	if len(windows) == 0 && len(absent) == 0 {
+		return nil, nil, nil, &APICallError{Kind: "empty"}
 	}
 	reset, err := ParseClaudeResetCredits(body, time.Now().UTC())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return windows, reset, nil
+	return windows, absent, reset, nil
 }
 
 // FetchCodexUsage performs one WHAM usage request and returns the normal quota

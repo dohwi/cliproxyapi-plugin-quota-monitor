@@ -31,6 +31,8 @@ const accounts = [
   { account_key: 'weekly-locked', provider: 'codex', account: 'weekly-locked@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, operational: {}, windows: [{ name: 'primary', window_minutes: 0, remaining_percent: 100, reset_at: now }, { name: 'secondary', window_minutes: 10080, remaining_percent: 0, reset_at: reset(20) }] },
   { account_key: 'b', provider: 'claude', account: 'claude@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, operational: {}, windows: [{ name: 'five-hour', remaining_percent: 40, reset_at: reset(2) }, { name: 'weekly', remaining_percent: 70, reset_at: reset(100) }] },
   { account_key: 'c', provider: 'antigravity', account: 'ag@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, operational: {}, windows: ['Gemini five hour', 'Gemini weekly', 'Claude five hour', 'Claude weekly'].map((name, j) => ({ name, remaining_percent: 55, reset_at: reset(j ? 120 : 3) })) },
+  { account_key: 'claude-weekly', provider: 'claude', account: 'claude-7d@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, windows: [{ name: 'weekly', window_minutes: 10080, remaining_percent: 75, reset_at: reset(120) }] },
+  { account_key: 'ag-weekly', provider: 'antigravity', account: 'ag-7d@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', window_minutes: 10080, remaining_percent: 80, reset_at: reset(120) }, { name: 'Claude and GPT models / Five Hour Limit Remaining', window_minutes: 300, remaining_percent: 60, reset_at: reset(3) }] },
 ];
 const snapshot = { configured: true, snapshot_complete: true, reason: 'auth_files_failed', reason_code: 'auth_files_failed', health: { last_category: 'auth_files_failed', failures: 1 }, accounts, availability: [] };
 const ORIGIN = 'http://console.invalid';
@@ -168,14 +170,19 @@ const clipped = f => f.evaluate(() => {
             assert.equal(await locked.getAttribute('data-availability'), 'unavailable', 'exhausting a weekly-only quota locks the account');
             assert.equal(await locked.locator('.quota-lock-time.quota-reset-weekly').count(), 1, 'weekly lock countdown');
             assert.equal(await locked.locator('.quota-lock-weekly').count(), 0, 'weekly-only lock has no 5h context');
+            const claude = frame.locator('[data-account-key="claude-weekly"]');
+            assert.deepEqual(await claude.locator('.quota-value-row').evaluateAll(rows => rows.map(row => row.dataset.kind)), ['weekly'], `official Claude weekly only @${width}`);
+            const ag = frame.locator('[data-account-key="ag-weekly"]');
+            assert.deepEqual(await ag.locator('.ag-limit-value').allTextContents(), ['—', '80%', '60%', '—'], `Antigravity periods and unreported windows @${width}`);
           }
           // 8) No clipped text in Chinese.
           if (lang === 'zh-CN') { const c = await clipped(frame); assert.deepEqual(c, [], `${which} zh-CN @${width}: clipped text`); }
           if (shots && (lang === 'zh-CN' || lang === 'ko')) {
             await tab.screenshot({ path: path.join(shots, `host-${which}-${lang}-${width}.png`) });
             if (signedIn && lang === 'ko') {
-              const card = frame.locator('.account-card').filter({ hasText: 'weekly-only@example.invalid' });
-              await card.screenshot({ path: path.join(shots, `weekly-only-${width}.png`) });
+              for (const key of ['weekly-only', 'claude-weekly', 'ag-weekly']) {
+                await frame.locator(`[data-account-key="${key}"]`).screenshot({ path: path.join(shots, `${key}-${width}.png`) });
+              }
               await frame.evaluate(() => window.scrollTo(0, 0));
             }
           }
@@ -201,7 +208,7 @@ const clipped = f => f.evaluate(() => {
       assert.deepEqual(errors, [], 'page errors');
       await ctx.close();
     }
-    console.log('PASS host: language sync and menu, weekly-only Codex cards and locks, no clipped Chinese, 0 CSP violations, top >= 88px @412/820/1280');
+    console.log('PASS host: language sync and menu, provider quota periods and weekly locks, no clipped Chinese, 0 CSP violations, top >= 88px @412/820/1280');
   } finally {
     await browser.close();
   }

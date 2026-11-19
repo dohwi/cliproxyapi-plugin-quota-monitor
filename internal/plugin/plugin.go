@@ -162,6 +162,8 @@ func classifyAccountTier(a quotamonitor.AccountQuota, isCurrent bool) probeTier 
 			strings.Contains(nameLow, "secondary")
 		if isCodex {
 			isLong = quotamonitor.CodexWindowKind(w) == quotamonitor.CodexWeekly
+		} else if isAG && w.WindowMinutes != nil {
+			isLong = minutes == 10080
 		}
 		if isLong {
 			if isAG && !strings.Contains(nameLow, "gemini") {
@@ -199,6 +201,8 @@ func classifyAccountTier(a quotamonitor.AccountQuota, isCurrent bool) probeTier 
 			strings.Contains(nameLow, "primary")
 		if isCodex {
 			isShort = quotamonitor.CodexWindowKind(w) == quotamonitor.CodexFiveHour
+		} else if isAG && w.WindowMinutes != nil {
+			isShort = minutes == 300
 		}
 		if isShort {
 			if isAG && !strings.Contains(nameLow, "gemini") {
@@ -1839,6 +1843,7 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 		probeCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
 		defer cancel() // also on panic; the explicit cancel below ends the probe early
 		var wins []quotamonitor.QuotaWindow
+		var claudeAbsent []string
 		var err error
 		if strings.EqualFold(a.Provider, "codex") {
 			var plan string
@@ -1856,7 +1861,7 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 			}
 		} else if strings.EqualFold(a.Provider, "claude") {
 			var reset *quotamonitor.ResetCredits
-			wins, reset, err = client.FetchClaudeUsage(probeCtx, *a)
+			wins, claudeAbsent, reset, err = client.FetchClaudeUsageWithWindowPresence(probeCtx, *a)
 			if err == nil {
 				// Claude inventory is a complete snapshot, not partial WHAM
 				// enrichment. Unknown inventory must not reconfirm old rights;
@@ -1867,11 +1872,16 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 			wins, err = client.FetchActiveQuota(probeCtx, *a)
 		}
 		cancel()
-		if err == nil && len(wins) > 0 {
+		if err == nil && (len(wins) > 0 || len(claudeAbsent) > 0) {
 			attempt.LastSuccess = now()
 			anchorWindowResets(wins, attempt.LastSuccess)
 			if strings.EqualFold(a.Provider, "codex") {
 				a.Windows = mergeCodexWindows(a.Windows, wins)
+			} else if strings.EqualFold(a.Provider, "claude") {
+				// Only explicit null clears a base window. A later measured value
+				// can restore it; missing data or a failed probe cannot.
+				a.ClaudeAbsentWindows = updateClaudeAbsentWindows(a.ClaudeAbsentWindows, claudeAbsent, wins)
+				a.Windows = mergeWindowsByKey(omitClaudeAbsentWindows(a.Windows, a.ClaudeAbsentWindows), wins, claudeMergeKey)
 			} else {
 				a.Windows = mergeWindows(a.Windows, wins)
 			}
@@ -2008,6 +2018,13 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 				// absent. A passive observation may simply omit its headers.
 				mergeFields = func(previous, fresh []quotamonitor.QuotaWindow) []quotamonitor.QuotaWindow {
 					return mergeCodexWindowFields(previous, fresh, retainActive)
+				}
+			}
+			if strings.EqualFold(a.Provider, "claude") {
+				a.ClaudeAbsentWindows = p.ClaudeAbsentWindows
+				a.Windows = omitClaudeAbsentWindows(a.Windows, a.ClaudeAbsentWindows)
+				mergeFields = func(previous, fresh []quotamonitor.QuotaWindow) []quotamonitor.QuotaWindow {
+					return mergeWindowFieldsByKey(previous, fresh, claudeMergeKey)
 				}
 			}
 			if retainActive {
@@ -2222,11 +2239,17 @@ func canonicalWindowKey(w quotamonitor.QuotaWindow) string {
 			break
 		}
 	}
-	if bucket == "" && minutes == 300 {
-		bucket = "5h"
-	}
-	if bucket == "" && minutes == 10080 {
-		bucket = "weekly"
+	// For group/bucket names, a declared period takes priority over the
+	// suffix extracted above. Claude's name-only merge does not pass a period.
+	if w.WindowMinutes != nil {
+		switch minutes {
+		case 300:
+			bucket = "5h"
+		case 10080:
+			bucket = "weekly"
+		default:
+			bucket = ""
+		}
 	}
 	if bucket != "" {
 		if base == "" {
@@ -2237,6 +2260,36 @@ func canonicalWindowKey(w quotamonitor.QuotaWindow) string {
 
 	kind := normalizeWindowText(w.LimitName)
 	return fmt.Sprintf("unknown:%s:%d:%s", name, minutes, kind)
+}
+
+func claudeMergeKey(w quotamonitor.QuotaWindow) string {
+	// Older passive observations may omit the period for a known OAuth bucket.
+	if name := quotamonitor.ClaudeWindowName(w.Name); name != "" {
+		return "claude:" + name
+	}
+	return canonicalWindowKey(w)
+}
+
+func updateClaudeAbsentWindows(previous, absent []string, measured []quotamonitor.QuotaWindow) []string {
+	if len(previous) == 0 {
+		return absent
+	}
+	out := slices.Clone(absent)
+	for _, name := range previous {
+		if !slices.Contains(out, name) && !slices.ContainsFunc(measured, func(w quotamonitor.QuotaWindow) bool { return w.Name == name }) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func omitClaudeAbsentWindows(windows []quotamonitor.QuotaWindow, absent []string) []quotamonitor.QuotaWindow {
+	if len(absent) == 0 {
+		return windows
+	}
+	return slices.DeleteFunc(slices.Clone(windows), func(w quotamonitor.QuotaWindow) bool {
+		return slices.Contains(absent, quotamonitor.ClaudeWindowName(w.Name))
+	})
 }
 
 func codexMergeKey(w quotamonitor.QuotaWindow) string {
@@ -2469,6 +2522,7 @@ func cloneAccounts(in []quotamonitor.AccountQuota) []quotamonitor.AccountQuota {
 		a.ObservedAt, a.LastSuccessAt, a.LastUsedAt = clonePtr(a.ObservedAt), clonePtr(a.LastSuccessAt), clonePtr(a.LastUsedAt)
 		a.RetryAfter = clonePtr(a.RetryAfter)
 		a.Credits, a.RawSignals = cloneStringMap(a.Credits), cloneStringMap(a.RawSignals)
+		a.ClaudeAbsentWindows = slices.Clone(a.ClaudeAbsentWindows)
 		if a.Windows != nil {
 			a.Windows = append([]quotamonitor.QuotaWindow{}, a.Windows...)
 			for j := range a.Windows {

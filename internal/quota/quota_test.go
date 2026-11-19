@@ -2166,6 +2166,16 @@ func TestParseAntigravityWeeklyVariations(t *testing.T) {
 	}
 }
 
+func TestParseAntigravityExplicitOtherPeriodNotFiveHour(t *testing.T) {
+	ws, err := ParseAntigravityModelQuota([]byte(`{"buckets":[
+	 {"modelId":"gemini-3-pro","remainingFraction":0,"window":"daily"},
+	 {"modelId":"gemini-3-flash","remainingFraction":0,"window":"unrecognized"},
+	 {"modelId":"gemini-2.5-pro","remainingFraction":0.8,"window":"weekly"}]}`))
+	if err != nil || len(ws) != 1 || ws[0].WindowMinutes == nil || *ws[0].WindowMinutes != 10080 {
+		t.Fatalf("expected only the measured weekly subscription bucket: %+v err=%v", ws, err)
+	}
+}
+
 // The per-model response observed so far has no weekly information, so no weekly
 // window may be invented; an explicitly declared weekly bucket must be kept.
 func TestParseAntigravityModelQuotaWeekly(t *testing.T) {

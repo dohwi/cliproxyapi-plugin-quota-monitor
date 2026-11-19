@@ -96,6 +96,33 @@ func TestComputeSplitsAntigravityFamilies(t *testing.T) {
 	}
 }
 
+func TestWeeklyOnlyAvailabilityOutsideCodex(t *testing.T) {
+	for _, tc := range []struct {
+		provider, key, short, weekly string
+	}{
+		{"claude", "claude", "five-hour", "weekly"},
+		{"antigravity", "antigravity_gemini", "Gemini Models / 5h", "Gemini Models / weekly"},
+		{"antigravity", "antigravity_claude", "Claude and GPT models / 5h", "Claude and GPT models / weekly"},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			for _, remaining := range []float64{42, 0} {
+				accounts := []quotamonitor.AccountQuota{{Provider: tc.provider, Windows: []quotamonitor.QuotaWindow{
+					{Name: tc.short, WindowMinutes: availWin(tc.short, 300, 0).WindowMinutes},
+					availWin(tc.weekly, 10080, remaining),
+				}}}
+				got := availEntry(t, Compute(accounts), tc.key)
+				if got.RemainingPercent != remaining || got.Accounts != 1 {
+					t.Fatalf("want measured weekly quota %v%%, got %+v", remaining, got)
+				}
+				accounts[0].Windows = accounts[0].Windows[:1]
+				if got := Compute(accounts); len(got) != 0 {
+					t.Fatalf("metadata-only 5h window invented availability: %+v", got)
+				}
+			}
+		})
+	}
+}
+
 func TestComputeEmptyWhenNothingMeasurable(t *testing.T) {
 	if got := Compute(nil); len(got) != 0 {
 		t.Fatalf("empty fleet produced %+v", got)

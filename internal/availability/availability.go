@@ -44,31 +44,31 @@ func clampPercentValue(v float64) float64 {
 	return math.Max(0, math.Min(100, v))
 }
 
-// windowRemaining returns the remaining percent of a window. A reached or
-// denied limit is 0; a window with no numbers is treated as fully available.
-func windowRemaining(w quotamonitor.QuotaWindow) float64 {
+// windowRemaining returns the reported remaining percent. A reached or denied
+// limit is 0; absent/invalid percentages do not establish availability.
+func windowRemaining(w quotamonitor.QuotaWindow) (float64, bool) {
 	if (w.LimitReached != nil && *w.LimitReached) || (w.Allowed != nil && !*w.Allowed) {
-		return 0
+		return 0, true
 	}
 	if w.RemainingPercent != nil && !math.IsNaN(*w.RemainingPercent) && !math.IsInf(*w.RemainingPercent, 0) {
-		return clampPercentValue(*w.RemainingPercent)
+		return clampPercentValue(*w.RemainingPercent), true
 	}
 	if w.UsedPercent != nil && !math.IsNaN(*w.UsedPercent) && !math.IsInf(*w.UsedPercent, 0) {
-		return 100 - clampPercentValue(*w.UsedPercent)
+		return 100 - clampPercentValue(*w.UsedPercent), true
 	}
-	return 100
+	return 0, false
 }
 
 // accountCountsTowardAvailability keeps exhausted-but-unavailable accounts in the
 // denominator as 0% instead of silently dropping them; disabled accounts never count.
 func accountCountsTowardAvailability(a quotamonitor.AccountQuota, windows []quotamonitor.QuotaWindow) bool {
 	op := a.Operational
-	if op != nil && op.Disabled != nil && *op.Disabled {
+	if op != nil && ((op.Disabled != nil && *op.Disabled) || strings.EqualFold(strings.TrimSpace(op.Status), "disabled")) {
 		return false
 	}
 	if (op != nil && op.Unavailable != nil && *op.Unavailable) || a.Status == quotamonitor.StatusError {
 		for _, w := range windows {
-			if windowRemaining(w) == 0 {
+			if remaining, known := windowRemaining(w); known && remaining == 0 {
 				return true
 			}
 		}
@@ -82,6 +82,9 @@ func findWindow(windows []quotamonitor.QuotaWindow, minutes int, names ...string
 	// weekly duration but has its own quota and must not stand in for the
 	// account-wide window.
 	for i := range windows {
+		if _, known := windowRemaining(windows[i]); !known {
+			continue
+		}
 		name := strings.ToLower(strings.TrimSpace(windows[i].Name))
 		for _, n := range names {
 			if name == n {
@@ -90,7 +93,7 @@ func findWindow(windows []quotamonitor.QuotaWindow, minutes int, names ...string
 		}
 	}
 	for i := range windows {
-		if windowMinutes(windows[i]) == minutes && !modelScopedWindow(windows[i]) {
+		if _, known := windowRemaining(windows[i]); known && windowMinutes(windows[i]) == minutes && !modelScopedWindow(windows[i]) {
 			return &windows[i]
 		}
 	}
@@ -111,9 +114,6 @@ func modelScopedWindow(w quotamonitor.QuotaWindow) bool {
 
 func claudeAvailability(a quotamonitor.AccountQuota) (float64, bool) {
 	primary := findWindow(a.Windows, windowFiveHourMinutes, "five-hour", "5h")
-	if primary == nil {
-		return 0, false
-	}
 	return primarySecondaryAvailability(a, primary, findWindow(a.Windows, windowWeeklyMinutes, "weekly", "7d"))
 }
 
@@ -135,51 +135,58 @@ func codexAvailability(a quotamonitor.AccountQuota) (float64, bool) {
 	return primarySecondaryAvailability(a, primary, secondary)
 }
 
-// The 5h window decides when present; a depleted weekly window always blocks
-// the account. A Codex account with only a weekly limit contributes that quota.
+// The measured 5h window decides when available; a depleted weekly window
+// always blocks the account. Without measured 5h, use the known weekly value.
 func primarySecondaryAvailability(a quotamonitor.AccountQuota, primary, secondary *quotamonitor.QuotaWindow) (float64, bool) {
-	if primary == nil {
-		primary, secondary = secondary, nil
-	}
-	if primary == nil {
-		return 0, false
-	}
-	considered := []quotamonitor.QuotaWindow{*primary}
-	if secondary != nil {
-		considered = append(considered, *secondary)
+	var considered []quotamonitor.QuotaWindow
+	for _, w := range []*quotamonitor.QuotaWindow{primary, secondary} {
+		if w != nil {
+			considered = append(considered, *w)
+		}
 	}
 	if !accountCountsTowardAvailability(a, considered) {
 		return 0, false
 	}
-	if secondary != nil && windowRemaining(*secondary) <= 0 {
-		return 0, true
-	}
-	return windowRemaining(*primary), true
-}
-
-func antigravityAvailability(a quotamonitor.AccountQuota, family *regexp.Regexp) (float64, bool) {
-	var familyWindows []quotamonitor.QuotaWindow
-	for _, w := range a.Windows {
-		if family.MatchString(w.Name) {
-			familyWindows = append(familyWindows, w)
-		}
-	}
-	lowest, found := 100.0, false
-	for _, w := range familyWindows {
-		if windowMinutes(w) == windowFiveHourMinutes {
-			found = true
-			lowest = math.Min(lowest, windowRemaining(w))
-		}
-	}
-	if !found || !accountCountsTowardAvailability(a, familyWindows) {
-		return 0, false
-	}
-	for _, w := range familyWindows {
-		if windowMinutes(w) == windowWeeklyMinutes && windowRemaining(w) == 0 {
+	var weekly float64
+	var weeklyKnown bool
+	if secondary != nil {
+		weekly, weeklyKnown = windowRemaining(*secondary)
+		if weeklyKnown && weekly == 0 {
 			return 0, true
 		}
 	}
-	return lowest, true
+	if primary != nil {
+		if short, known := windowRemaining(*primary); known {
+			return short, true
+		}
+	}
+	return weekly, weeklyKnown
+}
+
+func antigravityAvailability(a quotamonitor.AccountQuota, family *regexp.Regexp) (float64, bool) {
+	var short, weekly *quotamonitor.QuotaWindow
+	minShort, minWeekly := 101.0, 101.0
+	for i := range a.Windows {
+		w := &a.Windows[i]
+		if !family.MatchString(w.Name) {
+			continue
+		}
+		remaining, known := windowRemaining(*w)
+		if !known {
+			continue
+		}
+		switch windowMinutes(*w) {
+		case windowFiveHourMinutes:
+			if remaining < minShort {
+				short, minShort = w, remaining
+			}
+		case windowWeeklyMinutes:
+			if remaining < minWeekly {
+				weekly, minWeekly = w, remaining
+			}
+		}
+	}
+	return primarySecondaryAvailability(a, short, weekly)
 }
 
 func roundTenth(v float64) float64 { return math.Round(v*10) / 10 }

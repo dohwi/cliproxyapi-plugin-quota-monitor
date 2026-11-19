@@ -34,6 +34,14 @@ func TestMergeWindowsLogicalDedupRegression(t *testing.T) {
 		}
 	})
 
+	t.Run("AG reported period keeps same-label short and weekly windows separate", func(t *testing.T) {
+		const label = "Gemini Models / Five Hour Limit Remaining"
+		got := mergeWindows([]quotamonitor.QuotaWindow{regressionWindow(label, 300, 600)}, []quotamonitor.QuotaWindow{regressionWindow(label, 10080, 500000)})
+		if len(got) != 2 || *got[0].WindowMinutes != 10080 || *got[1].WindowMinutes != 300 {
+			t.Fatalf("different metering periods must not merge: %+v", got)
+		}
+	})
+
 	t.Run("AG same-name groups remain distinct while source variants dedup", func(t *testing.T) {
 		active := []quotamonitor.QuotaWindow{
 			regressionWindow("group-a / 5h", 300, 3600),

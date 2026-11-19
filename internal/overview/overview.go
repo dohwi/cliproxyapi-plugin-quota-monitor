@@ -202,6 +202,19 @@ func overviewWindow(w quotamonitor.QuotaWindow, provider string) (name, family s
 		default:
 			return "", "", false
 		}
+		if w.WindowMinutes != nil {
+			switch minutes := *w.WindowMinutes; minutes {
+			case 300:
+				return "five-hour", family, true
+			case 10080:
+				return "weekly", family, true
+			default:
+				if minutes > 0 {
+					return "window-" + strconv.Itoa(minutes) + "m", family, true
+				}
+				return "other", family, true
+			}
+		}
 	}
 	minutes := 0
 	if w.WindowMinutes != nil {
