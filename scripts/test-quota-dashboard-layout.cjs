@@ -89,7 +89,17 @@ const accounts = [
 // Include weekly exhaustion as well as the short-window locked Plus account.
 accounts.push({ ...accounts[4], account_key: 'fixture-8', account: 'weekly-locked@example.invalid',
   windows: [{name: 'primary', remaining_percent: 60, reset_at: reset(5)}, {name: 'secondary', remaining_percent: 0, reset_at: reset(120)}] });
-// Match the real endpoint and observation contract, including the user's two card shapes.
+// Verify short cards and mixed-duration Antigravity families alongside taller cards.
+accounts.push(
+  {...accounts[3], account_key: 'fixture-9', account: 'codex-weekly@example.invalid',
+    windows: [{name: 'primary', window_minutes: 10080, remaining_percent: 100, reset_at: reset(167)}]},
+  {...accounts[1], account_key: 'fixture-10', account: 'claude-weekly@example.invalid', provider: 'claude', plan_type: undefined,
+    windows: [{name: 'weekly', window_minutes: 10080, remaining_percent: 75, reset_at: reset(120)}]},
+  {...accounts[2], account_key: 'fixture-11', account: 'ag-mixed@example.invalid',
+    windows: [{name: 'Gemini Models / Weekly Limit Remaining', window_minutes: 10080, remaining_percent: 80, reset_at: reset(120)},
+      {name: 'Claude and GPT models / Five Hour Limit Remaining', window_minutes: 300, remaining_percent: 60, reset_at: reset(3)}]},
+);
+// Match the real endpoint and observation contract.
 accounts.forEach((account, i) => {
   account.endpoint = i === 1 ? 'warp1' : 'direct';
   account.observed_at = new Date(Date.now() - (i === 4 ? 39 : 7) * 60000).toISOString();
@@ -169,7 +179,7 @@ accounts.forEach((account, i) => {
       assert(surface.darker, `${surface.state}: card background must be darker than before`);
       assert(surface.contrast >= 4.5, `${surface.state}: body text contrast must meet WCAG AA`);
     }
-    for (const width of [1440, 1280, 1024, 900, 820, 768, 600, 560, 390, 360, 320]) {
+    for (const width of [1440, 1280, 1024, 900, 820, 768, 600, 560, 412, 390, 360, 320]) {
       await page.setViewportSize({width, height: 1000});
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const result = await page.evaluate(() => {
@@ -310,7 +320,7 @@ accounts.forEach((account, i) => {
         assert(cs.bottomWithinPadding, `${width}px: credit-summary must stay inside the card padding box`);
         assert(cs.noOverlap, `${width}px: credit-summary must not overlap preceding siblings`);
       }
-      assert(Math.max(...result.heights) - Math.min(...result.heights) <= 1, `cards sharing a row must share a height at ${width}`);
+      assert(Math.max(...result.heights) <= 1, `cards sharing a row must share a height at ${width}`);
       result.alignments.forEach(row => assert(row.left <= 1 && row.right <= 1, `${width}px misaligned ${JSON.stringify(row)}`));
       assert(result.alignments.length > 0, 'alignment assertions must inspect actual quota rows');
       if (process.env.SCREENSHOT_DIR) {
