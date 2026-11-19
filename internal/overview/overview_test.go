@@ -53,6 +53,20 @@ func TestBuildAllAccountsConservative(t *testing.T) {
 	}
 }
 
+func TestBuildCodexWeeklyOnlyAcrossPositionalNames(t *testing.T) {
+	accounts := []quotamonitor.AccountQuota{
+		{Provider: "codex", Windows: []quotamonitor.QuotaWindow{
+			{Name: "primary", WindowMinutes: summaryTestMinutes(10080), RemainingPercent: summaryTestPercent(80)},
+			{Name: "secondary", RemainingPercent: summaryTestPercent(0)},
+		}},
+		{Provider: "codex", Windows: []quotamonitor.QuotaWindow{{Name: "secondary", WindowMinutes: summaryTestMinutes(10080), RemainingPercent: summaryTestPercent(60)}}},
+	}
+	got := Build(accounts, false)[1]
+	if len(got.Limits) != 1 || got.Limits[0].Name != "weekly" || got.Limits[0].KnownCount != 2 || got.RemainingPercent == nil || *got.RemainingPercent != 60 {
+		t.Fatalf("summary=%+v, want only the reported weekly allowances", got)
+	}
+}
+
 func TestOverviewWindowRemaining(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

@@ -27,13 +27,15 @@ const now = new Date().toISOString();
 const reset = h => new Date(Date.now() + h * 3600000).toISOString();
 const accounts = [
   { account_key: 'a', provider: 'codex', account: 'recent@example.invalid', status: 'known', plan_type: 'plus', endpoint: 'direct', observed_at: now, operational: {}, windows: [{ name: 'primary', remaining_percent: 80, reset_at: reset(5) }, { name: 'secondary', remaining_percent: 100, reset_at: reset(120) }] },
+  { account_key: 'weekly-only', provider: 'codex', account: 'weekly-only@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, operational: {}, reset_credits: { available_count: 1 }, api_credits: { balance: 0 }, windows: [{ name: 'primary', window_minutes: 10080, remaining_percent: 100, reset_at: reset(167) }, { name: 'secondary', remaining_percent: 100, reset_at: now }] },
+  { account_key: 'weekly-locked', provider: 'codex', account: 'weekly-locked@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, operational: {}, windows: [{ name: 'primary', window_minutes: 0, remaining_percent: 100, reset_at: now }, { name: 'secondary', window_minutes: 10080, remaining_percent: 0, reset_at: reset(20) }] },
   { account_key: 'b', provider: 'claude', account: 'claude@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, operational: {}, windows: [{ name: 'five-hour', remaining_percent: 40, reset_at: reset(2) }, { name: 'weekly', remaining_percent: 70, reset_at: reset(100) }] },
   { account_key: 'c', provider: 'antigravity', account: 'ag@example.invalid', status: 'known', endpoint: 'direct', observed_at: now, operational: {}, windows: ['Gemini five hour', 'Gemini weekly', 'Claude five hour', 'Claude weekly'].map((name, j) => ({ name, remaining_percent: 55, reset_at: reset(j ? 120 : 3) })) },
 ];
 const snapshot = { configured: true, snapshot_complete: true, reason: 'auth_files_failed', reason_code: 'auth_files_failed', health: { last_category: 'auth_files_failed', failures: 1 }, accounts, availability: [] };
 const ORIGIN = 'http://console.invalid';
 const DASH = ORIGIN + '/v0/resource/plugins/quota-monitor/dashboard';
-const parentHTML = lang => `<!DOCTYPE html><html lang="${lang}"><head><style>body{margin:0}iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}#tools{position:fixed;top:0;right:0;left:0;height:76px;background:#0001;pointer-events:none;z-index:9}</style></head><body><div id="tools"></div><iframe id="plugin" src="${DASH}"></iframe></body></html>`;
+const parentHTML = lang => `<!DOCTYPE html><html lang="${lang}"><head><style>body{margin:0}iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}#tools{position:fixed;top:0;right:0;left:0;height:76px;background:#0001;pointer-events:none;z-index:9}@media(max-width:768px){#tools{height:60px}}</style></head><body><div id="tools"></div><iframe id="plugin" src="${DASH}"></iframe></body></html>`;
 const shots = process.env.SCREENSHOT_DIR;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
@@ -155,9 +157,28 @@ const clipped = f => f.evaluate(() => {
           await settle(frame);
           const top = await topOf(frame);
           assert(top.min >= 88 - 0.5, `${which} ${lang} @${width}: element above 88px: ${JSON.stringify(top)}`);
+          if (signedIn) {
+            const weekly = frame.locator('.account-card').filter({ hasText: 'weekly-only@example.invalid' });
+            const dual = frame.locator('.account-card').filter({ hasText: 'recent@example.invalid' });
+            const locked = frame.locator('.account-card').filter({ hasText: 'weekly-locked@example.invalid' });
+            assert.deepEqual(await weekly.locator('.quota-value-row').evaluateAll(rows => rows.map(row => row.dataset.kind)), ['secondary'], `weekly only @${width}`);
+            assert.equal(await weekly.locator('.quota-value-reset').getAttribute('data-window-name'), 'primary', 'countdown comes from the measured window');
+            assert.equal(await weekly.locator('.credit-summary').count(), 1, 'weekly-only accounts retain credits');
+            assert.deepEqual(await dual.locator('.quota-value-row').evaluateAll(rows => rows.map(row => row.dataset.kind)), ['primary', 'secondary'], `dual windows @${width}`);
+            assert.equal(await locked.getAttribute('data-availability'), 'unavailable', 'exhausting a weekly-only quota locks the account');
+            assert.equal(await locked.locator('.quota-lock-time.quota-reset-weekly').count(), 1, 'weekly lock countdown');
+            assert.equal(await locked.locator('.quota-lock-weekly').count(), 0, 'weekly-only lock has no 5h context');
+          }
           // 8) No clipped text in Chinese.
           if (lang === 'zh-CN') { const c = await clipped(frame); assert.deepEqual(c, [], `${which} zh-CN @${width}: clipped text`); }
-          if (shots && lang === 'zh-CN') await tab.screenshot({ path: path.join(shots, `host-${which}-${lang}-${width}.png`) });
+          if (shots && (lang === 'zh-CN' || lang === 'ko')) {
+            await tab.screenshot({ path: path.join(shots, `host-${which}-${lang}-${width}.png`) });
+            if (signedIn && lang === 'ko') {
+              const card = frame.locator('.account-card').filter({ hasText: 'weekly-only@example.invalid' });
+              await card.screenshot({ path: path.join(shots, `weekly-only-${width}.png`) });
+              await frame.evaluate(() => window.scrollTo(0, 0));
+            }
+          }
         }
       }
       // 6) Menu fully inside the viewport at 412 and 1280; the button stays below y=88.
@@ -180,7 +201,7 @@ const clipped = f => f.evaluate(() => {
       assert.deepEqual(errors, [], 'page errors');
       await ctx.close();
     }
-    console.log('PASS host: console zh-CN on load, live ko, pinned en survives console change + reload, Follow CLIProxyAPI, keyboard menu, menu inside viewport @412/1280, no clipped Chinese, 0 CSP violations, top >= 88px @412/820/1280');
+    console.log('PASS host: language sync and menu, weekly-only Codex cards and locks, no clipped Chinese, 0 CSP violations, top >= 88px @412/820/1280');
   } finally {
     await browser.close();
   }

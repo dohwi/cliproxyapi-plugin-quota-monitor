@@ -1032,7 +1032,8 @@ function effectiveUsed(w) {
 function getCanonicalStatus(acc) {
   if (!acc) return { key: 'unknown', label: t('st.unknown'), tone: 'chip-unknown' };
   var op = acc.operational || {};
-  var windows = Array.isArray(acc.windows) ? acc.windows : [];
+  var pKey = getProviderKey(acc.provider);
+  var windows = pKey === 'codex' ? displayedQuotaWindows(acc) : (Array.isArray(acc.windows) ? acc.windows : []);
 
   if (op.disabled === true) return { key: 'disabled', label: t('st.disabled'), tone: 'chip-disabled' };
 
@@ -1045,7 +1046,6 @@ function getCanonicalStatus(acc) {
   }
 
   var isLimited = false;
-  var pKey = getProviderKey(acc.provider);
   for (var i = 0; i < windows.length; i++) {
     var w = windows[i] || {};
     if (pKey === 'antigravity' && !/gemini/i.test(String(w.name || ''))) continue;
@@ -1130,8 +1130,10 @@ function endpointLabel(ep) {
 
 function displayedQuotaWindows(acc) {
   var windows = acc && Array.isArray(acc.windows) ? acc.windows : [];
+  var provider = getProviderKey(acc && acc.provider);
+  if (provider === 'codex') return displayedCodexWindows(windows);
   // Disabled pay-as-you-go overage is not an exhausted subscription window.
-  if (getProviderKey(acc && acc.provider) === 'claude') {
+  if (provider === 'claude') {
     // Only metered subscription rows are displayed. Passive unified headers also
     // carry short-lived (5m) and billing (overage) rows, and a header-only row
     // with a reset deadline but no percentage says nothing about remaining quota.
@@ -1160,7 +1162,52 @@ function claudeWindowKind(w) {
   return null;
 }
 
+// Codex slot names are positional, not durations. Mirror quota.CodexWindowKind
+// so the card and its lock use the same period as the server-side summaries.
+function codexWindowName(s) {
+  return String(s || '').trim().toLowerCase().replace(/[ _]/g, '-');
+}
+function codexDurationRole(name) {
+  if (/^(?:5h|5-hours?|five-hours?)$/.test(name)) return 'short';
+  if (/^(?:7d|7-days?|seven-days?|week|weekly)$/.test(name)) return 'long';
+  return null;
+}
+function codexSlotRole(name) {
+  if (/^primary(?:-window|-limit)?$/.test(name)) return 'short';
+  if (/^secondary(?:-window|-limit)?$/.test(name)) return 'long';
+  return null;
+}
+function codexWindowMinutes(w) {
+  return w && w.window_minutes != null && w.window_minutes !== '' ? Number(w.window_minutes) : null;
+}
+function codexWindowRole(w) {
+  var minutes = codexWindowMinutes(w);
+  if (minutes !== null) {
+    if (minutes === 300) return 'short';
+    if (minutes === 10080) return 'long';
+    return 'other';
+  }
+  var name = codexWindowName(w && w.name);
+  return codexDurationRole(name) || codexDurationRole(codexWindowName(w && w.limit_name)) || codexSlotRole(name) ||
+    (/-primary$/.test(name) ? 'short' : (/-secondary$/.test(name) ? 'long' : 'other'));
+}
+function displayedCodexWindows(windows) {
+  var measuredRoles = Object.create(null);
+  windows.forEach(function(w) {
+    var name = codexWindowName(w && w.name), minutes = codexWindowMinutes(w);
+    if ((codexSlotRole(name) || codexDurationRole(name)) && minutes !== null && minutes > 0) measuredRoles[codexWindowRole(w)] = true;
+  });
+  return windows.filter(function(w) {
+    if (!w) return false;
+    var name = codexWindowName(w.name), minutes = codexWindowMinutes(w);
+    if (!codexSlotRole(name) && !codexDurationRole(name)) return true;
+    var role = codexWindowRole(w);
+    return minutes !== 0 && (minutes !== null || role === 'other' || !measuredRoles[role]);
+  });
+}
+
 function quotaWindowRole(w, provider) {
+  if (getProviderKey(provider) === 'codex') return codexWindowRole(w);
   var name = String(w && w.name || '').toLowerCase();
   var kind = String(w && w.kind || '').toLowerCase();
   var limitName = String(w && w.limit_name || '').toLowerCase();
@@ -1940,7 +1987,7 @@ function loadDashboard(isInitial) {
 
 // Stable fallback identity prevents a one-account array from resetting duplicate keys to index 0.
 function quotaAccountKeys(accounts) { var seen={}, keys=[]; (accounts||[]).forEach(function(acc,index){acc=acc||{}; var base=String(acc.account_key || acc.endpoint || acc.name || 'account'); var n=seen[base]||0;seen[base]=n+1;keys[index]=base+'#'+n;}); return keys; }
-function quotaWindowMap(acc) { var seen={}, out={}; (acc.windows||[]).forEach(function(w){w=w||{};var base=String(w.name||w.kind||'window'),n=seen[base]||0;seen[base]=n+1;out[base+'#'+n]=[quotaNumber(w),String(w.reset_at||w.reset_time||w.resets_at||'')];});return out; }
+function quotaWindowMap(acc) { var seen={}, out={}; var wins=getProviderKey(acc.provider)==='codex'?displayedQuotaWindows(acc):(acc.windows||[]); wins.forEach(function(w){w=w||{};var base=String(w.name||w.kind||'window'),n=seen[base]||0;seen[base]=n+1;out[base+'#'+n]=[quotaNumber(w),String(w.reset_at||w.reset_time||w.resets_at||'')];});return out; }
 // Only server snapshots enter this comparison; countdown/filter renders never do.
 function buildQuotaSnapshot(accounts) { var out={}, keys=quotaAccountKeys(accounts); (accounts||[]).forEach(function(acc,index) { acc=acc||{}; var key=keys[index], credits=acc.api_credits||{}, reset=acc.reset_credits||{}, observed=getAccountObservedTime(acc); out[key]={observed_at:observed?observed.toISOString():'',availability:getAvailabilityState(acc).key,locked:!!lockedWindowInfo(acc,getAvailabilityState(acc)),windows:quotaWindowMap(acc),credits:[credits.balance,credits.has_credits,credits.unlimited,reset.available_count,reset.applicable_available_count,reset.nearest_expiry]}; }); return out; }
 function quotaTone(before, after, inverse) { var a=Number(before),b=Number(after);if(isFinite(a)&&isFinite(b)&&a!==b)return (b>a)!==!!inverse?'flash-good':'flash-bad';return 'flash-neutral'; }
@@ -2181,7 +2228,8 @@ function groupQuotaWindows(windows, provider) {
       group = 'claude';
       if (kind) { add('claude', t('grp.claude'), kind, w); return; }
     } else if (key === 'codex') {
-      kind = /secondary/i.test(low)?'secondary':(/primary/i.test(low)?'primary':null);
+      var role = codexWindowRole(w);
+      kind = role === 'long' ? 'secondary' : (role === 'short' ? 'primary' : null);
       group = 'limits';
     } else {
       kind = /secondary|weekly/i.test(low)||Number(w.window_minutes)===10080 ? 'secondary' :

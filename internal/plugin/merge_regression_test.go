@@ -51,6 +51,71 @@ func TestMergeWindowsLogicalDedupRegression(t *testing.T) {
 	})
 }
 
+func TestCodexWeeklyOnlyProbeDropsObsoleteShortWindow(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"rate_limit":{"primary_window":{"limit_window_seconds":604800,"used_percent":25,"reset_after_seconds":600000},"secondary_window":null}}`
+		fmt.Fprintf(w, `{"status_code":200,"body":%s}`, jsonString(body))
+	}))
+	defer server.Close()
+	client := quotamonitor.NewClient(server.URL, "k")
+	used := 100.0
+	account := quotamonitor.AccountQuota{
+		AccountKey: "codex", AuthIndex: "1", Provider: "codex", Source: "passive", Status: quotamonitor.StatusKnown,
+		Windows: []quotamonitor.QuotaWindow{regressionWindow("primary", 300, 0), regressionWindow("secondary", 10080, 0)},
+	}
+	account.Windows[0].UsedPercent = &used
+	account.Windows[1].UsedPercent = &used
+	got := probeActive(client, []quotamonitor.AccountQuota{account}, nil)[0]
+	assertWeekly := func(stage string, a quotamonitor.AccountQuota) {
+		t.Helper()
+		if len(a.Windows) != 1 || a.Windows[0].WindowMinutes == nil || *a.Windows[0].WindowMinutes != 10080 || a.Windows[0].RemainingPercent == nil || *a.Windows[0].RemainingPercent != 75 || a.Windows[0].ResetAfterSec == nil || *a.Windows[0].ResetAfterSec != 600000 {
+			t.Fatalf("%s: want only fresh weekly quota, got %+v", stage, a.Windows)
+		}
+	}
+	assertWeekly("active probe", got)
+	olderPassive := applyLastGoodWindows([]quotamonitor.AccountQuota{account}, []quotamonitor.AccountQuota{got})[0]
+	assertWeekly("older passive data", olderPassive)
+
+	// A newer observation can report a real 5h window again.
+	newer := got.LastSuccessAt.Add(time.Minute)
+	account.ObservedAt = &newer
+	newerPassive := applyLastGoodWindows([]quotamonitor.AccountQuota{account}, []quotamonitor.AccountQuota{got})[0]
+	if len(newerPassive.Windows) != 2 {
+		t.Fatalf("newer two-window observation lost a quota: %+v", newerPassive.Windows)
+	}
+
+	// New passive headers can report use in the same slot without repeating its duration.
+	used = 30
+	account.Windows = []quotamonitor.QuotaWindow{{Name: "primary", UsedPercent: &used}}
+	partial := applyLastGoodWindows([]quotamonitor.AccountQuota{account}, []quotamonitor.AccountQuota{got})[0]
+	if len(partial.Windows) != 1 || partial.Windows[0].WindowMinutes == nil || *partial.Windows[0].WindowMinutes != 10080 || partial.Windows[0].UsedPercent == nil || *partial.Windows[0].UsedPercent != 30 {
+		t.Fatalf("durationless passive data invented a 5h window: %+v", partial.Windows)
+	}
+}
+
+func TestCodexWeeklyOnlyMergeKeepsRealOrUnconfirmedShortWindows(t *testing.T) {
+	base := []quotamonitor.QuotaWindow{regressionWindow("primary", 300, 600), regressionWindow("secondary", 10080, 600000)}
+	for _, tc := range []struct {
+		name      string
+		fresh     []quotamonitor.QuotaWindow
+		confirmed bool
+		want      int
+	}{
+		{"passive partial weekly", []quotamonitor.QuotaWindow{regressionWindow("secondary", 10080, 120)}, false, 2},
+		{"passive slot repurposed", []quotamonitor.QuotaWindow{regressionWindow("primary", 10080, 120)}, false, 1},
+		{"active weekly in secondary", []quotamonitor.QuotaWindow{regressionWindow("secondary", 10080, 120)}, true, 1},
+		{"legacy active partial", []quotamonitor.QuotaWindow{{Name: "secondary"}}, true, 2},
+		{"active short and weekly", base, true, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mergeCodexWindowFields(base, tc.fresh, tc.confirmed)
+			if len(got) != tc.want {
+				t.Fatalf("want %d windows, got %+v", tc.want, got)
+			}
+		})
+	}
+}
+
 func TestProbeCacheFullSyntheticLogicalDedupRegression(t *testing.T) {
 	const agBody = `{"groups":[{"displayName":"group-a","buckets":[{"displayName":"5h","bucketId":"a-5","window":"five_hour","remainingFraction":0.8},{"displayName":"weekly","bucketId":"a-w","window":"weekly","remainingFraction":0.8}]},{"displayName":"group-b","buckets":[{"displayName":"5h","bucketId":"b-5","window":"five_hour","remainingFraction":0.8},{"displayName":"weekly","bucketId":"b-w","window":"weekly","remainingFraction":0.8}]}]}`
 	const codexBody = `{"primary_window":{"used_percent":20,"reset_after_seconds":3500},"secondary_window":{"used_percent":30,"reset_after_seconds":7100}}`

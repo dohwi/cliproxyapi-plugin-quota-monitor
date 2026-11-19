@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -150,6 +151,7 @@ func classifyAccountTier(a quotamonitor.AccountQuota, isCurrent bool) probeTier 
 
 	// Weekly (long-window) exhausted → slow.
 	isAG := strings.EqualFold(strings.TrimSpace(a.Provider), "antigravity")
+	isCodex := strings.EqualFold(strings.TrimSpace(a.Provider), "codex")
 	for _, w := range a.Windows {
 		minutes := 0
 		if w.WindowMinutes != nil {
@@ -158,6 +160,9 @@ func classifyAccountTier(a quotamonitor.AccountQuota, isCurrent bool) probeTier 
 		nameLow := strings.ToLower(w.Name)
 		isLong := minutes == 10080 || strings.Contains(nameLow, "week") ||
 			strings.Contains(nameLow, "secondary")
+		if isCodex {
+			isLong = quotamonitor.CodexWindowKind(w) == quotamonitor.CodexWeekly
+		}
 		if isLong {
 			if isAG && !strings.Contains(nameLow, "gemini") {
 				continue
@@ -192,6 +197,9 @@ func classifyAccountTier(a quotamonitor.AccountQuota, isCurrent bool) probeTier 
 		isShort := minutes == 300 || strings.Contains(nameLow, "five") ||
 			strings.Contains(nameLow, "5h") ||
 			strings.Contains(nameLow, "primary")
+		if isCodex {
+			isShort = quotamonitor.CodexWindowKind(w) == quotamonitor.CodexFiveHour
+		}
 		if isShort {
 			if isAG && !strings.Contains(nameLow, "gemini") {
 				continue
@@ -1862,7 +1870,11 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 		if err == nil && len(wins) > 0 {
 			attempt.LastSuccess = now()
 			anchorWindowResets(wins, attempt.LastSuccess)
-			a.Windows = mergeWindows(a.Windows, wins)
+			if strings.EqualFold(a.Provider, "codex") {
+				a.Windows = mergeCodexWindows(a.Windows, wins)
+			} else {
+				a.Windows = mergeWindows(a.Windows, wins)
+			}
 			a.Source, a.Status = "active", quotamonitor.StatusKnown
 			a.LastSuccessAt = clonePtr(&attempt.LastSuccess)
 			a.ObservedAt = clonePtr(&attempt.LastSuccess)
@@ -1989,10 +2001,19 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 			retainActive := confirmed && (a.ObservedAt == nil || !a.ObservedAt.After(*p.LastSuccessAt) || a.Stale)
 			anchorAccountResets(&p)
 			anchorAccountResets(a)
+			isCodex := strings.EqualFold(a.Provider, "codex")
+			mergeFields := mergeWindowFields
+			if isCodex {
+				// Only a confirmed active response establishes that a sibling is
+				// absent. A passive observation may simply omit its headers.
+				mergeFields = func(previous, fresh []quotamonitor.QuotaWindow) []quotamonitor.QuotaWindow {
+					return mergeCodexWindowFields(previous, fresh, retainActive)
+				}
+			}
 			if retainActive {
 				// Fill missing fields, but never replace a confirmed value with an
 				// older passive signal merely because auth-files was fetched later.
-				a.Windows = mergeWindowFields(a.Windows, p.Windows)
+				a.Windows = mergeFields(a.Windows, p.Windows)
 				a.FetchedAt = p.FetchedAt
 				if p.PlanType != "" {
 					a.PlanType = p.PlanType
@@ -2016,7 +2037,7 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 					}
 				}
 			} else {
-				a.Windows = mergeWindowFields(p.Windows, a.Windows)
+				a.Windows = mergeFields(p.Windows, a.Windows)
 			}
 			if len(a.Windows) == 0 || retainActive || (!confirmed && (p.Source == "active" || p.Source == "both")) || p.Stale || p.ErrorKind != "" {
 				a.Status, a.Stale, a.Error, a.ErrorKind = p.Status, p.Stale, p.Error, p.ErrorKind
@@ -2218,11 +2239,23 @@ func canonicalWindowKey(w quotamonitor.QuotaWindow) string {
 	return fmt.Sprintf("unknown:%s:%d:%s", name, minutes, kind)
 }
 
-func canonicalWindows(in []quotamonitor.QuotaWindow) []quotamonitor.QuotaWindow {
+func codexMergeKey(w quotamonitor.QuotaWindow) string {
+	if quotamonitor.IsCodexAccountWindow(w) {
+		if kind := quotamonitor.CodexWindowKind(w); kind != "" {
+			return "codex:" + kind
+		}
+		if w.WindowMinutes != nil {
+			return fmt.Sprintf("codex:period:%d", *w.WindowMinutes)
+		}
+	}
+	return canonicalWindowKey(w)
+}
+
+func canonicalWindows(in []quotamonitor.QuotaWindow, windowKey func(quotamonitor.QuotaWindow) string) []quotamonitor.QuotaWindow {
 	out := make([]quotamonitor.QuotaWindow, 0, len(in))
 	seen := make(map[string]struct{}, len(in))
 	for _, w := range in {
-		key := canonicalWindowKey(w)
+		key := windowKey(w)
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -2233,13 +2266,76 @@ func canonicalWindows(in []quotamonitor.QuotaWindow) []quotamonitor.QuotaWindow 
 }
 
 func mergeWindowFields(previous, fresh []quotamonitor.QuotaWindow) []quotamonitor.QuotaWindow {
-	out := canonicalWindows(previous)
+	return mergeWindowFieldsByKey(previous, fresh, canonicalWindowKey)
+}
+
+// A confirmed active weekly-only response supersedes an older short limit.
+// Passive snapshots may omit a header, so only a positional conflict (the
+// same slot now has a different measured period) proves an old row invalid.
+func prepareCodexMerge(previous, fresh []quotamonitor.QuotaWindow, confirmedActive bool) ([]quotamonitor.QuotaWindow, []quotamonitor.QuotaWindow) {
+	fresh = quotamonitor.DistinctCodexWindows(fresh)
+	measuredWeekly := slices.ContainsFunc(fresh, func(w quotamonitor.QuotaWindow) bool {
+		return quotamonitor.IsCodexAccountWindow(w) && w.WindowMinutes != nil && quotamonitor.CodexWindowKind(w) == quotamonitor.CodexWeekly
+	})
+	fresh = slices.Clone(fresh)
+	for i, w := range fresh {
+		if w.WindowMinutes != nil {
+			continue
+		}
+		// A header or partial response can update a slot without its duration.
+		// Prefer the last measured period of that slot over its positional label.
+		for _, old := range previous {
+			if old.WindowMinutes != nil && *old.WindowMinutes > 0 && quotamonitor.SameCodexWindowSlot(old, w) && quotamonitor.CodexWindowKind(old) != quotamonitor.CodexWindowKind(w) {
+				fresh[i].WindowMinutes = old.WindowMinutes
+				break
+			}
+		}
+	}
+	fresh = quotamonitor.DistinctCodexWindows(fresh)
+	hasShort := slices.ContainsFunc(fresh, func(w quotamonitor.QuotaWindow) bool {
+		return quotamonitor.IsCodexAccountWindow(w) && quotamonitor.CodexWindowKind(w) == quotamonitor.CodexFiveHour
+	})
+	base := slices.DeleteFunc(quotamonitor.DistinctCodexWindows(previous), func(old quotamonitor.QuotaWindow) bool {
+		if !quotamonitor.IsCodexAccountWindow(old) {
+			return false
+		}
+		if confirmedActive && measuredWeekly && !hasShort && quotamonitor.CodexWindowKind(old) == quotamonitor.CodexFiveHour {
+			return true
+		}
+		// Preserve matching-period fields even when the provider moves them to
+		// the other slot; don't retain an unmatched row for a repurposed slot.
+		key := codexMergeKey(old)
+		if slices.ContainsFunc(fresh, func(w quotamonitor.QuotaWindow) bool { return codexMergeKey(w) == key }) {
+			return false
+		}
+		for _, w := range fresh {
+			if w.WindowMinutes != nil && quotamonitor.SameCodexWindowSlot(w, old) {
+				return true
+			}
+		}
+		return false
+	})
+	return base, fresh
+}
+
+func mergeCodexWindowFields(previous, fresh []quotamonitor.QuotaWindow, confirmedActive bool) []quotamonitor.QuotaWindow {
+	previous, fresh = prepareCodexMerge(previous, fresh, confirmedActive)
+	return mergeWindowFieldsByKey(previous, fresh, codexMergeKey)
+}
+
+func mergeCodexWindows(previous, fresh []quotamonitor.QuotaWindow) []quotamonitor.QuotaWindow {
+	previous, fresh = prepareCodexMerge(previous, fresh, true)
+	return mergeWindowsByKey(previous, fresh, codexMergeKey)
+}
+
+func mergeWindowFieldsByKey(previous, fresh []quotamonitor.QuotaWindow, windowKey func(quotamonitor.QuotaWindow) string) []quotamonitor.QuotaWindow {
+	out := canonicalWindows(previous, windowKey)
 	index := make(map[string]int, len(out))
 	for i := range out {
-		index[canonicalWindowKey(out[i])] = i
+		index[windowKey(out[i])] = i
 	}
-	for _, incoming := range canonicalWindows(fresh) {
-		key := canonicalWindowKey(incoming)
+	for _, incoming := range canonicalWindows(fresh, windowKey) {
+		key := windowKey(incoming)
 		if i, ok := index[key]; ok {
 			base := out[i]
 			if incoming.Name != "" {
@@ -2282,6 +2378,10 @@ func mergeWindowFields(previous, fresh []quotamonitor.QuotaWindow) []quotamonito
 }
 
 func mergeWindows(passive, active []quotamonitor.QuotaWindow) []quotamonitor.QuotaWindow {
+	return mergeWindowsByKey(passive, active, canonicalWindowKey)
+}
+
+func mergeWindowsByKey(passive, active []quotamonitor.QuotaWindow, windowKey func(quotamonitor.QuotaWindow) string) []quotamonitor.QuotaWindow {
 	// Active values win per field while missing active fields retain passive
 	// values. Fresh active ordering is preserved, followed by passive-only rows.
 	active = append([]quotamonitor.QuotaWindow(nil), active...)
@@ -2322,20 +2422,20 @@ func mergeWindows(passive, active []quotamonitor.QuotaWindow) []quotamonitor.Quo
 			}
 		}
 	}
-	merged := mergeWindowFields(passive, active)
+	merged := mergeWindowFieldsByKey(passive, active, windowKey)
 	activeKeys := make(map[string]struct{}, len(active))
 	out := make([]quotamonitor.QuotaWindow, 0, len(merged))
 	byKey := make(map[string]quotamonitor.QuotaWindow, len(merged))
 	for _, w := range merged {
-		byKey[canonicalWindowKey(w)] = w
+		byKey[windowKey(w)] = w
 	}
-	for _, w := range canonicalWindows(active) {
-		key := canonicalWindowKey(w)
+	for _, w := range canonicalWindows(active, windowKey) {
+		key := windowKey(w)
 		activeKeys[key] = struct{}{}
 		out = append(out, byKey[key])
 	}
-	for _, w := range canonicalWindows(passive) {
-		key := canonicalWindowKey(w)
+	for _, w := range canonicalWindows(passive, windowKey) {
+		key := windowKey(w)
 		if _, ok := activeKeys[key]; !ok {
 			out = append(out, byKey[key])
 		}

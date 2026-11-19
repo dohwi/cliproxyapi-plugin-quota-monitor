@@ -57,7 +57,11 @@ func Build(accounts []quotamonitor.AccountQuota, snapshotStale bool) []Summary {
 			stale := snapshotStale || account.Stale || account.Status == quotamonitor.StatusStale
 			limits := map[string]quotaRemainingSummary{}
 			var worst quotaRemainingSummary
-			for _, window := range account.Windows {
+			windows := account.Windows
+			if spec[0] == "codex" {
+				windows = quotamonitor.DistinctCodexWindows(windows)
+			}
+			for _, window := range windows {
 				name, family, ok := overviewWindow(window, spec[0])
 				if !ok || family != spec[1] {
 					continue
@@ -181,7 +185,13 @@ func overviewWindow(w quotamonitor.QuotaWindow, provider string) (name, family s
 	}
 	family = provider
 	if provider == "codex" {
-		family = "gpt"
+		if kind := quotamonitor.CodexWindowKind(w); kind != "" {
+			return kind, "gpt", true
+		}
+		if w.WindowMinutes != nil && *w.WindowMinutes > 0 {
+			return "window-" + strconv.Itoa(*w.WindowMinutes) + "m", "gpt", true
+		}
+		return "other", "gpt", true
 	}
 	if provider == "antigravity" {
 		switch {
@@ -198,7 +208,7 @@ func overviewWindow(w quotamonitor.QuotaWindow, provider string) (name, family s
 		minutes = *w.WindowMinutes
 	}
 	switch {
-	case strings.Contains(label, "weekly"), strings.Contains(label, "seven-day"), strings.Contains(label, "7d"), minutes == 10080, provider == "codex" && strings.Contains(label, "secondary"):
+	case strings.Contains(label, "weekly"), strings.Contains(label, "seven-day"), strings.Contains(label, "7d"), minutes == 10080:
 		name = "weekly"
 		if provider == "claude" {
 			for _, suffix := range []string{"opus", "sonnet", "oauth-apps", "cowork", "sessions"} {
@@ -208,7 +218,7 @@ func overviewWindow(w quotamonitor.QuotaWindow, provider string) (name, family s
 				}
 			}
 		}
-	case strings.Contains(label, "five-hour"), strings.Contains(label, "5-hour"), strings.Contains(label, "5h"), minutes == 300, provider == "codex" && strings.Contains(label, "primary"):
+	case strings.Contains(label, "five-hour"), strings.Contains(label, "5-hour"), strings.Contains(label, "5h"), minutes == 300:
 		name = "five-hour"
 	case minutes > 0:
 		name = "window-" + strconv.Itoa(minutes) + "m"

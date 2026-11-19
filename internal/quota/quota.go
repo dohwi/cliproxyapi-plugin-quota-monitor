@@ -1675,6 +1675,7 @@ func (a *Adapter) parseCodexSignals(res *AccountQuota) {
 			normalizeWindowResetAt(w, res.ObservedAt)
 			res.Windows = append(res.Windows, *w)
 		}
+		res.Windows = DistinctCodexWindows(res.Windows)
 		normalizeWindows(res.Windows)
 	}
 }
@@ -2020,7 +2021,14 @@ func ParseCodexQuota(data []byte) ([]QuotaWindow, error) {
 			continue
 		}
 		w := QuotaWindow{Name: pair.name}
-		if seconds, ok := quotaResetAfterSeconds(objectValue(m, "limit_window_seconds", "limitWindowSeconds")); ok {
+		seconds, hasDuration := quotaResetAfterSeconds(objectValue(m, "limit_window_seconds", "limitWindowSeconds"))
+		if !hasDuration && pair.name == "primary" {
+			seconds, hasDuration = quotaResetAfterSeconds(objectValue(container, "limit_window_seconds", "limitWindowSeconds"))
+		}
+		if hasDuration {
+			if seconds == 0 {
+				continue // Explicitly disabled upstream slot, even if it carries zero usage.
+			}
 			if minutes, ok := windowMinutesFromSeconds(seconds); ok {
 				w.WindowMinutes = &minutes
 			}
@@ -2066,13 +2074,6 @@ func ParseCodexQuota(data []byte) ([]QuotaWindow, error) {
 					w.Allowed = &b
 				}
 			}
-			if w.WindowMinutes == nil {
-				if seconds, ok := quotaResetAfterSeconds(objectValue(container, "limit_window_seconds", "limitWindowSeconds")); ok {
-					if minutes, ok := windowMinutesFromSeconds(seconds); ok {
-						w.WindowMinutes = &minutes
-					}
-				}
-			}
 		}
 		if t, ok := quotaTime(objectValue(m, "reset_at", "reset_time", "resets_at")); ok {
 			w.ResetAt = t
@@ -2083,7 +2084,7 @@ func ParseCodexQuota(data []byte) ([]QuotaWindow, error) {
 		normalizeWindow(&w)
 		out = append(out, w)
 	}
-	return out, nil
+	return DistinctCodexWindows(out), nil
 }
 
 func quotaBool(v any) (bool, bool) {

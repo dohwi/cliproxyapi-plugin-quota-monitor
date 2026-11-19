@@ -109,14 +109,41 @@ func modelScopedWindow(w quotamonitor.QuotaWindow) bool {
 	return false
 }
 
-// primarySecondaryAvailability serves Claude and Codex: the 5h window decides,
-// but a depleted weekly window blocks the account regardless of 5h.
-func primarySecondaryAvailability(a quotamonitor.AccountQuota, primaryNames, secondaryNames []string) (float64, bool) {
-	primary := findWindow(a.Windows, windowFiveHourMinutes, primaryNames...)
+func claudeAvailability(a quotamonitor.AccountQuota) (float64, bool) {
+	primary := findWindow(a.Windows, windowFiveHourMinutes, "five-hour", "5h")
 	if primary == nil {
 		return 0, false
 	}
-	secondary := findWindow(a.Windows, windowWeeklyMinutes, secondaryNames...)
+	return primarySecondaryAvailability(a, primary, findWindow(a.Windows, windowWeeklyMinutes, "weekly", "7d"))
+}
+
+func codexAvailability(a quotamonitor.AccountQuota) (float64, bool) {
+	windows := quotamonitor.DistinctCodexWindows(a.Windows)
+	var primary, secondary *quotamonitor.QuotaWindow
+	for i := range windows {
+		w := &windows[i]
+		if !quotamonitor.IsCodexAccountWindow(*w) {
+			continue
+		}
+		switch quotamonitor.CodexWindowKind(*w) {
+		case quotamonitor.CodexFiveHour:
+			primary = w
+		case quotamonitor.CodexWeekly:
+			secondary = w
+		}
+	}
+	return primarySecondaryAvailability(a, primary, secondary)
+}
+
+// The 5h window decides when present; a depleted weekly window always blocks
+// the account. A Codex account with only a weekly limit contributes that quota.
+func primarySecondaryAvailability(a quotamonitor.AccountQuota, primary, secondary *quotamonitor.QuotaWindow) (float64, bool) {
+	if primary == nil {
+		primary, secondary = secondary, nil
+	}
+	if primary == nil {
+		return 0, false
+	}
 	considered := []quotamonitor.QuotaWindow{*primary}
 	if secondary != nil {
 		considered = append(considered, *secondary)
@@ -173,12 +200,8 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 		}
 	}
 	families := []family{
-		{"claude", "Claude", "CC", provider("claude", func(a quotamonitor.AccountQuota) (float64, bool) {
-			return primarySecondaryAvailability(a, []string{"five-hour", "5h"}, []string{"weekly", "7d"})
-		})},
-		{"codex", "GPT", "GPT", provider("codex", func(a quotamonitor.AccountQuota) (float64, bool) {
-			return primarySecondaryAvailability(a, []string{"primary"}, []string{"secondary"})
-		})},
+		{"claude", "Claude", "CC", provider("claude", claudeAvailability)},
+		{"codex", "GPT", "GPT", provider("codex", codexAvailability)},
 		{"antigravity_gemini", "안티그래비티 · Gemini", "AG", provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
 			return antigravityAvailability(a, antigravityGeminiPattern)
 		})},

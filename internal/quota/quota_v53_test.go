@@ -157,6 +157,50 @@ func TestV53CodexActiveScopeFlagsWindowsAndEmptyObjects(t *testing.T) {
 	}
 }
 
+func TestCodexWeeklyOnlyActiveWindows(t *testing.T) {
+	const weekly = `{"used_percent":0,"limit_window_seconds":604800,"reset_after_seconds":604000}`
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"weekly in primary", `{"rate_limit":{"primary_window":` + weekly + `,"secondary_window":null}}`},
+		{"weekly in secondary", `{"rate_limit":{"secondary_window":` + weekly + `}}`},
+		{"weekly in rate-limit scope", `{"rateLimit":{"limitWindowSeconds":604800,"primaryWindow":{"used_percent":0,"reset_after_seconds":604000}}}`},
+		{"zero-length placeholder", `{"rate_limit":{"primary_window":{"used_percent":0,"limit_window_seconds":0,"reset_after_seconds":0},"secondary_window":` + weekly + `}}`},
+		{"duplicate positional weekly", `{"rate_limit":{"primary_window":` + weekly + `,"secondary_window":{"used_percent":0,"reset_after_seconds":0}}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			windows, err := ParseCodexQuota([]byte(tc.body))
+			if err != nil || len(windows) != 1 {
+				t.Fatalf("windows=%+v err=%v, want only the measured weekly window", windows, err)
+			}
+			w := windows[0]
+			if w.WindowMinutes == nil || *w.WindowMinutes != 10080 || w.RemainingPercent == nil || *w.RemainingPercent != 100 || w.ResetAfterSec == nil || *w.ResetAfterSec != 604000 {
+				t.Fatalf("wrong weekly window: %+v", w)
+			}
+		})
+	}
+}
+
+func TestCodexWeeklyOnlyPassiveWindows(t *testing.T) {
+	for _, secondary := range []string{`"x-codex-secondary-window-minutes":"0",`, `"x-codex-secondary-window-minutes":"10080",`, ""} {
+		accounts, err := NewAdapter().ParseAuthFilesJSON([]byte(`[{"provider":"codex","quota":{"signals":{
+			"x-codex-primary-window-minutes":"10080",
+			"x-codex-primary-used-percent":"20",
+			` + secondary + `
+			"x-codex-secondary-used-percent":"0",
+			"x-codex-secondary-reset-after-seconds":"0"
+		}}}]`))
+		if err != nil || len(accounts) != 1 || len(accounts[0].Windows) != 1 {
+			t.Fatalf("accounts=%+v err=%v, want a single weekly window", accounts, err)
+		}
+		w := accounts[0].Windows[0]
+		if w.WindowMinutes == nil || *w.WindowMinutes != 10080 || w.RemainingPercent == nil || *w.RemainingPercent != 80 {
+			t.Fatalf("wrong weekly window: %+v", w)
+		}
+	}
+}
+
 func TestV53AntigravityFieldUnitsAndTimestampSafety(t *testing.T) {
 	windows, err := ParseAntigravityQuota([]byte(`{"groups":[{"buckets":[
 		{"displayName":"fraction string","remainingFraction":"0.25"},

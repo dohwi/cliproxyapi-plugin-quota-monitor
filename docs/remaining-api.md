@@ -15,6 +15,10 @@ allowances are reported separately. Remaining percentages describe the most
 constrained known allowance; percentages across different accounts are never
 added. Unknown allowances stay unknown, and stale data is explicitly marked.
 Overage billing and code-review allowances are excluded from subscription usage.
+For Codex, a reported window duration takes precedence over the `primary` or
+`secondary` slot name. Accounts with only a weekly window have no 5-hour row;
+their weekly value also contributes to the fleet availability indicator. The
+reset countdown is not used to infer the window duration.
 This is quota utilization, not an estimate of remaining tokens or money.
 
 ## Explicit refresh

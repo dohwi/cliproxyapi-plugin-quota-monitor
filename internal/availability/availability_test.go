@@ -43,6 +43,26 @@ func TestComputeAveragesAccountsAndHonorsWeekly(t *testing.T) {
 	}
 }
 
+func TestComputeCodexWeeklyOnlyAvailability(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		windows []quotamonitor.QuotaWindow
+		want    float64
+	}{
+		{"weekly in primary with positional duplicate", []quotamonitor.QuotaWindow{availWin("primary", 10080, 65), {Name: "secondary", RemainingPercent: new(float64)}}, 65},
+		{"weekly in secondary", []quotamonitor.QuotaWindow{availWin("secondary", 10080, 70)}, 70},
+		{"weekly exhausted", []quotamonitor.QuotaWindow{availWin("primary", 10080, 0)}, 0},
+		{"two distinct windows", []quotamonitor.QuotaWindow{availWin("primary", 300, 50), availWin("secondary", 10080, 70)}, 50},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := quotamonitor.AccountQuota{Provider: "codex", Status: quotamonitor.StatusKnown, Windows: tc.windows}
+			if got := availEntry(t, Compute([]quotamonitor.AccountQuota{a}), "codex"); got.RemainingPercent != tc.want || got.Accounts != 1 {
+				t.Fatalf("codex = %+v, want %v%% over 1 account", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestComputeKeepsExhaustedUnavailableAccountAtZero(t *testing.T) {
 	yes := true
 	accounts := []quotamonitor.AccountQuota{
