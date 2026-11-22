@@ -206,15 +206,23 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 			return fn(a)
 		}
 	}
+	antigravityTier := func(tier string, family *regexp.Regexp) func(quotamonitor.AccountQuota) (float64, bool) {
+		return provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
+			if quotamonitor.NormalizeAntigravityTier(a.ModelTier) != tier {
+				return 0, false
+			}
+			return antigravityAvailability(a, family)
+		})
+	}
 	families := []family{
 		{"claude", "Claude", "CC", provider("claude", claudeAvailability)},
 		{"codex", "GPT", "GPT", provider("codex", codexAvailability)},
-		{"antigravity_gemini", "안티그래비티 · Gemini", "AG", provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
-			return antigravityAvailability(a, antigravityGeminiPattern)
-		})},
-		{"antigravity_claude", "안티그래비티 · Claude/GPT", "AG", provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
-			return antigravityAvailability(a, antigravityClaudePattern)
-		})},
+		{"antigravity_4_gemini", "AGY (4) · Gemini", "AG4", antigravityTier(quotamonitor.AntigravityTier4, antigravityGeminiPattern)},
+		{"antigravity_4_claude", "AGY (4) · Claude/GPT", "AG4", antigravityTier(quotamonitor.AntigravityTier4, antigravityClaudePattern)},
+		{"antigravity_3_8_gemini", "AGY (3.8) · Gemini", "AG3.8", antigravityTier(quotamonitor.AntigravityTier38, antigravityGeminiPattern)},
+		{"antigravity_3_8_claude", "AGY (3.8) · Claude/GPT", "AG3.8", antigravityTier(quotamonitor.AntigravityTier38, antigravityClaudePattern)},
+		{"antigravity_gemini", "안티그래비티 · Gemini", "AG", antigravityTier("", antigravityGeminiPattern)},
+		{"antigravity_claude", "안티그래비티 · Claude/GPT", "AG", antigravityTier("", antigravityClaudePattern)},
 	}
 	entries := make([]Entry, 0, len(families))
 	for _, f := range families {

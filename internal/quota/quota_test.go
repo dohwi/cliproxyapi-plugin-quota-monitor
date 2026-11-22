@@ -2195,3 +2195,95 @@ func TestParseAntigravityModelQuotaWeekly(t *testing.T) {
 		t.Errorf("weekly must be the lowest declared weekly bucket (60%%): %+v", w)
 	}
 }
+
+func TestClassifyAntigravityModels(t *testing.T) {
+	cases := []struct {
+		name   string
+		models []string
+		want   string
+	}{
+		{"empty", nil, ""},
+		{"blank only", []string{"", "   "}, ""},
+		{"pro 3.8 only", []string{"gemini-3.8-flash", "gemini-3.1-flash-image", "gemini-claude-opus-4.6"}, AntigravityTier38},
+		{"ultra gemini-4", []string{"gemini-3.8-flash", "gemini-4-argon", "gemini-claude-opus-5.5"}, AntigravityTier4},
+		{"prefixed gemini-4", []string{"ultra/GEMINI-4-Neon"}, AntigravityTier4},
+		{"dotted gemini-4", []string{"gemini-4.0-pro"}, AntigravityTier4},
+		{"exact gemini-4", []string{"gemini-4"}, AntigravityTier4},
+		{"non-4 lookalike", []string{"gemini-40-flash"}, AntigravityTier38},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClassifyAntigravityModels(tc.models); got != tc.want {
+				t.Errorf("ClassifyAntigravityModels(%v) = %q, want %q", tc.models, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseAuthFileModelsJSON(t *testing.T) {
+	models, err := ParseAuthFileModelsJSON([]byte(`{"models":[{"id":"gemini-3.8-flash"},{"id":"gemini-4-argon","display_name":"Gemini 4 Argon"}]}`))
+	if err != nil {
+		t.Fatalf("ParseAuthFileModelsJSON error: %v", err)
+	}
+	if len(models) != 2 || models[0] != "gemini-3.8-flash" || models[1] != "gemini-4-argon" {
+		t.Fatalf("models = %v", models)
+	}
+	bare, err := ParseAuthFileModelsJSON([]byte(`[{"id":"gemini-3.8-flash"},"gemini-4-carbon"]`))
+	if err != nil || len(bare) != 2 {
+		t.Fatalf("bare array models = %v, err = %v", bare, err)
+	}
+	if _, err := ParseAuthFileModelsJSON([]byte(`not-json`)); err == nil {
+		t.Fatal("expected parse error for invalid json")
+	}
+}
+
+func TestFetchAuthFileModelsAndTier(t *testing.T) {
+	var seenPath, seenQueryName, seenAuth, seenKey string
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		seenPath = r.URL.Path
+		seenQueryName = r.URL.Query().Get("name")
+		seenAuth = r.Header.Get("Authorization")
+		seenKey = r.Header.Get("X-Management-Key")
+		switch seenQueryName {
+		case "antigravity-ultra@example.com.json":
+			_, _ = w.Write([]byte(`{"models":[{"id":"gemini-3.8-flash"},{"id":"gemini-4-argon"}]}`))
+		case "antigravity-pro@example.com.json":
+			_, _ = w.Write([]byte(`{"models":[{"id":"gemini-3.8-flash"},{"id":"gemini-claude-opus-4.6"}]}`))
+		case "antigravity-autherr.json":
+			w.WriteHeader(http.StatusUnauthorized)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL+"/v0", "secret-key")
+
+	// Account with empty authFileName must not hit the network.
+	if tier, err := client.FetchAntigravityModelTier(context.Background(), AccountQuota{Provider: "antigravity"}); err != nil || tier != "" || hits != 0 {
+		t.Fatalf("empty filename hit network: tier=%q err=%v hits=%d", tier, err, hits)
+	}
+
+	ultra := AccountQuota{Provider: "antigravity", authFileName: "antigravity-ultra@example.com.json"}
+	tier, err := client.FetchAntigravityModelTier(context.Background(), ultra)
+	if err != nil || tier != AntigravityTier4 {
+		t.Fatalf("ultra tier = %q, err = %v, want %q", tier, err, AntigravityTier4)
+	}
+	if seenPath != "/v0/management/auth-files/models" || seenQueryName != "antigravity-ultra@example.com.json" || seenAuth != "Bearer secret-key" || seenKey != "secret-key" {
+		t.Fatalf("unexpected request: path=%q name=%q auth=%q key=%q", seenPath, seenQueryName, seenAuth, seenKey)
+	}
+
+	pro := AccountQuota{Provider: "antigravity", authFileName: "antigravity-pro@example.com.json"}
+	if tier, err := client.FetchAntigravityModelTier(context.Background(), pro); err != nil || tier != AntigravityTier38 {
+		t.Fatalf("pro tier = %q, err = %v, want %q", tier, err, AntigravityTier38)
+	}
+
+	authErrAcc := AccountQuota{Provider: "antigravity", authFileName: "antigravity-autherr.json"}
+	if _, err := client.FetchAuthFileModels(context.Background(), authErrAcc); err == nil {
+		t.Fatal("expected auth error on 401")
+	} else if ae, ok := err.(*APICallError); !ok || ae.Kind != "auth" {
+		t.Fatalf("want APICallError{Kind:auth}, got %#v", err)
+	}
+}

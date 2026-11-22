@@ -206,9 +206,13 @@ type AccountQuota struct {
 	// Endpoint is a safe allowlisted enum (direct|warp1|warp2|unknown) derived
 	// from proxy_url in the raw auth file via EndpointResolver.
 	// URL/host/IP/token details are never stored.
-	Endpoint  EndpointKind `json:"endpoint,omitempty"`
-	projectID string       `json:"-"`
-	accountID string       `json:"-"`
+	Endpoint EndpointKind `json:"endpoint,omitempty"`
+	// ModelTier is an allowlisted Antigravity capability tier derived from
+	// registered auth-file models ("4" when gemini-4* is registered, "3.8"
+	// otherwise). Empty when unknown or non-Antigravity.
+	ModelTier string `json:"model_tier,omitempty"`
+	projectID string `json:"-"`
+	accountID string `json:"-"`
 	// authFileName is the stable auth file name (e.g. "user.json") used as
 	// the join key between management list entries and disk auth files.
 	// It is never serialized or logged.
@@ -2812,4 +2816,158 @@ func (c *Client) FetchAuthFiles(ctx context.Context) ([]AccountQuota, error) {
 	}
 
 	return c.Adapter.ParseAuthFilesJSON(body)
+}
+
+const (
+	AntigravityTier4  = "4"
+	AntigravityTier38 = "3.8"
+
+	maxAuthFileModels = 512
+)
+
+// NormalizeAntigravityTier returns an allowlisted Antigravity model tier
+// ("4" or "3.8"), or "" for any other value.
+func NormalizeAntigravityTier(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case AntigravityTier4:
+		return AntigravityTier4
+	case AntigravityTier38:
+		return AntigravityTier38
+	default:
+		return ""
+	}
+}
+
+// ClassifyAntigravityModels classifies an Antigravity account's registered
+// model list into AntigravityTier4 when any gemini-4 model is registered,
+// AntigravityTier38 when at least one valid model ID is registered without
+// gemini-4, and "" when no registered model IDs are known.
+func ClassifyAntigravityModels(modelIDs []string) string {
+	hasAny := false
+	for _, raw := range modelIDs {
+		id := strings.ToLower(strings.TrimSpace(raw))
+		if id == "" {
+			continue
+		}
+		hasAny = true
+		base := id
+		if slash := strings.LastIndex(base, "/"); slash >= 0 {
+			base = base[slash+1:]
+		}
+		if base == "gemini-4" || strings.HasPrefix(base, "gemini-4-") || strings.HasPrefix(base, "gemini-4.") {
+			return AntigravityTier4
+		}
+	}
+	if !hasAny {
+		return ""
+	}
+	return AntigravityTier38
+}
+
+// ParseAuthFileModelsJSON extracts bounded model IDs from CLIProxyAPI's
+// /management/auth-files/models response ({"models":[{"id":"..."}]}).
+func ParseAuthFileModelsJSON(data []byte) ([]string, error) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return nil, &APICallError{Kind: "parse"}
+	}
+	var rawItems []json.RawMessage
+	if trimmed[0] == '{' {
+		var envelope struct {
+			Models []json.RawMessage `json:"models"`
+		}
+		if err := json.Unmarshal(trimmed, &envelope); err != nil {
+			return nil, &APICallError{Kind: "parse"}
+		}
+		rawItems = envelope.Models
+	} else if trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &rawItems); err != nil {
+			return nil, &APICallError{Kind: "parse"}
+		}
+	} else {
+		return nil, &APICallError{Kind: "parse"}
+	}
+	if len(rawItems) > maxAuthFileModels {
+		rawItems = rawItems[:maxAuthFileModels]
+	}
+	out := make([]string, 0, len(rawItems))
+	for _, raw := range rawItems {
+		item := bytes.TrimSpace(raw)
+		if len(item) == 0 {
+			continue
+		}
+		if item[0] == '"' {
+			var id string
+			if err := json.Unmarshal(item, &id); err == nil {
+				if id = strings.TrimSpace(id); id != "" {
+					out = append(out, id)
+				}
+			}
+			continue
+		}
+		var obj struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(item, &obj); err == nil {
+			if id := strings.TrimSpace(obj.ID); id != "" {
+				out = append(out, id)
+			}
+		}
+	}
+	return out, nil
+}
+
+// FetchAuthFileModels queries /management/auth-files/models?name=<file> for an
+// account's registered models. Returns nil, nil when the account has no raw
+// auth file name.
+func (c *Client) FetchAuthFileModels(ctx context.Context, account AccountQuota) ([]string, error) {
+	if c.BaseURL == "" {
+		return nil, &APICallError{Kind: "upstream"}
+	}
+	name := strings.TrimSpace(account.authFileName)
+	if name == "" {
+		return nil, nil
+	}
+	reqURL := c.BaseURL + "/management/auth-files/models?" + url.Values{"name": {name}}.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, &APICallError{Kind: "upstream"}
+	}
+	req.Header.Set("Accept", "application/json")
+	if c.ManagementKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.ManagementKey)
+		req.Header.Set("X-Management-Key", c.ManagementKey)
+	}
+	resp, err := c.managementClient().Do(req)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, &APICallError{Kind: "timeout"}
+		}
+		return nil, &APICallError{Kind: "upstream"}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, &APICallError{Kind: "auth", StatusCode: resp.StatusCode}
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, &APICallError{Kind: "upstream", StatusCode: resp.StatusCode}
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxBodyBytes+1))
+	if err != nil {
+		return nil, &APICallError{Kind: "upstream"}
+	}
+	if int64(len(body)) > MaxBodyBytes {
+		return nil, &APICallError{Kind: "parse"}
+	}
+	return ParseAuthFileModelsJSON(body)
+}
+
+// FetchAntigravityModelTier resolves the allowlisted Antigravity model tier
+// ("4" or "3.8") from the host's registered models for this auth file.
+func (c *Client) FetchAntigravityModelTier(ctx context.Context, account AccountQuota) (string, error) {
+	models, err := c.FetchAuthFileModels(ctx, account)
+	if err != nil {
+		return "", err
+	}
+	return ClassifyAntigravityModels(models), nil
 }

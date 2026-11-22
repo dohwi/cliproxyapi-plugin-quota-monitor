@@ -281,7 +281,7 @@ func nextAccountProbeDue(a quotamonitor.AccountQuota, isCurrent bool, attemptedA
 func nextPollHintMS(accounts []quotamonitor.AccountQuota, currentKeys map[string]string) int64 {
 	var minInterval time.Duration
 	for _, a := range accounts {
-		prov := strings.ToLower(strings.TrimSpace(a.Provider))
+		prov := accountUnitKey(a)
 		isCurrent := a.AccountKey != "" && currentKeys[prov] == a.AccountKey
 		tier := classifyAccountTier(a, isCurrent)
 		interval := probeIntervalForTier(tier)
@@ -866,11 +866,12 @@ type safeAccount struct {
 	// Endpoint is "direct", "unknown", or a sanitized single-label proxy
 	// hostname (e.g. a Docker service name such as "warp1"). URLs, ports,
 	// credentials, IPs and dotted/FQDN hosts are never included.
-	Endpoint quotamonitor.EndpointKind `json:"endpoint"`
-	PlanType string                    `json:"plan_type,omitempty"`
+	Endpoint  quotamonitor.EndpointKind `json:"endpoint"`
+	PlanType  string                    `json:"plan_type,omitempty"`
+	ModelTier string                    `json:"model_tier,omitempty"`
 	// CurrentAccount marks the single most-recently-used account per provider
-	// based on the latest audited token usage within currentAccountWindow.
-	// At most one account per provider has this set to true.
+	// unit (with Antigravity split by model_tier) based on the latest audited
+	// token usage within currentAccountWindow.
 	CurrentAccount bool   `json:"current_account,omitempty"`
 	CurrentKind    string `json:"current_kind,omitempty"` // recent only
 	CurrentReason  string `json:"current_reason,omitempty"`
@@ -882,6 +883,23 @@ type safeAccount struct {
 
 func sanitizePlanType(p string) string {
 	return quotamonitor.NormalizeCodexPlanType(p)
+}
+
+func sanitizeModelTier(provider, raw string) string {
+	if !strings.EqualFold(strings.TrimSpace(provider), "antigravity") {
+		return ""
+	}
+	return quotamonitor.NormalizeAntigravityTier(raw)
+}
+
+func accountUnitKey(a quotamonitor.AccountQuota) string {
+	p := strings.ToLower(strings.TrimSpace(a.Provider))
+	if p == "antigravity" {
+		if tier := quotamonitor.NormalizeAntigravityTier(a.ModelTier); tier != "" {
+			return p + ":" + tier
+		}
+	}
+	return p
 }
 
 func maskAccount(s string) string {
@@ -973,10 +991,10 @@ func currentAccountSelection(in []quotamonitor.AccountQuota) map[string]currentC
 	result := make(map[string]currentChoice)
 	cutoff := now().Add(-currentAccountWindow)
 
-	// Group accounts by lowercase provider
+	// Group accounts by provider unit (Antigravity splits by model_tier).
 	byProv := make(map[string][]quotamonitor.AccountQuota)
 	for _, a := range in {
-		p := strings.ToLower(strings.TrimSpace(a.Provider))
+		p := accountUnitKey(a)
 		if p != "" {
 			byProv[p] = append(byProv[p], a)
 		}
@@ -1044,6 +1062,7 @@ func sanitizeAccountsWithSelection(in []quotamonitor.AccountQuota, currentByProv
 			ObservedAt:       a.ObservedAt,
 			Endpoint:         a.Endpoint,
 			PlanType:         sanitizePlanType(a.PlanType),
+			ModelTier:        sanitizeModelTier(a.Provider, a.ModelTier),
 			APICredits:       a.APICredits,
 			ResetCredits:     a.ResetCredits,
 		}
@@ -1062,7 +1081,7 @@ func sanitizeAccountsWithSelection(in []quotamonitor.AccountQuota, currentByProv
 		// Preserve the committed selection during progressive updates, but never
 		// publish a border after its audited use expires or the account blocks.
 		// This only clears an invalid selection; it does not move it mid-batch.
-		provKey := strings.ToLower(strings.TrimSpace(a.Provider))
+		provKey := accountUnitKey(a)
 		recent := a.LastUsedAt != nil && !a.LastUsedAt.Before(now().Add(-currentAccountWindow))
 		if choice, ok := currentByProv[provKey]; ok && choice.kind == "recent" && choice.reason == "recent_usage" && choice.accountKey == a.AccountKey && recent && isAccountRoutableHealthy(a) {
 			x.CurrentAccount = true
@@ -1729,7 +1748,7 @@ func recordProbeAttempts(st *stateData, accounts []quotamonitor.AccountQuota, at
 		if !ok {
 			continue
 		}
-		attempt.NextDue = nextAccountProbeDue(a, current[strings.ToLower(strings.TrimSpace(a.Provider))] == a.AccountKey, attempt.LastAttempt)
+		attempt.NextDue = nextAccountProbeDue(a, current[accountUnitKey(a)] == a.AccountKey, attempt.LastAttempt)
 		if attempt.LastSuccess.IsZero() {
 			st.health.ProbeFailures++
 			attempt.LastSuccess = st.schedules[a.AccountKey].LastSuccess
@@ -1869,6 +1888,11 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 				a.ResetCredits = mergeResetCredits(nil, reset)
 			}
 		} else {
+			if strings.EqualFold(a.Provider, "antigravity") {
+				if tier, tierErr := client.FetchAntigravityModelTier(probeCtx, *a); tierErr == nil && tier != "" {
+					a.ModelTier = tier
+				}
+			}
 			wins, err = client.FetchActiveQuota(probeCtx, *a)
 		}
 		cancel()
@@ -2035,6 +2059,9 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 				if p.PlanType != "" {
 					a.PlanType = p.PlanType
 				}
+				if p.ModelTier != "" && a.ModelTier == "" {
+					a.ModelTier = p.ModelTier
+				}
 				a.APICredits = mergeAPICredits(a.APICredits, p.APICredits)
 				a.ResetCredits = mergeResetCredits(a.ResetCredits, p.ResetCredits)
 				if p.Credits != nil {
@@ -2076,6 +2103,9 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 			}
 			if a.PlanType == "" && p.PlanType != "" {
 				a.PlanType = p.PlanType
+			}
+			if a.ModelTier == "" && p.ModelTier != "" {
+				a.ModelTier = p.ModelTier
 			}
 			a.APICredits = mergeAPICredits(p.APICredits, a.APICredits)
 			a.ResetCredits = mergeResetCredits(p.ResetCredits, a.ResetCredits)

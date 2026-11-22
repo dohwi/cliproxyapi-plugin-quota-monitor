@@ -205,6 +205,10 @@ var I18N = {
     'legend.low': '10% 미만 부족',
     'fleet.antigravity_gemini': '안티그래비티 · Gemini',
     'fleet.antigravity_claude': '안티그래비티 · Claude/GPT',
+    'fleet.antigravity_4_gemini': 'AGY (4) · Gemini',
+    'fleet.antigravity_4_claude': 'AGY (4) · Claude/GPT',
+    'fleet.antigravity_3_8_gemini': 'AGY (3.8) · Gemini',
+    'fleet.antigravity_3_8_claude': 'AGY (3.8) · Claude/GPT',
     'fleet.count': '{n}개 계정',
     'fleet.chipCount': '{n}개',
     'accounts.aria': '계정 목록',
@@ -363,6 +367,10 @@ var I18N = {
     'legend.low': 'Under 10% critical',
     'fleet.antigravity_gemini': 'Antigravity \u00b7 Gemini',
     'fleet.antigravity_claude': 'Antigravity \u00b7 Claude/GPT',
+    'fleet.antigravity_4_gemini': 'AGY (4) \u00b7 Gemini',
+    'fleet.antigravity_4_claude': 'AGY (4) \u00b7 Claude/GPT',
+    'fleet.antigravity_3_8_gemini': 'AGY (3.8) \u00b7 Gemini',
+    'fleet.antigravity_3_8_claude': 'AGY (3.8) \u00b7 Claude/GPT',
     'fleet.count': '{n} accounts',
     'fleet.count.one': '{n} account',
     'fleet.chipCount': '{n}',
@@ -523,6 +531,10 @@ var I18N = {
     'legend.low': '告急（低于 10%）',
     'fleet.antigravity_gemini': 'Antigravity \u00b7 Gemini',
     'fleet.antigravity_claude': 'Antigravity \u00b7 Claude/GPT',
+    'fleet.antigravity_4_gemini': 'AGY (4) \u00b7 Gemini',
+    'fleet.antigravity_4_claude': 'AGY (4) \u00b7 Claude/GPT',
+    'fleet.antigravity_3_8_gemini': 'AGY (3.8) \u00b7 Gemini',
+    'fleet.antigravity_3_8_claude': 'AGY (3.8) \u00b7 Claude/GPT',
     'fleet.count': '{n}个账号',
     'fleet.count.one': '{n}个账号',
     'fleet.chipCount': '{n}个',
@@ -997,6 +1009,34 @@ function getProviderKey(p) {
   return 'unknown';
 }
 
+function normalizeModelTier(raw) {
+  var s = String(raw || '').trim();
+  if (s === '4' || s === '3.8') return s;
+  return '';
+}
+
+function accountProviderUnit(acc) {
+  var p = acc && acc.provider;
+  if (getProviderKey(p) === 'antigravity') {
+    var tier = normalizeModelTier(acc && acc.model_tier);
+    if (tier === '4') return 'AGY (4)';
+    if (tier === '3.8') return 'AGY (3.8)';
+  }
+  return formatProviderLabel(p || 'unknown');
+}
+
+function modelTierRank(raw) {
+  var tier = normalizeModelTier(raw);
+  return tier === '4' ? 0 : tier === '3.8' ? 1 : 2;
+}
+
+function providerUnitRank(unit) {
+  if (unit === 'AGY (4)') return 0;
+  if (unit === 'AGY (3.8)') return 1;
+  var key = getProviderKey(unit);
+  return key === 'antigravity' ? 2 : key === 'codex' ? 3 : key === 'claude' ? 4 : 5;
+}
+
 function providerIcon(provider, size) {
   var s = (size && typeof size === 'number') ? size : 16;
   var cacheKey = getProviderKey(provider) + ':' + s;
@@ -1296,6 +1336,10 @@ function sortAccountsByEndpoint(accounts) {
   arr.sort(function(a, b) {
     var pr = providerRank(a.provider) - providerRank(b.provider);
     if (pr !== 0) return pr;
+    if (getProviderKey(a.provider) === 'antigravity' && getProviderKey(b.provider) === 'antigravity') {
+      var tr = modelTierRank(a.model_tier) - modelTierRank(b.model_tier);
+      if (tr !== 0) return tr;
+    }
     var er = endpointCompare(normalizeEndpoint(a.endpoint), normalizeEndpoint(b.endpoint));
     if (er !== 0) return er;
     var sr = statusRank(a) - statusRank(b);
@@ -2009,7 +2053,7 @@ function populateProviderSegmented(accounts) {
   var provMap = {};
   var provCounts = {};
   for (var i = 0; i < accs.length; i++) {
-    var pKey = formatProviderLabel(accs[i].provider || 'unknown');
+    var pKey = accountProviderUnit(accs[i]);
     provMap[pKey] = true;
     provCounts[pKey] = (provCounts[pKey] || 0) + 1;
   }
@@ -2022,7 +2066,11 @@ function populateProviderSegmented(accounts) {
     select.appendChild(option);
   }
   appendOption('all', t('all.count', { n: accs.length }));
-  Object.keys(provMap).sort().forEach(function(provider) {
+  Object.keys(provMap).sort(function(a, b) {
+    var ra = providerUnitRank(a), rb = providerUnitRank(b);
+    if (ra !== rb) return ra - rb;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }).forEach(function(provider) {
     appendOption(provider, provider + ' (' + (provCounts[provider] || 0) + ')');
   });
   select.value = selectedProvider;
@@ -2078,17 +2126,29 @@ function renderFleetAvailability(entries) {
   var el = document.getElementById('fleetAvailability');
   if (!el) return;
   var list = Array.isArray(entries) ? entries : [];
-  // Antigravity's Gemini and Claude/GPT families collapse into one "AGY" chip.
+  // Each Antigravity unit (AGY (4), AGY (3.8), or legacy unclassified AGY)
+  // collapses its Gemini and Claude/GPT families into one chip.
+  var agyGroupByKey = {
+    antigravity_4_gemini: 'AGY (4)',
+    antigravity_4_claude: 'AGY (4)',
+    antigravity_3_8_gemini: 'AGY (3.8)',
+    antigravity_3_8_claude: 'AGY (3.8)',
+    antigravity_gemini: 'AGY',
+    antigravity_claude: 'AGY'
+  };
   var chips = [];
-  var agy = null;
+  var agyChips = {};
   for (var i = 0; i < list.length; i++) {
     var e = list[i] || {};
     var rem = Number(e.remaining_percent);
     if (!isFinite(rem)) continue;
     var count = Number(e.accounts) || 0;
-    if (e.key === 'antigravity_gemini' || e.key === 'antigravity_claude') {
+    var agyLabel = agyGroupByKey[e.key];
+    if (agyLabel) {
+      var agy = agyChips[agyLabel];
       if (!agy) {
-        agy = { label: 'AGY', provider: 'antigravity', title: '', values: [], accounts: 0 };
+        agy = { label: agyLabel, provider: 'antigravity', title: '', values: [], accounts: 0 };
+        agyChips[agyLabel] = agy;
         chips.push(agy);
       }
       agy.values.push(rem);
@@ -2174,8 +2234,9 @@ function applyFilters() {
   for (var i = 0; i < cachedAccounts.length; i++) {
     var acc = cachedAccounts[i];
     if (selectedProvider !== 'all') {
+      var unitP = accountProviderUnit(acc);
       var normP = formatProviderLabel(acc.provider);
-      if (normP !== selectedProvider && acc.provider !== selectedProvider) continue;
+      if (unitP !== selectedProvider && normP !== selectedProvider && acc.provider !== selectedProvider) continue;
     }
     if (st !== 'all') {
       var canonKey = getCanonicalStatus(acc).key;
@@ -2549,6 +2610,8 @@ function renderAccounts(accounts) {
     card.setAttribute('role', 'group');
     card.setAttribute('aria-label', String(acc.account || acc.alias || t('card.account')) + ' · ' + availability.label + (isCurrent ? t('card.current') : ''));
     card.setAttribute('data-provider', pKey);
+    var modelTier = pKey === 'antigravity' ? normalizeModelTier(acc.model_tier) : '';
+    if (modelTier) card.setAttribute('data-model-tier', modelTier);
     var cardEndpoint = normalizeEndpoint(acc.endpoint);
     card.setAttribute('data-endpoint', cardEndpoint);
     if (isCurrent) card.setAttribute('data-current', 'true');
@@ -2563,9 +2626,9 @@ function renderAccounts(accounts) {
     var metaLeft = document.createElement('span');
     metaLeft.className = 'card-meta-left';
     var provEl = document.createElement('span');
-    var provBadgeClass = pKey === 'antigravity' ? 'badge-provider-antigravity' : (pKey === 'codex' ? 'badge-provider-codex' : (pKey === 'claude' ? 'badge-provider-claude' : 'badge-provider-default'));
+    var provBadgeClass = pKey === 'antigravity' ? ('badge-provider-antigravity' + (modelTier === '3.8' ? ' badge-provider-antigravity-38' : '')) : (pKey === 'codex' ? 'badge-provider-codex' : (pKey === 'claude' ? 'badge-provider-claude' : 'badge-provider-default'));
     provEl.className = 'badge-provider ' + provBadgeClass;
-    var provBaseLabel = formatProviderLabel(acc.provider);
+    var provBaseLabel = accountProviderUnit(acc);
     var provHTML = providerIcon(acc.provider, 14);
     if (pKey === 'codex' && acc.plan_type) {
       var planKey = String(acc.plan_type).toLowerCase();

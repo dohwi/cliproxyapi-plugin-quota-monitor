@@ -98,7 +98,7 @@ for (const r of src.matchAll(/\bt[n]?\('([\w.]+)'/g)) used.add(r[1]);
 for (const r of html.matchAll(/data-i18n(?:-aria)?="([\w.]+)"/g)) used.add(r[1]);
 const dynamic = /^(fleet|grp)\./;
 for (const k of used) if (!(k in I18N.ko && k in I18N.en && k in I18N['zh-CN']) && !dynamic.test(k)) fail.push('unknown key used: ' + k);
-for (const k of ['grp.antigravity','grp.claude','grp.limits','grp.unknown','fleet.antigravity_gemini','fleet.antigravity_claude']) if (!(k in I18N.ko && k in I18N.en && k in I18N['zh-CN'])) fail.push('dynamic key missing: ' + k);
+for (const k of ['grp.antigravity','grp.claude','grp.limits','grp.unknown','fleet.antigravity_gemini','fleet.antigravity_claude','fleet.antigravity_4_gemini','fleet.antigravity_4_claude','fleet.antigravity_3_8_gemini','fleet.antigravity_3_8_claude']) if (!(k in I18N.ko && k in I18N.en && k in I18N['zh-CN'])) fail.push('dynamic key missing: ' + k);
 if (fail.length) { console.error(fail.join('\n')); process.exit(1); }
 console.log('OK_I18N');
 `

@@ -148,3 +148,67 @@ func TestModelScopedWeeklyDoesNotReplaceAccountWindow(t *testing.T) {
 		t.Errorf("remaining = %v, want the 5h window's 80 (model-scoped weekly is not the account window)", entries[0].RemainingPercent)
 	}
 }
+
+func TestComputeSplitsAntigravityByModelTier(t *testing.T) {
+	accounts := []quotamonitor.AccountQuota{
+		{
+			Provider: "antigravity", ModelTier: quotamonitor.AntigravityTier4, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{
+				availWin("Gemini Models / Five Hour Limit Remaining", 300, 99),
+				availWin("Gemini Models / Weekly Limit Remaining", 10080, 100),
+				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100),
+				availWin("Claude and GPT models / Weekly Limit Remaining", 10080, 100),
+			},
+		},
+		{
+			Provider: "antigravity", ModelTier: quotamonitor.AntigravityTier38, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{
+				availWin("Gemini Models / Five Hour Limit Remaining", 300, 96),
+				availWin("Gemini Models / Weekly Limit Remaining", 10080, 94),
+				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100),
+				availWin("Claude and GPT models / Weekly Limit Remaining", 10080, 0),
+			},
+		},
+		{
+			Provider: "antigravity", ModelTier: quotamonitor.AntigravityTier38, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{
+				availWin("Gemini Models / Five Hour Limit Remaining", 300, 100),
+				availWin("Gemini Models / Weekly Limit Remaining", 10080, 96),
+				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100),
+				availWin("Claude and GPT models / Weekly Limit Remaining", 10080, 0),
+			},
+		},
+	}
+
+	entries := Compute(accounts)
+	if len(entries) != 4 {
+		t.Fatalf("entries = %#v, want 4 split AGY entries (no unclassified entry)", entries)
+	}
+	if e := availEntry(t, entries, "antigravity_4_gemini"); e.RemainingPercent != 99 || e.Accounts != 1 || e.Label != "AGY (4) · Gemini" || e.Short != "AG4" {
+		t.Fatalf("antigravity_4_gemini = %+v", e)
+	}
+	if e := availEntry(t, entries, "antigravity_4_claude"); e.RemainingPercent != 100 || e.Accounts != 1 || e.Label != "AGY (4) · Claude/GPT" || e.Short != "AG4" {
+		t.Fatalf("antigravity_4_claude = %+v", e)
+	}
+	if e := availEntry(t, entries, "antigravity_3_8_gemini"); e.RemainingPercent != 98 || e.Accounts != 2 || e.Label != "AGY (3.8) · Gemini" || e.Short != "AG3.8" {
+		t.Fatalf("antigravity_3_8_gemini = %+v", e)
+	}
+	if e := availEntry(t, entries, "antigravity_3_8_claude"); e.RemainingPercent != 0 || e.Accounts != 2 || e.Label != "AGY (3.8) · Claude/GPT" || e.Short != "AG3.8" {
+		t.Fatalf("antigravity_3_8_claude = %+v", e)
+	}
+
+	// Unclassified or non-allowlisted tier falls into legacy antigravity_* without polluting 4/3.8.
+	accounts = append(accounts, quotamonitor.AccountQuota{
+		Provider: "antigravity", ModelTier: "unexpected", Status: quotamonitor.StatusKnown,
+		Windows: []quotamonitor.QuotaWindow{
+			availWin("Gemini Models / Five Hour Limit Remaining", 300, 50),
+		},
+	})
+	entries = Compute(accounts)
+	if e := availEntry(t, entries, "antigravity_gemini"); e.RemainingPercent != 50 || e.Accounts != 1 {
+		t.Fatalf("unclassified fallback = %+v", e)
+	}
+	if e := availEntry(t, entries, "antigravity_4_gemini"); e.RemainingPercent != 99 || e.Accounts != 1 {
+		t.Fatalf("AGY (4) polluted by unclassified account: %+v", e)
+	}
+}
