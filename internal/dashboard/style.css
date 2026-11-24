@@ -355,9 +355,9 @@
 
   /* Snapshot-only change cues: only the changed value/status receives this class. */
   .value-flash { animation: valueFlash 180ms ease-out both; border-radius: 4px; }
-  .value-flash.flash-good { background-color: #ecfdf5; color: #047857 !important; }
-  .value-flash.flash-bad { background-color: #fffbeb; color: #b45309 !important; }
-  .value-flash.flash-danger { background-color: #fef2f2; color: #b91c1c !important; }
+  .value-flash.flash-good { background-color: rgb(4 120 87 / .10); color: #065f46 !important; }
+  .value-flash.flash-bad { background-color: rgb(180 83 9 / .11); color: #92400e !important; }
+  .value-flash.flash-danger { background-color: rgb(185 28 28 / .10); color: #991b1b !important; }
   .value-flash.flash-neutral { background-color: #e9e9ed; }
   @keyframes valueFlash { 0% { opacity: .6; } 100% { opacity: 1; } }
   /* Brief market-ticker style cue when a server observation or value changes. */
