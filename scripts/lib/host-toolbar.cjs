@@ -31,7 +31,7 @@ module.exports = async function verifyLanguagePlacement(page, panelSelector) {
       clearsHost: headingRect.top >= offset - 1 && !intersects(headingRect, host.getBoundingClientRect()),
       reachable: group.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)),
       height: rect.height,
-      expectedHeight: parseFloat(getComputedStyle(group).getPropertyValue('--filter-control-height')),
+      expectedHeight: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--btn-h')),
       label: group.getAttribute('aria-label'),
       lang: document.documentElement.lang,
     };
@@ -39,7 +39,7 @@ module.exports = async function verifyLanguagePlacement(page, panelSelector) {
   assert(result.inHeading, 'language switch lives in the page header actions');
   assert(!result.hostOverlap && result.reachable, 'language button must remain unobstructed by the console floating buttons');
   assert(result.clearsHost, 'the header row starts below --dashboard-top-offset');
-  assert(result.height >= 30 && result.height <= result.expectedHeight + 1, `language switch shares filter control height: ${result.height} vs ${result.expectedHeight}`);
+  assert(result.height >= 28 && result.height <= Math.max(result.expectedHeight, 44) + 1, `language switch uses the 28px icon button (44px on touch): ${result.height} vs ${result.expectedHeight}`);
   assert(result.square, 'language button is a single square icon button');
   assert.equal(result.label, LABELS[result.lang], 'menu button label names the shown language');
 };

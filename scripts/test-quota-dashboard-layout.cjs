@@ -139,20 +139,16 @@ accounts.forEach((account, i) => {
       return { background: style.backgroundColor, filters: regions.map(region => region.filter), countdown: getComputedStyle(time).color, opacity: style.opacity, pointerEvents: style.pointerEvents };
     }));
     for (const locked of lockedChecks) {
-      assert.equal(locked.background, 'rgb(236, 239, 243)', 'locked card must use disabled gray surface');
+      assert.equal(locked.background, 'rgb(245, 245, 247)', 'locked card must use the neutral tinted group surface');
       assert(locked.filters.every(filter => filter === 'grayscale(1)'), 'locked card regions must desaturate provider, quota, freshness and credits');
-      assert.equal(locked.countdown, 'rgb(71, 85, 105)', 'locked reset countdown must use readable gray');
+      assert.equal(locked.countdown, 'rgb(82, 82, 91)', 'locked reset countdown must use readable gray');
       assert.equal(locked.opacity, '1', 'locked content must not lose contrast through opacity');
       assert.notEqual(locked.pointerEvents, 'none', 'locked card must remain selectable and tooltips accessible');
     }
     assert(await page.locator('.badge-provider').count() > 0 && await page.locator('.badge-endpoint').count() > 0, 'provider and endpoint context remains');
     const surfaceChecks = await page.evaluate(() => {
-      const states = {
-        active: ['#e7f3eb', '#f5faf7'], pending: ['#eaf2f8', '#f7fafc'],
-        warning: ['#f8f0d9', '#fcfaf3'], limited: ['#faeadc', '#fcf8f4'],
-        unavailable: ['#f8e5e5', '#fcf6f6'], stale: ['#e9eff7', '#f6f8fb'],
-        disabled: ['#eceff3', '#f8f9fb'], unknown: ['#eff3f7', '#f8fafc'],
-      };
+      const neutral = ['#f5f5f7', '#f5f5f7'];
+      const states = {active: neutral, pending: neutral, warning: neutral, limited: neutral, unavailable: neutral, stale: neutral, disabled: neutral, unknown: neutral};
       const rgb = hex => hex.slice(1).match(/../g).map(value => parseInt(value, 16));
       const luminance = channels => channels.map(value => {
         const s = value / 255;
@@ -174,9 +170,8 @@ accounts.forEach((account, i) => {
       });
     });
     for (const surface of surfaceChecks) {
-      assert.equal(surface.actual, surface.expected, `${surface.state}: stronger status surface must render`);
-      assert.equal(surface.actualBorder, 'rgb(228, 231, 236)', `${surface.state}: border must use the subtle default #e4e7ec`);
-      assert(surface.darker, `${surface.state}: card background must be darker than before`);
+      assert.equal(surface.actual, surface.expected, `${surface.state}: cards use the neutral tinted group surface`);
+      assert.equal(surface.actualBorder, 'rgba(0, 0, 0, 0)', `${surface.state}: inactive card keeps a transparent 1px border`);
       assert(surface.contrast >= 4.5, `${surface.state}: body text contrast must meet WCAG AA`);
     }
     for (const width of [1440, 1280, 1024, 900, 820, 768, 600, 560, 412, 390, 360, 320]) {
@@ -210,7 +205,7 @@ accounts.forEach((account, i) => {
         const recentBorder = {
           width: currentStyle.borderTopWidth,
           color: currentStyle.borderTopColor,
-          preservesSurface: currentStyle.backgroundColor === regularStyle.backgroundColor,
+          preservesSurface: currentStyle.backgroundColor !== regularStyle.backgroundColor,
           horizontalInset: parseFloat(currentStyle.borderLeftWidth) + parseFloat(currentStyle.paddingLeft),
           regularHorizontalInset: parseFloat(regularStyle.borderLeftWidth) + parseFloat(regularStyle.paddingLeft),
           verticalInset: parseFloat(currentStyle.borderTopWidth) + parseFloat(currentStyle.paddingTop),
@@ -239,7 +234,7 @@ accounts.forEach((account, i) => {
           return {
             balancedSpace: !!block && Math.abs(topSpace - bottomSpace) <= 1.5,
             hasQuotaWrapper: !!quota,
-            isCentered: style ? (style.justifyContent === 'flex-start' || style.justifyContent === 'center') : false,
+            isCentered: style ? ['flex-start', 'flow-start', 'start', 'center'].includes(style.justifyContent) : false,
             isFlexColumn: style ? (style.display === 'flex' && style.flexDirection === 'column') : false,
           };
         });
@@ -276,15 +271,15 @@ accounts.forEach((account, i) => {
         return {alignments, heights, clips, recentBorder, nonCurrentBorders, headingChecks, quotaWrappers, creditSummaryChecks, overflow: document.documentElement.scrollWidth > innerWidth + 1};
       });
       assert(!result.overflow && !result.clips.length, `overflow/clipping at ${width}: ${JSON.stringify(result.clips)}`);
-      assert.equal(result.recentBorder.width, '2px', `${width}px: recent account border must be 2px`);
-      assert.equal(result.recentBorder.color, 'rgb(37, 99, 235)', `${width}px: recent account border must be distinct blue`);
-      assert(result.recentBorder.preservesSurface, `${width}px: recent usage must preserve the status background`);
+      assert.equal(result.recentBorder.width, '1px', `${width}px: recent account border is a 1px hairline`);
+      assert.equal(result.recentBorder.color, 'rgb(226, 226, 231)', `${width}px: recent account border uses --row-selected-border`);
+      assert(result.recentBorder.preservesSurface, `${width}px: recent usage uses the selected-row fill`);
       assert.equal(result.recentBorder.horizontalInset, result.recentBorder.regularHorizontalInset, `${width}px: horizontal content alignment must stay unchanged`);
       assert.equal(result.recentBorder.verticalInset, result.recentBorder.regularVerticalInset, `${width}px: vertical content alignment must stay unchanged`);
 
       // Only recent usage gets a strong outline; all other borders stay subtle.
       for (const b of result.nonCurrentBorders) {
-        assert.equal(b.color, 'rgb(228, 231, 236)', `${width}px: non-current border must be subtle #e4e7ec`);
+        assert.equal(b.color, 'rgba(0, 0, 0, 0)', `${width}px: non-current border is transparent`);
         assert.equal(b.width, '1px', `${width}px: non-current border must be thin`);
       }
       const lockTitles = await page.locator('.quota-lock-title').evaluateAll(titles => titles.map(title => {
@@ -346,8 +341,8 @@ accounts.forEach((account, i) => {
         renderAccounts(cachedAccounts);
         let card = document.querySelector('.account-card');
         check(card.dataset.current === 'true', provider + ': audited use must receive border');
-        check(getComputedStyle(card).borderTopColor === 'rgb(37, 99, 235)', provider + ': recent border must be blue');
-        check(getComputedStyle(card).borderTopWidth === '2px', provider + ': recent border must be 2px');
+        check(getComputedStyle(card).borderTopColor === 'rgb(226, 226, 231)', provider + ': recent border must be the hairline selected border');
+        check(getComputedStyle(card).borderTopWidth === '1px', provider + ': recent border must be 1px');
         for (const metadata of [
           {current_account: false}, {current_kind: 'candidate'}, {current_reason: 'priority_candidate'},
           {current_account: undefined, current_kind: undefined, current_reason: undefined},
@@ -357,7 +352,7 @@ accounts.forEach((account, i) => {
           card = document.querySelector('.account-card');
           check(!card.hasAttribute('data-current'), provider + ': removed or non-audited metadata must clear old border');
           check(getComputedStyle(card).borderTopWidth === '1px', provider + ': cleared border must return to 1px');
-          check(getComputedStyle(card).borderTopColor === 'rgb(228, 231, 236)', provider + ': cleared border must return to subtle gray');
+          check(getComputedStyle(card).borderTopColor === 'rgba(0, 0, 0, 0)', provider + ': cleared border must return to a transparent hairline');
         }
         cachedAccounts = [fixture, {...fixture, account_key: 'next-' + provider, current_account: false}];
         renderAccounts(cachedAccounts);

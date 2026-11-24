@@ -444,15 +444,11 @@ func TestDashboardHTMLFeatures(t *testing.T) {
 func TestDashboardPastelTokensAndProviderIcons(t *testing.T) {
 	// 1. Static HTML / CSS token verifications
 	requiredTokens := []string{
-		"--bg-body: #f7f8fa;",
-		"--prov-ag-bg: #f2efff;",
-		"--prov-ag-border: #ddd6fe;",
-		"--prov-ag-text: #5b4bb7;",
-		"--prov-codex-bg: #eaf8f6;",
-		"--prov-codex-border: #bfe8e2;",
-		"--prov-codex-text: #0f6b64;",
-		"--status-active-bg: #f5faf7;",
-		"--status-active-text: #065f46;",
+		"--bg-body: #ffffff;",
+				"--prov-ag-text: #5b4bb7;",
+				"--prov-codex-text: #0f6b64;",
+		"--status-active-bg: #ecfdf5;",
+		"--status-active-text: #047857;",
 		"--pct-high: #047857;",
 		"aria-hidden=\"true\"",
 		"providerIcon",
@@ -668,7 +664,7 @@ console.log('OK_PERCENT_TESTS');`
 	if err != nil || !strings.Contains(string(out), "OK_PERCENT_TESTS") {
 		t.Fatalf("node numeric percentage tests failed: %v\n%s", err, out)
 	}
-	for _, token := range []string{"--dashboard-top-offset: 88px;", "--dashboard-top-offset: 88px;", "prefers-reduced-motion", "quota-value-number", "5시간 제한", "주간 제한"} {
+	for _, token := range []string{"--dashboard-top-offset: 88px;", "prefers-reduced-motion", "quota-value-number", "5시간 제한", "주간 제한"} {
 		if !strings.Contains(dashboard.HTML, token) {
 			t.Errorf("missing numeric/accessibility token %q", token)
 		}
@@ -1516,7 +1512,7 @@ console.log('OK_CUSTOM_ENDPOINTS');
 }
 
 func TestDashboardCardHeaderHasEndpointButNoTopStatusChip(t *testing.T) {
-	for _, want := range []string{"badge-endpoint", "badge-endpoint-unknown", "endpointLabel(endpointKey)", "data-endpoint", ".quota-group:first-child", "getAvailabilityState", "data-availability", "--card-state-bg", "availability.label", "grid-auto-rows: 1fr;", "data-provider", "height: 100%", "min-height: 226px", "grid-template-columns: minmax(0, 1fr) 64px"} {
+	for _, want := range []string{"badge-endpoint", "badge-endpoint-unknown", "endpointLabel(endpointKey)", "data-endpoint", ".quota-group:first-child", "getAvailabilityState", "data-availability", "availability.label", "grid-auto-rows: 1fr;", "data-provider", "height: 100%", "min-height: 226px", "grid-template-columns: minmax(0, 1fr) 64px"} {
 		if !strings.Contains(dashboard.HTML, want) {
 			t.Errorf("dashboard.HTML missing endpoint or availability marker %q", want)
 		}
@@ -2020,7 +2016,7 @@ assert(html.indexOf('data-current') !== -1, 'data-current attribute present');
 // SUIT font @font-face present.
 assert(html.indexOf('@font-face') !== -1, '@font-face declaration present');
 assert(html.indexOf("font-family: 'Manrope'") !== -1, 'Manrope font-family declared');
-assert(html.indexOf("font-family: 'Manrope', 'SUIT'") !== -1, 'dohwi.com font stack declared');
+assert(html.indexOf("font-family: 'Pretendard', 'Manrope', 'SUIT'") !== -1, 'dohwi.com font stack declared');
 assert(html.indexOf('suit-regular.woff2') !== -1, 'suit-regular.woff2 reference present');
 // Visibility change handler present.
 assert(html.indexOf('visibilitychange') !== -1, 'visibilitychange handler present');
@@ -2063,15 +2059,13 @@ func TestDashboardSUITFontAndBodyFamily(t *testing.T) {
 	}
 }
 
-// TestCurrentAccountCardBorderCSS verifies that current_account cards receive
-// a stronger blue border without a badge or changes to the status surface/content inset.
+// TestCurrentAccountCardBorderCSS verifies that current_account cards use the Hairline Inset Fill
+// (no thick coloured ring) while every card keeps a 1px border so selection never shifts layout.
 func TestCurrentAccountCardBorderCSS(t *testing.T) {
 	required := []string{
-		"--current-border: #2563eb;",
-		` .account-card[data-current="true"] { border: 2px solid var(--current-border); padding: 9px 10px; }`,
-		"border: 1px solid var(--account-border);",
+		`.account-card[data-current="true"] { background: var(--row-selected); border: 1px solid var(--row-selected-border); }`,
+		"border: 1px solid transparent;",
 		` .account-card { min-height: 226px; height: 100%; padding: 9px 10px; }`,
-		` .account-card[data-current="true"] { padding: 8px 9px; }`,
 		`data-current="true"`,
 	}
 	for _, r := range required {

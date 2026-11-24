@@ -1,100 +1,82 @@
   :root {
-    --bg-body: #f7f8fa;
-    --surface: #ffffff;
-    --surface-lavender: #faf8ff;
-    --border: #e4e7ec;
-    --border-subtle: #edf2f7;
-    --text: #0f172a;
-    --muted: #475569;
-    --accent: #2563eb;
-    --accent-bg: #eef4fb;
-    --accent-hover: #1d4ed8;
-    --radius: 12px;
-    --filter-control-height: 38px;
-    --filter-control-radius: 8px;
-    --filter-control-border: #c7ced8;
-    --filter-control-bg: #ffffff;
-    --filter-control-hover-bg: #f3f7fc;
-    --filter-control-focus: #2f6fb0;
-    --filter-label-color: #667085;
-    --filter-gap: 10px;
-    /* Keep the page heading close to the content on every viewport. */
-    --dashboard-top-offset: 88px; /* clears the console's floating buttons (to y=76px) */
+    color-scheme: light dark;
+    --dashboard-top-offset: 88px; /* clears the console's floating buttons (to y=76px); never varied by media queries */
+    /* Achromatic hybrid zero-shadow palette */
+    --bg-body: #ffffff;
+    --bg-group: #f5f5f7;
+    --surface: #f5f5f7;
+    --row-hover: #ededf0;
+    --row-selected: #ffffff;
+    --row-selected-border: #e2e2e7;
+    --text: #09090b;
+    --muted: #52525b;
+    --border: #d4d4d8;
+    --divider: #e4e4e7;
+    --ctl: #000000;
+    --ctl-hover: #27272a;
+    --ctl-fg: #ffffff;
+    --accent: #000000;
+    --ov-bg: #ffffff;
+    --ov-border: #c7c7cf;
+    --dis-bg: #f5f5f7;
+    --dis-border: #e4e4e7;
+    --dis-fg: #8f8f99;
+    --err: #dc2626;
+    --radius: 8px;
+    --filter-control-height: 32px;
+    --filter-control-radius: 6px;
+    --filter-control-border: var(--border);
+    --filter-control-bg: var(--bg-body);
+    --filter-control-hover-bg: var(--row-hover);
+    --filter-control-focus: var(--ctl);
+    --filter-label-color: var(--muted);
+    --filter-gap: 8px;
+    --btn-h: 28px;
 
-    /* Provider palette tokens — badge text/bg only, NOT card bg/border */
-    --prov-ag-bg: #f2efff;
-    --prov-ag-border: #ddd6fe;
+    /* Provider text colors (no badge fills) */
     --prov-ag-text: #5b4bb7;
     --prov-ag38-text: #2563a8;
-    --prov-codex-bg: #eaf8f6;
-    --prov-codex-border: #bfe8e2;
     --prov-codex-text: #0f6b64;
     --prov-claude-text: #a44a2c;
-    --prov-neutral-bg: #f1f5f9;
-    --prov-neutral-border: #cbd5e1;
-    --prov-neutral-text: #334155;
+    --prov-neutral-text: #3f3f46;
 
-    /* Semantic card surfaces make available, limited and unavailable states scannable. */
-    --status-active-bg: #f5faf7;
-    --status-active-border: #d3e6db;
-    --status-active-text: #065f46;
-
-    --status-pending-bg: #f7fafc;
-    --status-pending-border: #d6e5ee;
-    --status-pending-text: #0c4a6e;
-
-    --status-warning-bg: #fcfaf3;
-    --status-warning-border: #e9dfbf;
-    --status-warning-text: #78350f;
-
-    --status-limited-bg: #fcf8f4;
-    --status-limited-border: #eadbcd;
-    --status-limited-text: #9a3412;
-
-    --status-error-bg: #fcf6f6;
-    --status-error-border: #ead3d3;
-    --status-error-text: #991b1b;
-
-    --status-stale-bg: #f6f8fb;
-    --status-stale-border: #d6e0ed;
-    --status-stale-text: #1e3a5f;
-
-    --status-disabled-bg: #f8f9fb;
-    --status-disabled-border: #cbd5e1;
-    --status-disabled-text: #334155;
-
-    --status-unknown-bg: #f8fafc;
-    --status-unknown-border: #94a3b8;
-    --status-unknown-text: #475569;
+    /* Soft tinted 4px badge / notice tokens */
+    --status-active-bg: #ecfdf5;  --status-active-border: #a7f3d0;  --status-active-text: #047857;
+    --status-pending-bg: #f0f9ff; --status-pending-border: #bae6fd;  --status-pending-text: #0369a1;
+    --status-warning-bg: #fffbeb; --status-warning-border: #fde68a;  --status-warning-text: #b45309;
+    --status-limited-bg: #fffbeb; --status-limited-border: #fde68a;  --status-limited-text: #b45309;
+    --status-error-bg: #fef2f2;   --status-error-border: #fecaca;    --status-error-text: #b91c1c;
+    --status-stale-bg: #e9e9ed;   --status-stale-border: #d4d4d8;    --status-stale-text: #52525b;
+    --status-disabled-bg: #e9e9ed; --status-disabled-border: #d4d4d8; --status-disabled-text: #52525b;
+    --status-unknown-bg: #e9e9ed; --status-unknown-border: #d4d4d8;  --status-unknown-text: #52525b;
 
     /* Numeric remaining-percentage threshold colors */
     --pct-high: #047857;
     --pct-med: #2563eb;
     --pct-warn: #b45309;
     --pct-low: #c81e1e;
-    --pct-unknown: #64748b;
+    --pct-unknown: #71717a;
 
-    /* Recent usage stays independent of quota availability. */
-    --account-border: var(--border);
-    --current-border: #2563eb;
-    /* Reset countdown accent colors */
-    --reset-primary: #c2410c;
+    --account-border: transparent;
+    --reset-primary: #b45309;
     --reset-weekly: #4338ca;
-    --surface-input-off: #f2f4f7;
-    --surface-group: #f1f5f9;
-    --glass-on-card: rgba(255,255,255,0.7);
-    --glass-on-seg: rgba(255,255,255,0.6);
+    --surface-input-off: var(--dis-bg);
+    --surface-group: var(--bg-group);
+    --glass-on-card: var(--row-hover);
+    --glass-on-seg: var(--row-hover);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  @font-face { font-family: 'Manrope'; src: url('/v0/resource/plugins/quota-monitor/assets/manrope-variable.woff2') format('woff2'); font-style: normal; font-weight: 200 800; font-display: swap; unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF; }
+  @font-face { font-family: 'Manrope'; src: url('/v0/resource/plugins/quota-monitor/assets/manrope-variable.woff2') format('woff2'); font-style: normal; font-weight: 400 800; font-display: swap; unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20A0-20CF; }
   @font-face { font-family: 'SUIT'; src: url('/v0/resource/plugins/quota-monitor/assets/suit-regular.woff2') format('woff2'); font-style: normal; font-weight: 400; font-display: swap; }
   @font-face { font-family: 'SUIT'; src: url('/v0/resource/plugins/quota-monitor/assets/suit-semibold.woff2') format('woff2'); font-style: normal; font-weight: 600; font-display: swap; }
   html { scrollbar-gutter: stable; }
   body {
     background-color: var(--bg-body);
     color: var(--text);
-    font-family: 'Manrope', 'SUIT', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
-    line-height: 1.45;
+    font-family: 'Pretendard', 'Manrope', 'SUIT', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK KR", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
+    font-size: 13px;
+    line-height: 20px;
+    word-break: keep-all;
     padding: 0 14px 16px;
     font-variant-numeric: tabular-nums;
     min-width: 0;
@@ -106,96 +88,94 @@
   /* Header: one row, logo + title on the left and language/theme on the right. */
   .page-heading { grid-template-areas: "brand actions"; }
   .page-heading-brand { grid-area: brand; display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .page-logo { flex: none; width: 40px; height: 40px; border-radius: 10px; object-fit: contain; }
+  .page-logo { flex: none; width: 40px; height: 40px; border-radius: 8px; object-fit: contain; }
   .page-heading-actions { grid-area: actions; display: inline-flex; align-items: center; gap: 6px; flex: none; }
-  .page-heading h1 { font-size: 1.5rem; font-weight: 800; line-height: 1.3; letter-spacing: -0.04em; }
+  .page-heading h1 { font-size: 20px; font-weight: 700; line-height: 24px; letter-spacing: 0; }
   @media (max-width: 767px) {
     .page-heading { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; margin-bottom: 10px; align-items: center; }
-    .page-heading h1 { font-size: 1.3rem; }
   }
   /* Keep language controls in normal filter flow, below the host's floating tools. */
   .filter-language-field { flex: 0 0 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; }
-  .lang-toggle, .theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: var(--filter-control-height); height: var(--filter-control-height); padding: 0; border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); background: var(--filter-control-bg); color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
-  .lang-toggle:hover:not(:disabled), .theme-toggle:hover:not(:disabled) { background: var(--filter-control-hover-bg); color: var(--accent-hover); }
-  .lang-toggle:disabled { opacity: .5; cursor: progress; }
+  .lang-toggle, .theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: var(--btn-h); height: var(--btn-h); padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-body); color: var(--muted); cursor: pointer; transition: background-color 120ms ease-out, color 120ms ease-out; }
+  .lang-toggle:hover:not(:disabled), .theme-toggle:hover:not(:disabled) { background: var(--filter-control-hover-bg); color: var(--text); }
+  .lang-toggle:disabled { background: var(--dis-bg); border-color: var(--dis-border); color: var(--dis-fg); cursor: progress; }
   .lang-toggle.is-spinning svg { animation: qm-spin .9s linear infinite; }
   @keyframes qm-spin { to { transform: rotate(360deg); } }
-  .lang-toggle:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 1px; }
+  .lang-toggle:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--ctl); outline-offset: 2px; }
   .lang-toggle svg, .theme-toggle svg { display: block; pointer-events: none; }
-  /* Specificity beats .ui-ripple-host { position: relative } so the icon stays pinned to the card corner. */
-  .account-card > .card-heading .card-refresh, .account-card .card-refresh.ui-ripple-host { position: absolute; top: 7px; right: 7px; z-index: 1; width: 28px; height: 28px; min-height: 28px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); }
-  .card-refresh svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .account-card > .card-heading .card-refresh { position: absolute; top: 6px; right: 6px; z-index: 1; display: inline-flex; align-items: center; justify-content: center; width: var(--btn-h); height: var(--btn-h); min-height: var(--btn-h); padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); }
+  .card-refresh svg { width: 16px; height: 16px; flex-shrink: 0; }
   /* Keep the 28px visual, but give pointer/touch a 40px hit area and a visible keyboard focus ring. */
   .card-refresh::after { content: ''; position: absolute; inset: -6px; }
-  .account-card .card-refresh:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 1px; background: var(--glass-on-card); }
+  .account-card .card-refresh:focus-visible { outline: 2px solid var(--ctl); outline-offset: 2px; background: var(--row-hover); }
   .account-card .card-refresh:hover:not(:disabled) { color: var(--text); background: var(--glass-on-card); border-color: var(--border); }
   .card-refresh[aria-busy="true"] svg { animation: card-refresh-spin 0.9s linear infinite; }
   @keyframes card-refresh-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .card-refresh[aria-busy="true"] svg { animation: none; } }
-  /* The current-account card has a 2px border (others 1px); pull the button in 1px so it sits at the same spot. */
-  .account-card[data-current="true"] > .card-heading .card-refresh, .account-card[data-current="true"] .card-refresh.ui-ripple-host { top: 6px; right: 6px; }
   .account-card .card-meta-left { padding-right: 32px; min-height: 24px; }
   .card-refresh .ico-check { display: none; }
   .card-refresh.is-done .ico-refresh { display: none; }
   .card-refresh.is-done .ico-check { display: block; }
-  .account-card .card-refresh.is-done { color: #16a34a; }
-  .card-refresh-status { font-size: .75rem; color: var(--muted); overflow-wrap: anywhere; }
+  .account-card .card-refresh.is-done { color: var(--pct-high); }
+  .card-refresh-status { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
   .card-refresh-status:empty { display: none; }
   /* Fleet availability is one panel; providers are split by thin separators. */
-  .fleet-availability { display: flex; align-items: stretch; margin: 0 0 12px; padding: 0; list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .fleet-availability { display: flex; align-items: stretch; margin: 0 0 12px; padding: 0; list-style: none; background: var(--bg-group); border: 0; border-radius: 8px; overflow: hidden; }
   .fleet-availability:empty { display: none; }
-  .fleet-chip { flex: 1 1 0; display: flex; align-items: center; gap: 8px; min-width: 0; height: var(--filter-control-height); padding: 0 14px; }
-  .fleet-chip + .fleet-chip { border-left: 1px solid var(--border); }
+  .fleet-chip { flex: 1 1 0; display: flex; align-items: center; gap: 8px; min-width: 0; height: 32px; padding: 0 12px; }
+  .fleet-chip + .fleet-chip { border-left: 1px solid var(--divider); }
   @media (max-width: 1040px) and (min-width: 761px) {
     .fleet-availability { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .fleet-chip { flex: none; }
     .fleet-chip + .fleet-chip { border-left: 0; }
-    .fleet-chip:nth-child(even) { border-left: 1px solid var(--border); }
-    .fleet-chip:nth-child(n+3) { border-top: 1px solid var(--border); }
+    .fleet-chip:nth-child(even) { border-left: 1px solid var(--divider); }
+    .fleet-chip:nth-child(n+3) { border-top: 1px solid var(--divider); }
     .fleet-chip:last-child:nth-child(odd) { grid-column: 1 / -1; }
   }
   @media (max-width: 760px) {
     .fleet-availability { flex-direction: column; }
     .fleet-chip { flex: 0 0 auto; }
-    .fleet-chip + .fleet-chip { border-left: 0; border-top: 1px solid var(--border); }
+    .fleet-chip + .fleet-chip { border-left: 0; border-top: 1px solid var(--divider); }
   }
-  .fleet-chip-label { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 600; color: var(--filter-label-color); }
+  .fleet-chip-label { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--filter-label-color); }
   .fleet-chip-icon { flex: 0 0 auto; display: inline-flex; color: var(--text); }
   .fleet-chip-icon svg { display: block; }
   .fleet-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fleet-chip-value { flex: 0 0 auto; font-size: 0.875rem; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .fleet-chip-value { flex: 0 0 auto; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
   .fleet-chip-sep { color: var(--muted); font-weight: 500; margin: 0 8px; }
-  .fleet-chip-count { flex: 0 0 auto; font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
-  .btn { background-color: var(--accent); color: #ffffff; border: none; padding: 6px 12px; font-size: 0.8125rem; font-weight: 500; border-radius: 6px; cursor: pointer; transition: background-color 0.15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; font-family: inherit; line-height: 1.2; }
-  .btn:hover:not(:disabled) { background-color: var(--accent-hover); }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-secondary { background-color: var(--surface); color: var(--text); border: 1px solid var(--border); }
-  .btn-secondary:hover:not(:disabled) { background-color: var(--surface-lavender); border-color: #cbd5e1; }
-  .input { padding: 6px 10px; border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); font-size: 0.8125rem; outline: none; background: var(--filter-control-bg); color: var(--text); min-width: 0; }
-  .input:focus-visible, .btn:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 2px; border-color: var(--filter-control-focus); }
+  .fleet-chip-count { flex: 0 0 auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .btn { background-color: var(--ctl); color: var(--ctl-fg); border: 1px solid transparent; min-height: var(--btn-h); padding: 4px 12px; font-size: 13px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: background-color 120ms ease-out; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; font-family: inherit; line-height: 20px; }
+  .btn:hover:not(:disabled) { background-color: var(--ctl-hover); }
+  .btn:disabled { background-color: var(--dis-bg); border-color: var(--dis-border); color: var(--dis-fg); cursor: not-allowed; }
+  .btn-secondary { background-color: var(--bg-body); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover:not(:disabled) { background-color: var(--row-hover); border-color: var(--border); }
+  .input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; line-height: 20px; outline: none; background: var(--bg-body); color: var(--text); min-width: 0; }
+  .input[aria-invalid="true"] { border-color: var(--err); }
+  .input:focus-visible { outline: 2px solid var(--ctl); outline-offset: -1px; }
+  .btn:focus-visible { outline: 2px solid var(--ctl); outline-offset: 2px; }
   .warning-box, .error-box, .stale-notice { min-height: 40px; display: flex; align-items: center; }
-  .stale-notice .btn { min-height: 28px; padding: 3px 10px; border-radius: var(--filter-control-radius); }
-  .warning-box { background-color: var(--status-warning-bg); border: 1px solid var(--status-warning-border); color: var(--status-warning-text); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.8125rem; }
-  .error-box { background-color: var(--status-error-bg); border: 1px solid var(--status-error-border); color: var(--status-error-text); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.8125rem; }
-  .stale-notice { background-color: var(--status-warning-bg); border: 1px solid var(--status-warning-border); color: var(--status-warning-text); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.8125rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .stale-notice .btn { min-height: var(--btn-h); padding: 3px 10px; border-radius: 6px; }
+  .warning-box { background-color: var(--status-warning-bg); border: 1px solid var(--status-warning-border); color: var(--status-warning-text); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 20px; }
+  .error-box { background-color: var(--status-error-bg); border: 1px solid var(--status-error-border); color: var(--status-error-text); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 20px; }
+  .stale-notice { background-color: var(--status-warning-bg); border: 1px solid var(--status-warning-border); color: var(--status-warning-text); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   /* Management-key gate: shown instead of the dashboard until a key is accepted. */
-  .auth-gate { max-width: 560px; margin: 12vh auto 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-  .auth-gate h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; }
+  .auth-gate { max-width: 560px; margin: 12vh auto 14px; padding: 16px 18px; background: var(--ov-bg); border: 1px solid var(--ov-border); border-radius: 8px; }
+  .auth-gate h2 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
   .auth-gate-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
   .auth-gate-head h2 { margin-bottom: 0; min-width: 0; }
   .auth-gate-head .lang-toggle { flex: 0 0 auto; }
   .auth-gate-actions { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
-  .auth-gate-desc { color: #475467; font-size: 0.8125rem; line-height: 20px; margin-bottom: 10px; }
+  .auth-gate-desc { color: var(--muted); font-size: 13px; line-height: 20px; margin-bottom: 10px; }
   .auth-gate-form { display: flex; gap: 8px; align-items: stretch; }
   .auth-gate-form .input { flex: 1 1 auto; height: var(--filter-control-height); }
-  .auth-gate-form .btn { flex: 0 0 auto; height: var(--filter-control-height); padding: 0 16px; border-radius: var(--filter-control-radius); font-size: 0.875rem; font-weight: 600; }
-  .auth-gate-message { margin-top: 10px; color: var(--status-error-text); font-size: 0.8125rem; }
+  .auth-gate-form .btn { flex: 0 0 auto; height: var(--filter-control-height); padding: 0 16px; border-radius: 6px; font-size: 14px; font-weight: 600; }
+  .auth-gate-message { margin-top: 10px; line-height: 20px; color: var(--err); font-size: 13px; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
   /* One top control panel for filters and manual refresh. */
   #dashboardContent { background: transparent; border: 0; padding: 0; min-width: 0; }
-  .dashboard-control-panel { padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin: 0 0 12px; width: 100%; max-width: 100%; min-width: 0; }
+  .dashboard-control-panel { padding: 12px; background: var(--bg-group); border: 0; border-radius: 8px; margin: 0 0 12px; width: 100%; max-width: 100%; min-width: 0; }
   .toolbar { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: end; gap: var(--filter-gap); min-width: 0; }
   .filter-field { flex: 0 1 210px; width: 210px; max-width: 100%; min-width: 0; position: relative; }
   .filter-endpoint-field { flex-basis: 175px; width: 175px; }
@@ -209,31 +189,21 @@
     .toolbar .filter-field, .toolbar .filter-endpoint-field, .toolbar .filter-status-field { flex: 1 1 0; width: auto; min-width: 120px; }
     .toolbar .filter-actions { flex: 0 0 auto; flex-wrap: nowrap; margin-left: 4px; }
   }
-  .filter-label, .filter-field label { color: var(--filter-label-color); font-size: 0.75rem; font-weight: 600; line-height: 1.2; white-space: nowrap; text-align: left; }
+  .filter-label, .filter-field label { color: var(--filter-label-color); font-size: 12px; font-weight: 600; line-height: 16px; white-space: nowrap; text-align: left; }
   .compact-select-wrap { position: relative; min-width: 0; }
-  .compact-select-wrap::after { position: absolute; top: 50%; right: 10px; width: 7px; height: 7px; border-right: 1.5px solid var(--filter-label-color); border-bottom: 1.5px solid var(--filter-label-color); content: ""; pointer-events: none; transform: translateY(-65%) rotate(45deg); opacity: 0.75; }
-  .compact-select { width: 100%; min-width: 0; height: var(--filter-control-height); min-height: var(--filter-control-height); padding: 0 30px 0 10px; border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); outline: none; appearance: none; -webkit-appearance: none; background: var(--filter-control-bg); color: var(--text); font-family: inherit; font-size: 0.875rem; font-weight: 500; line-height: 1.2; text-align: left; text-align-last: left; text-overflow: ellipsis; white-space: nowrap; transition: border-color 0.15s ease, background-color 0.15s ease; }
-  .compact-select:hover:not(:disabled) { background: var(--filter-control-hover-bg); border-color: #98a2b3; }
-  .compact-select:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 2px; border-color: var(--filter-control-focus); }
-  .compact-select:disabled { background: var(--surface-input-off); color: var(--filter-label-color); cursor: not-allowed; opacity: 0.75; }
+  .compact-select-wrap::after { position: absolute; top: 50%; right: 12px; width: 8px; height: 8px; border-right: 1.5px solid var(--filter-label-color); border-bottom: 1.5px solid var(--filter-label-color); content: ""; pointer-events: none; transform: translateY(-65%) rotate(45deg); opacity: 0.75; }
+  .compact-select { width: 100%; min-width: 0; height: var(--filter-control-height); min-height: var(--filter-control-height); padding: 0 30px 0 10px; border: 1px solid var(--filter-control-border); border-radius: 6px; outline: none; appearance: none; -webkit-appearance: none; background: var(--filter-control-bg); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 500; line-height: 20px; text-align: left; text-align-last: left; text-overflow: ellipsis; white-space: nowrap; transition: background-color 120ms ease-out; }
+  .compact-select:hover:not(:disabled) { background: var(--row-hover); }
+  .compact-select:focus-visible { outline: 2px solid var(--ctl); outline-offset: -1px; }
+  .compact-select:disabled { background: var(--dis-bg); color: var(--dis-fg); border-color: var(--dis-border); cursor: not-allowed; }
   .filter-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: var(--filter-gap); min-width: 0; }
   .filter-actions .filter-reset-button { width: auto; min-width: 112px; white-space: nowrap; }
   .manual-refresh-status:empty { display: none; }
-  .manual-refresh-status { margin-top: 8px; color: var(--muted); font-size: 0.8125rem; text-align: left; }
-  .filter-reset-button { min-height: var(--filter-control-height); height: var(--filter-control-height); padding: 0 13px; border: 1px solid var(--filter-control-border); border-radius: var(--filter-control-radius); background: var(--filter-control-bg); color: #182230; font-family: inherit; font-size: 0.875rem; font-weight: 600; line-height: 1.2; justify-content: center; }
-  #fullRefreshBtn { background: var(--surface); border-color: #93b4f0; color: var(--accent-hover); }
-  #fullRefreshBtn:hover:not(:disabled) { background: var(--accent-bg); border-color: var(--accent); color: #1e40af; }
-  #fullRefreshBtn:focus-visible { outline-color: var(--accent); }
-  .filter-reset-button:hover:not(:disabled) { background: var(--filter-control-hover-bg); border-color: #98a2b3; }
-  .filter-reset-button:focus-visible { outline: 2px solid var(--filter-control-focus); outline-offset: 2px; border-color: var(--filter-control-focus); }
+  .manual-refresh-status { margin-top: 8px; color: var(--muted); font-size: 13px; text-align: left; }
+  .filter-reset-button { min-height: var(--filter-control-height); height: var(--filter-control-height); padding: 0 13px; border: 1px solid var(--filter-control-border); border-radius: 6px; background: var(--filter-control-bg); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; line-height: 20px; justify-content: center; }
+  .filter-reset-button:hover:not(:disabled) { background: var(--row-hover); border-color: var(--border); }
+  .filter-reset-button:focus-visible { outline: 2px solid var(--ctl); outline-offset: 2px; }
 
-
-  .segmented-group { display: inline-flex; background: var(--surface-group); border-radius: 7px; padding: 2px; gap: 2px; flex-wrap: wrap; }
-  .seg-btn { border: 1px solid transparent; background: transparent; padding: 4px 10px; font-size: 0.75rem; font-weight: 500; color: #334155; border-radius: 5px; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 5px; line-height: 1; white-space: nowrap; }
-  .seg-btn:hover { color: var(--text); background: var(--glass-on-seg); }
-  .seg-btn.active { background: var(--surface); color: var(--accent); border-color: #cbd5e1; font-weight: 600; }
-  .seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
-  .seg-btn svg { width: 14px; height: 14px; display: inline-flex; align-self: center; flex-shrink: 0; }
 
   /* All rows share the tallest content-driven card height, including sparse states. */
   .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 245px), 1fr)); grid-auto-rows: 1fr; align-items: stretch; gap: 10px; }
@@ -247,91 +217,72 @@
   .card-quota { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; }
   .quota-groups { display: flex; flex-direction: column; gap: 5px; margin-top: 0; min-width: 0; }
   /* Fill the shared row while allowing it to grow for the largest card's wrapped content. */
-  .account-card { background: var(--surface); border: 1px solid var(--account-border); border-radius: var(--radius); padding: 10px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; min-height: 226px; height: 100%; position: relative; overflow-wrap: anywhere; container-type: inline-size; }
-  /* Color the complete surface, not a tiny line; explicit labels remain authoritative. */
-  /* Deepen card surfaces only; notices retain their softer semantic backgrounds. */
-  .account-card {
-    --status-active-bg: #e7f3eb;
-    --status-pending-bg: #eaf2f8;
-    --status-warning-bg: #f8f0d9;
-    --status-limited-bg: #faeadc;
-    --status-error-bg: #f8e5e5;
-    --status-stale-bg: #e9eff7;
-    --status-disabled-bg: #eceff3;
-    --status-unknown-bg: #eff3f7;
-    --card-state-bg: var(--status-unknown-bg); background: var(--card-state-bg);
-  }
-  .account-card[data-availability="active"] { --card-state-bg: var(--status-active-bg); }
-  .account-card[data-availability="warning"] { --card-state-bg: var(--status-warning-bg); }
-  .account-card[data-availability="limited"] { --card-state-bg: var(--status-limited-bg); }
-  .account-card[data-availability="unavailable"] { --card-state-bg: var(--status-error-bg); }
-  .account-card[data-availability="pending"] { --card-state-bg: var(--status-pending-bg); }
-  .account-card[data-availability="stale"] { --card-state-bg: var(--status-stale-bg); }
-  .account-card[data-availability="disabled"] { --card-state-bg: var(--status-disabled-bg); }
+  .account-card { background: var(--bg-group); border: 1px solid transparent; border-radius: 8px; padding: 10px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; min-height: 226px; height: 100%; position: relative; overflow-wrap: anywhere; container-type: inline-size; }
+  /* Cards are neutral tinted groups; status is carried by badges and percentage colours, never by fills. */
+  .account-card[data-availability="disabled"], .account-card[data-availability="unavailable"] { background: var(--dis-bg); }
+  .account-card[data-availability="disabled"] > .card-heading, .account-card[data-availability="disabled"] > .card-quota { color: var(--dis-fg); }
   /* Locked quotas are visually inactive; keep countdowns readable and text selectable. */
-  .account-card[data-locked="true"] { --card-state-bg: var(--status-disabled-bg); --reset-primary: #475569; --reset-weekly: #475569; }
+  .account-card[data-locked="true"] { --reset-primary: var(--muted); --reset-weekly: var(--muted); }
   .account-card[data-locked="true"] > .card-heading,
   .account-card[data-locked="true"] > .card-quota,
   .account-card[data-locked="true"] > .credit-summary { filter: grayscale(1); }
   /* Multi-model card isolation: preserve sibling model visibility when only one family is exhausted */
   .account-card[data-provider="antigravity"][data-locked="true"] > .card-heading,
   .account-card[data-provider="antigravity"][data-locked="true"] > .card-quota { filter: none; }
-  .account-card[data-provider="antigravity"][data-locked="true"] { --reset-primary: #c2410c; --reset-weekly: #4338ca; }
+  .account-card[data-provider="antigravity"][data-locked="true"] { --reset-primary: #b45309; --reset-weekly: #4338ca; }
   /* Because .card-heading carries filter: grayscale(1), it becomes the containing block for absolute children.
-     Offset from heading's origin so the refresh button stays pinned at 8px / 8px from card border. */
-  .account-card[data-locked="true"]:not([data-provider="antigravity"]) > .card-heading .card-refresh { top: -3px; right: -4px; }
-  /* Only recent usage gets a strong border, with a matching content inset. */
-  .account-card[data-current="true"] { border: 2px solid var(--current-border); padding: 9px 10px; }
+     Offset from heading's origin so the refresh button stays pinned 6px from the card edge. */
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) > .card-heading .card-refresh { top: -4px; right: -5px; }
+  /* Recent usage: Hairline Inset Fill. Inactive cards keep a transparent 1px border so nothing shifts. */
+  .account-card[data-current="true"] { background: var(--row-selected); border: 1px solid var(--row-selected-border); }
 
   /* Numeric quota rows integrated into the card: no meter/bar and no nested card. */
-  .quota-group { min-width: 0; margin-top: 0; padding: 6px 0 0; border: 0; border-top: 1px solid rgba(148,163,184,0.30); border-radius: 0; background: transparent; }
-  .quota-group:first-child { padding-top: 6px; border-top: 1px solid rgba(148,163,184,0.30); }
-  .quota-group[data-group-status="disabled"] { opacity: 0.75; }
+  .quota-group { min-width: 0; margin-top: 0; padding: 6px 0 0; border: 0; border-top: 1px solid var(--divider); border-radius: 0; background: transparent; }
+  .quota-group:first-child { padding-top: 6px; border-top: 1px solid var(--divider); }
+  .quota-group[data-group-status="disabled"] { color: var(--dis-fg); }
   .quota-lock-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 58px; text-align: center; }
-  .quota-lock-icon { width: 14px; height: 14px; flex: 0 0 auto; color: #64748b; }
-  .quota-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; font-size: 0.82rem; font-weight: 800; color: #334155; }
-  .quota-lock-time { margin-top: 3px; font-size: 1.05rem; line-height: 1.15; font-weight: 800; color: #c2410c; font-variant-numeric: tabular-nums; }
+  .quota-lock-icon { width: 14px; height: 14px; flex: 0 0 auto; color: var(--muted); }
+  .quota-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--muted); }
+  .quota-lock-time { margin-top: 3px; font-size: 14px; line-height: 20px; font-weight: 700; color: var(--reset-primary); font-variant-numeric: tabular-nums; }
   .quota-lock-time.quota-reset-primary, .ag-family-lock-time.quota-reset-primary, .quota-reset-primary { color: var(--reset-primary); }
   .quota-lock-time.quota-reset-weekly, .ag-family-lock-time.quota-reset-weekly, .quota-reset-weekly { color: var(--reset-weekly); }
-  .quota-lock-note { margin-top: 3px; font-size: 0.76rem; color: #475569; }
-  .quota-lock-weekly { width: min(100%, 240px); margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(148,163,184,0.35); color: #64748b; text-align: center; }
-  .quota-lock-weekly-summary { display: inline; font-size: 0.74rem; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-  .quota-lock-weekly strong { font-size: 0.84rem; color: #334155; font-variant-numeric: tabular-nums; }
-  .quota-lock-weekly small { font-size: 0.72rem; font-weight: 600; }
+  .quota-lock-note { margin-top: 3px; font-size: 12px; color: var(--muted); }
+  .quota-lock-weekly { width: min(100%, 240px); margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--divider); color: var(--muted); text-align: center; }
+  .quota-lock-weekly-summary { display: inline; font-size: 12px; font-weight: 700; line-height: 16px; overflow-wrap: anywhere; }
+  .quota-lock-weekly strong { font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .quota-lock-weekly small { font-size: 12px; font-weight: 600; }
   .quota-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; row-gap: 2px; align-items: start; }
   .quota-value-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px; grid-template-rows: auto auto; align-items: baseline; column-gap: 6px; padding: 4px 0; min-width: 0; }
-  .quota-value-row:nth-child(odd) { padding-right: 12px; border-right: 1px solid rgba(148,163,184,0.28); }
-  .quota-value-label { min-width: 0; font-size: 0.7rem; font-weight: 700; color: #475569; white-space: normal; overflow-wrap: anywhere; }
-  .quota-value-number { width: 64px; font-size: 1.18rem; line-height: 1.25; font-weight: 800; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.035em; }
-  .quota-value-reset { grid-column: 1 / -1; align-self: end; min-width: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.35; text-align: right; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
+  .quota-value-row:nth-child(odd) { padding-right: 12px; border-right: 1px solid var(--divider); }
+  .quota-value-label { min-width: 0; font-size: 12px; font-weight: 700; color: var(--muted); white-space: normal; overflow-wrap: anywhere; }
+  .quota-value-number { width: 64px; font-size: 16px; line-height: 24px; font-weight: 700; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.035em; }
+  .quota-value-reset { grid-column: 1 / -1; align-self: end; min-width: 0; color: var(--muted); font-size: 12px; line-height: 16px; text-align: right; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
 
   /* Antigravity: one card, split into Gemini/Claude top-bottom sections. */
   .ag-family-stack { display: flex; flex-direction: column; gap: 8px; }
-  .ag-family-section { min-width: 0; padding-top: 8px; border-top: 1px solid rgba(148,163,184,0.28); display: flex; flex-direction: column; gap: 4px; }
+  .ag-family-section { min-width: 0; padding-top: 8px; border-top: 1px solid var(--divider); display: flex; flex-direction: column; gap: 4px; }
   .ag-family-section:first-child { padding-top: 0; border-top: 0; }
   /* family heading: inline icon only, title tooltip and section aria-label provide names */
-  .ag-family-head { margin: 0 0 1px 0; display: inline-flex; align-items: center; width: fit-content; line-height: 1; color: #334155; }
-  .ag-family-name { margin-left: 5px; font-size: 0.74rem; font-weight: 750; }
+  .ag-family-head { margin: 0 0 1px 0; display: inline-flex; align-items: center; width: fit-content; line-height: 1; color: var(--text); }
+  .ag-family-name { margin-left: 5px; font-size: 12px; font-weight: 700; }
   .ag-family-icon { width: 14px; height: 14px; flex-shrink: 0; display: inline-block; vertical-align: middle; }
   .ag-family-limits { display: grid; grid-template-columns: 4.6em 54px minmax(max-content, 1fr); row-gap: 3px; column-gap: 6px; width: 100%; min-width: 0; }
   .ag-limit-item { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; column-gap: 6px; min-width: 0; width: 100%; }
-  .ag-limit-label { min-width: 0; font-size: 0.72rem; font-weight: 650; color: #64748b; white-space: normal; overflow-wrap: anywhere; }
-  .ag-limit-value { font-size: 0.88rem; line-height: 1.25; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
-  .ag-limit-label { white-space: nowrap; }
-  .ag-limit-reset { min-width: 0; font-size: 0.68rem; line-height: 1.35; color: #64748b; text-align: right; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
-  .ag-family-section.is-locked { margin: 0; padding: 6px 0; border: 0; border-top: 1px solid rgba(148,163,184,0.28); border-radius: 0; background: transparent; }
+  .ag-limit-label { min-width: 0; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .ag-limit-value { font-size: 14px; line-height: 20px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+  .ag-limit-reset { min-width: 0; font-size: 12px; line-height: 16px; color: var(--muted); text-align: right; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
+  .ag-family-section.is-locked { margin: 0; padding: 6px 0; border: 0; border-top: 1px solid var(--divider); border-radius: 0; background: transparent; }
   .ag-family-section.is-locked:first-child { padding-top: 0; border-top: 0; }
   .ag-family-section.is-locked .ag-family-lock { width: 100%; }
   .ag-family-lock { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; text-align: center; }
-  .ag-family-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; font-size: 0.78rem; font-weight: 800; color: #334155; }
-  .ag-family-lock-title .ag-lock-padlock { width: 13px; height: 13px; flex: 0 0 auto; color: #64748b; }
-  .ag-family-lock-title .ag-family-icon { width: 13px; height: 13px; flex: 0 0 auto; }
-  .ag-family-lock-time { margin-top: 3px; font-size: 1.02rem; line-height: 1.2; font-weight: 850; letter-spacing: -0.01em; color: #c2410c; font-variant-numeric: tabular-nums; text-align: center; }
-  .ag-family-lock-context { width: min(100%, 240px); margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(148,163,184,0.28); color: #64748b; text-align: center; font-size: 0.74rem; line-height: 1.35; overflow-wrap: anywhere; }
-  .ag-family-lock-context strong { font-size: 0.84rem; font-weight: 750; color: #1e293b; font-variant-numeric: tabular-nums; }
-  .ag-family-lock-context .quota-reset-weekly { color: var(--reset-weekly); font-weight: 650; }
-  .quota-pending { margin-top: 0; padding-top: 6px; border-top: 1px solid rgba(148,163,184,0.24); color: var(--muted); font-size: 0.75rem; text-align: center; }
-  .credit-summary { display: flex; flex-direction: column; gap: 4px; margin-top: 0; padding-top: 6px; border-top: 1px solid var(--border-subtle); font-size: 0.75rem; color: var(--muted); min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .ag-family-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; font-size: 12px; font-weight: 700; color: var(--text); }
+  .ag-family-lock-title .ag-lock-padlock { width: 14px; height: 14px; flex: 0 0 auto; color: var(--muted); }
+  .ag-family-lock-title .ag-family-icon { width: 14px; height: 14px; flex: 0 0 auto; }
+  .ag-family-lock-time { margin-top: 3px; font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: -0.01em; color: var(--reset-primary); font-variant-numeric: tabular-nums; text-align: center; }
+  .ag-family-lock-context { width: min(100%, 240px); margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--divider); color: var(--muted); text-align: center; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+  .ag-family-lock-context strong { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+  .ag-family-lock-context .quota-reset-weekly { color: var(--reset-weekly); font-weight: 600; }
+  .quota-pending { margin-top: 0; padding-top: 6px; border-top: 1px solid var(--divider); color: var(--muted); font-size: 12px; text-align: center; }
   .credit-summary strong { color: var(--text); }
   .credit-reset-summary { display: flex; flex-direction: column; align-items: stretch; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
   .credit-api-summary { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
@@ -342,46 +293,41 @@
   .credit-reset-expiry-tree { flex: 0 0 auto; white-space: pre; }
   .credit-reset-expiry-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
   /* Observation time is secondary metadata, not a status badge. */
-  .card-freshness { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: -2px; color: #475569; font-size: 0.75rem; font-weight: 500; line-height: 1.3; }
-  .card-freshness::before { content: ''; width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: #16a34a; }
-  .card-freshness.is-aging { color: #a16207; }
-  .card-freshness.is-aging::before { background: #f59e0b; }
-  .card-freshness.is-old { color: #c2410c; font-weight: 600; }
-  .card-freshness.is-old::before { background: #f97316; }
+  .card-freshness { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: -2px; color: var(--muted); font-size: 12px; font-weight: 500; line-height: 16px; }
+  .card-freshness.is-aging { color: #b45309; }
+  .card-freshness.is-old { color: #b45309; font-weight: 600; }
   .card-freshness.is-failed { color: #b91c1c; font-weight: 600; }
-  .card-freshness.is-failed::before { background: #dc2626; }
-  .card-freshness.is-unknown { color: #94a3b8; }
-  .card-freshness.is-unknown::before { background: #94a3b8; }
+  .card-freshness.is-unknown { color: var(--dis-fg); }
 
   .card-header { display: block; min-width: 0; min-height: 38px; }
   .card-identity { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: start; gap: 3px 8px; min-width: 0; }
 
   /* Provider is the primary top-left identity; account alias is secondary. */
   .card-meta-left { grid-column: 1 / -1; grid-row: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 7px; min-width: 0; }
-  .badge-provider { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; font-size: 0.9rem; font-weight: 750; line-height: 1.2; background: transparent; width: fit-content; min-width: 0; }
+  .badge-provider { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; font-size: 14px; font-weight: 700; line-height: 20px; background: transparent; width: fit-content; min-width: 0; }
   .badge-provider-antigravity { color: var(--prov-ag-text); }
   .badge-provider-antigravity-38 { color: var(--prov-ag38-text); }
   .badge-provider-codex       { color: var(--prov-codex-text); }
   .badge-provider-claude      { color: var(--prov-claude-text); }
   .badge-provider-default     { color: var(--prov-neutral-text); }
-  .badge-provider svg { width: 17px; height: 17px; display: inline-flex; align-self: center; flex-shrink: 0; }
+  .badge-provider svg { width: 16px; height: 16px; display: inline-flex; align-self: center; flex-shrink: 0; }
   .prov-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
-  .prov-sep { opacity: 0.45; font-size: 0.72rem; padding: 0 1px; user-select: none; }
-  .prov-plan { font-size: 0.75rem; font-weight: 650; opacity: 0.88; }
-  .account-alias { grid-column: 1; grid-row: 2; line-height: 1.3; font-size: 0.78rem; font-weight: 550; color: var(--muted); min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  .prov-sep { opacity: 0.45; font-size: 12px; padding: 0 1px; user-select: none; }
+  .prov-plan { font-size: 12px; font-weight: 600; opacity: 0.88; }
+  .account-alias { grid-column: 1; grid-row: 2; line-height: 16px; font-size: 12px; font-weight: 500; color: var(--muted); min-width: 0; white-space: normal; overflow-wrap: anywhere; }
   /* Endpoint is plain metadata; reserve pills for exceptional states/actions. */
-  .badge-endpoint { grid-column: 2; grid-row: 2; justify-self: end; align-self: start; display: inline-flex; align-items: center; min-height: 1.2em; color: #475569; font-size: 0.72rem; font-weight: 600; line-height: 1.2; white-space: nowrap; }
-  .badge-endpoint { color: #64748b; }
+  .badge-endpoint { grid-column: 2; grid-row: 2; justify-self: end; align-self: start; display: inline-flex; align-items: center; min-height: 1.2em; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 16px; white-space: nowrap; }
+  .badge-endpoint { color: var(--muted); }
   .badge-endpoint-unknown { color: var(--muted); }
 
-  .skeleton-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 11px; min-height: 226px; height: 100%; display: flex; flex-direction: column; gap: 6px; }
+  .skeleton-card { background: var(--bg-group); border: 1px solid transparent; border-radius: 8px; padding: 10px 11px; min-height: 226px; height: 100%; display: flex; flex-direction: column; gap: 6px; }
   .skeleton-meta { display: flex; justify-content: space-between; align-items: center; }
-  .skeleton-quota-stack { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; border-top: 1px solid var(--border-subtle); }
+  .skeleton-quota-stack { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; border-top: 1px solid var(--divider); }
   .skeleton-family { display: flex; flex-direction: column; gap: 3px; }
   .skeleton-family-values { display: flex; flex-direction: column; gap: 2px; }
-  .skeleton-line { background: #e2e8f0; border-radius: 4px; animation: pulse 1.5s infinite ease-in-out; }
-  @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.25; } }
-  .text-empty { color: #64748b; font-style: normal; font-weight: 400; }
+  /* Static tinted bars: no pulsing. */
+  .skeleton-line { background: var(--divider); border-radius: 4px; }
+  .text-empty { color: var(--muted); font-style: normal; font-weight: 400; }
   .cards-grid[data-count="0"] .text-empty { grid-column: 1 / -1; padding: 18px; }
   /* Reflow quota details by actual card width, not just viewport width. */
   @container (max-width: 300px) {
@@ -395,39 +341,45 @@
   }
 
   /* Snapshot-only change cues: only the changed value/status receives this class. */
-  .value-flash { animation: valueFlash 1s ease-out both; border-radius: 3px; }
-  .value-flash.flash-good { background-color: #eaf5ee; color: #166534 !important; }
-  .value-flash.flash-bad { background-color: #f7f1df; color: #92400e !important; }
-  .value-flash.flash-danger { background-color: #f9eaea; color: #991b1b !important; }
-  .value-flash.flash-neutral { background-color: #edf0f4; }
-  @keyframes valueFlash { 0% { opacity: .5; } 100% { opacity: 1; } }
+  .value-flash { animation: valueFlash 180ms ease-out both; border-radius: 4px; }
+  .value-flash.flash-good { background-color: #ecfdf5; color: #047857 !important; }
+  .value-flash.flash-bad { background-color: #fffbeb; color: #b45309 !important; }
+  .value-flash.flash-danger { background-color: #fef2f2; color: #b91c1c !important; }
+  .value-flash.flash-neutral { background-color: #e9e9ed; }
+  @keyframes valueFlash { 0% { opacity: .6; } 100% { opacity: 1; } }
   /* Brief market-ticker style cue when a server observation or value changes. */
-  .account-card.card-pulse { animation: cardPulse 1.35s ease-out both; }
-  .account-card.card-pulse::after { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; background: rgb(var(--pulse-rgb)); animation: cardPulseOverlay 1.35s ease-out both; }
-  .account-card.card-pulse.flash-sync { --pulse-rgb: 37, 99, 235; }
+    .account-card.card-pulse::after { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; background: rgb(var(--pulse-rgb)); animation: cardPulseOverlay 180ms ease-out both; }
+  .account-card.card-pulse.flash-sync { --pulse-rgb: 113, 113, 122; }
   .account-card.card-pulse.flash-good { --pulse-rgb: 22, 163, 74; }
   .account-card.card-pulse.flash-bad { --pulse-rgb: 217, 119, 6; }
   .account-card.card-pulse.flash-danger { --pulse-rgb: 220, 38, 38; }
   .account-card.card-pulse.flash-neutral { --pulse-rgb: 100, 116, 139; }
-  @keyframes cardPulse { 0%, 100% { outline: 0 solid rgba(var(--pulse-rgb), 0); } 22% { outline: 1px solid rgba(var(--pulse-rgb), 0.18); } 55% { outline: 1px solid rgba(var(--pulse-rgb), 0.08); } }
-  @keyframes cardPulseOverlay { 0%, 100% { opacity: 0; } 18% { opacity: 0.045; } 42% { opacity: 0.015; } }
+  @keyframes cardPulseOverlay { 0% { opacity: .06; } 100% { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) {
-    .skeleton-line { animation: none; opacity: 0.4; }
+    /* Static tinted bars: no pulsing. */
+  .skeleton-line { background: var(--divider); border-radius: 4px; }
     .value-flash { animation: none; }
-    .account-card.card-pulse { animation: none; }
+    .account-card.card-pulse::after { animation: none; }
   }
   /* Labels and controls remain left aligned; quota numerals remain right aligned. */
   /* Responsive */
   @media (max-width: 767px) {
-    :root { --dashboard-top-offset: 88px; } /* iframe width != host width: one value fits all */
     body { padding: 0 10px 12px; }
     .container { width: 100%; }
-    .dashboard-control-panel { padding: 10px; border-radius: 12px; }
+    .dashboard-control-panel { padding: 10px; border-radius: 8px; }
     .toolbar { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: start; gap: 12px 10px; }
     .dashboard-control-panel { --filter-control-height: 44px; }
     .filter-field { width: 100%; max-width: 100%; justify-self: stretch; }
     .filter-endpoint-field { width: 100%; }
-    .compact-select { font-size: 1rem; }
+    .compact-select { font-size: 16px; line-height: 24px; }
+    .lang-toggle, .theme-toggle { width: 44px; height: 44px; }
+    .page-heading-actions { gap: 8px; }
+    .auth-gate-form .input { font-size: 16px; line-height: 24px; height: 44px; }
+    .auth-gate-form .btn { height: 44px; }
+    .account-card > .card-heading .card-refresh { top: 0; right: 0; width: 40px; height: 40px; min-height: 40px; }
+    .account-card[data-locked="true"]:not([data-provider="antigravity"]) > .card-heading .card-refresh { top: -10px; right: -10px; }
+    .account-card .card-meta-left { padding-right: 40px; }
+    .card-refresh::after { inset: 0; }
     .filter-reset-button { min-height: 44px; }
     .compact-select-wrap, .compact-select { width: 100%; min-width: 0; }
     .filter-status-field { width: 100%; }
@@ -435,20 +387,18 @@
     .filter-actions .filter-reset-button { flex: 1 1 0; width: auto; min-width: 0; justify-content: center; }
     .cards-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: 1fr; gap: 8px; }
     .account-card { min-height: 226px; height: 100%; padding: 9px 10px; }
-    .account-card[data-current="true"] { padding: 8px 9px; }
     .card-meta-left { flex-wrap: wrap; gap: 5px; }
     .quota-values { column-gap: 8px; }
     .quota-value-row { grid-template-columns: minmax(0,1fr) 62px; column-gap: 4px; }
-    .quota-value-number { width: 62px; font-size: 1.18rem; }
+    .quota-value-number { width: 62px; font-size: 16px; }
     .ag-family-stack { gap: 4px; }
     .ag-family-section { padding-top: 4px; }
     .ag-family-limits { gap: 2px; }
     .ag-limit-item { column-gap: 5px; }
-    .ag-limit-label { font-size: 0.7rem; }
-    .ag-limit-value { font-size: 0.85rem; }
-    .ag-family-lock-context { font-size: 0.7rem; }
+    .ag-limit-label { font-size: 12px; }
+    .ag-limit-value { font-size: 13px; }
+    .ag-family-lock-context { font-size: 12px; }
     .quota-lock-state { min-height: 62px; }
-    .credit-summary { overflow-wrap: anywhere; }
   }
   @media (min-width: 360px) and (max-width: 767px) {
     .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -462,31 +412,28 @@
   @media (max-width: 359px) {
     .dashboard-control-panel { padding-right: 8px; padding-left: 8px; }
   }
-  @media (min-width: 768px) and (max-width: 1199px) {
-    :root { --dashboard-top-offset: 88px; }
-    body { padding: 0 14px 16px; }
-  }
-  @media (min-width: 1200px) {
-    :root { --dashboard-top-offset: 88px; }
-    body { padding: 0 14px 16px; }
-  }
 
   /* ===================== Card body (appended design layer, grouped by area) ===================== */
 
   /* ---- Colour legend ---- */
-  .pct-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; padding: 0 11px; /* align the dots with the card content above and below */ list-style: none; color: var(--muted); font-size: 0.75rem; }
+  .pct-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; padding: 0 12px; list-style: none; color: var(--muted); font-size: 12px; line-height: 16px; }
+  @media (max-width: 559px) { .pct-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; } .pct-legend li { white-space: normal; } }
   .pct-legend li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-  .pct-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .pct-legend-dot { width: 8px; height: 8px; border-radius: 4px; flex: 0 0 auto; }
+  .pct-legend-dot.is-high { background: var(--pct-high); }
+  .pct-legend-dot.is-med { background: var(--pct-med); }
+  .pct-legend-dot.is-warn { background: var(--pct-warn); }
+  .pct-legend-dot.is-low { background: var(--pct-low); }
 
   /* ---- Dividers: one hairline under the card header and nothing else inside the card body ---- */
   .quota-group, .ag-family-section, .ag-family-section.is-locked, .ag-family-section:first-child,
   .ag-family-section.is-locked:first-child { border-top: 0; }
   .ag-family-stack { gap: 12px; }
   .ag-family-section { padding-top: 0; }
-  .quota-value-row:nth-child(odd) { border-right-color: rgba(148,163,184,0.20); }
+  .quota-value-row:nth-child(odd) { border-right-color: var(--divider); }
 
   /* ---- Single-window cards (GPT / Claude): values centred below the one divider; equal footer zone ---- */
-  .account-card:not([data-provider="antigravity"]) .card-quota { justify-content: center; padding-top: 0; border-top: 1px solid rgba(148,163,184,0.30); margin-top: 2px; }
+  .account-card:not([data-provider="antigravity"]) .card-quota { justify-content: center; padding-top: 0; border-top: 1px solid var(--divider); margin-top: 2px; }
   .account-card:not([data-provider="antigravity"]) .quota-group { padding-top: 0; border-top: 0; }
   .account-card:not([data-provider="antigravity"]) .quota-groups { gap: 0; }
   .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { content: ''; flex: 0 0 62px; }
@@ -494,56 +441,55 @@
   /* ---- Locked state: antigravity section + GPT/Claude card share one 3-step reading order ---- */
   .ag-family-section.is-locked { padding: 10px 0 8px; }
   .ag-family-lock { min-height: 0; align-items: center; gap: 2px; padding: 0; }
-  .ag-family-lock-title { font-size: 0.74rem; font-weight: 650; color: #475569; gap: 4px; }
+  .ag-family-lock-title { font-size: 12px; font-weight: 600; color: var(--muted); gap: 4px; }
   .ag-family-lock-title .ag-family-icon { display: none; }
-  .ag-family-lock-title .ag-lock-padlock { width: 12px; height: 12px; color: #64748b; }
-  .ag-family-lock-time { margin-top: 0; font-size: 1.2rem; line-height: 1.25; font-weight: 800; }
-  .ag-family-lock-context { width: auto; margin-top: 2px; padding-top: 0; border-top: 0; font-size: 0.74rem; color: #475569; }
-  .ag-family-lock-context strong { font-weight: 700; color: #334155; font-size: 0.74rem; }
+  .ag-family-lock-title .ag-lock-padlock { width: 12px; height: 12px; color: var(--muted); }
+  .ag-family-lock-time { margin-top: 0; font-size: 16px; line-height: 24px; font-weight: 700; }
+  .ag-family-lock-context { width: auto; margin-top: 2px; padding-top: 0; border-top: 0; font-size: 12px; color: var(--muted); }
+  .ag-family-lock-context strong { font-weight: 700; color: var(--text); font-size: 12px; }
   .ag-family-lock-context .quota-reset-weekly, .ag-family-lock-context .quota-reset-primary { color: inherit; font-weight: 500; }
 
   .quota-lock-state { min-height: 0; gap: 2px; padding: 0 0 6px; }
-  .quota-lock-icon { width: 14px; height: 14px; color: #64748b; }
-  .quota-lock-title { font-size: 0.74rem; font-weight: 650; color: #475569; }
-  .quota-lock-time { margin-top: 0; font-size: 1.2rem; line-height: 1.25; }
+  .quota-lock-icon { width: 14px; height: 14px; color: var(--muted); }
+  .quota-lock-time { margin-top: 0; font-size: 16px; line-height: 24px; }
   .quota-lock-note { display: none; }
-  .quota-lock-weekly { width: auto; margin-top: 2px; padding-top: 0; border-top: 0; color: #475569; }
-  .quota-lock-weekly-summary { font-size: 0.74rem; font-weight: 500; color: #475569; }
-  .quota-lock-weekly strong { font-size: 0.74rem; font-weight: 700; color: #334155; }
-  .quota-lock-weekly small, .quota-lock-weekly .quota-reset-weekly, .quota-lock-weekly .quota-reset-primary { color: inherit; font-weight: 500; font-size: 0.74rem; }
+  .quota-lock-weekly { width: auto; margin-top: 2px; padding-top: 0; border-top: 0; color: var(--muted); }
+  .quota-lock-weekly-summary { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .quota-lock-weekly strong { font-size: 12px; font-weight: 700; color: var(--text); }
+  .quota-lock-weekly small, .quota-lock-weekly .quota-reset-weekly, .quota-lock-weekly .quota-reset-primary { color: inherit; font-weight: 500; font-size: 12px; }
 
   /* ---- Empty states (pending / error / disabled): icon + one clear line + a hint, centred in the whole body ---- */
   .quota-pending { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin-top: 0; margin-bottom: 0; padding: 0 8px; border-top: 0; text-align: center; }
-  .quota-pending-icon { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; color: #94a3b8; }
+  .quota-pending-icon { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; color: var(--dis-fg); }
   .quota-pending-icon svg { width: 28px; height: 28px; }
-  .quota-pending-title { font-size: 0.95rem; font-weight: 750; color: #475569; }
-  .quota-pending-hint { font-size: 0.74rem; color: #475569; line-height: 1.35; }
+  .quota-pending-title { font-size: 14px; font-weight: 700; color: var(--muted); }
+  .quota-pending-hint { font-size: 12px; color: var(--muted); line-height: 16px; }
   .quota-pending.is-error, .quota-pending.is-error .quota-pending-icon, .quota-pending.is-error .quota-pending-title { color: #b91c1c; font-weight: 600; }
-  .quota-pending.is-error .quota-pending-title { font-weight: 750; }
+  .quota-pending.is-error .quota-pending-title { font-weight: 700; }
   .account-card:has(.quota-pending) { padding-bottom: 10px; }
   .account-card:has(.quota-pending) .card-quota { justify-content: center; margin-bottom: 0; }
   .account-card:has(.quota-pending) .quota-pending { padding-bottom: 0; transform: translateY(1px); }
   .account-card:has(.quota-pending)::after { display: none; }
 
   /* ---- Credits footer: plain, quiet two-line caption (no pills, no boxes) ---- */
-  .credit-summary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-    margin: 0; padding: 0; min-height: 0; border-top: 0; font-size: 0.74rem; color: #475569; text-align: center; }
+  .credit-summary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    margin: 0; padding: 0; min-height: 0; border-top: 0; font-size: 12px; line-height: 16px; color: var(--muted); text-align: center; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
   .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 62px; box-sizing: border-box; justify-content: flex-start; padding: 2px 0 0; }
   .credit-reset-summary, .credit-api-summary { display: flex; flex-direction: row; align-items: baseline; justify-content: center; flex-wrap: wrap;
-    gap: 0 5px; padding: 0; border: 0; border-radius: 0; background: none; color: #475569; line-height: 1.45; width: auto; max-width: 100%; }
+    gap: 0 8px; padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); line-height: 16px; width: auto; max-width: 100%; text-align: center; }
   .credit-reset-primary { display: inline-flex; }
-  .credit-reset-primary strong, .credit-api-summary strong { font-size: 0.74rem; font-weight: 700; color: #334155; }
-  .credit-reset-expiry { display: inline-flex; width: auto; padding: 0; color: #475569; font-size: 0.72rem; }
+  .credit-reset-primary strong, .credit-api-summary strong { font-size: 12px; font-weight: 700; color: var(--text); }
+  .credit-reset-expiry { display: inline-flex; width: auto; padding: 0; color: var(--muted); font-size: 12px; }
   .credit-reset-expiry-tree { display: none; }
-  .credit-reset-expiry-text::before { content: '· '; }
+  .credit-reset-expiry-text::before { content: ''; }
 
   /* ---- Text contrast: small text reaches WCAG AA (4.5:1) on the tinted card surfaces ---- */
-  .badge-endpoint, .badge-endpoint-unknown { color: #475569; }
-  .ag-limit-label, .quota-value-label, .ag-limit-reset, .quota-value-reset { color: #475569; }
+  .badge-endpoint, .badge-endpoint-unknown { color: var(--muted); }
+  .ag-limit-label, .quota-value-label, .ag-limit-reset, .quota-value-reset { color: var(--muted); }
   .account-card[data-locked="true"] .quota-reset-primary, .quota-reset-primary { filter: brightness(0.9); }
   .quota-reset-weekly { filter: brightness(0.9); }
   .badge-provider-claude, .badge-provider-antigravity { filter: brightness(0.9); }
-  .prov-sep, .prov-plan { color: #475569; }
+  .prov-sep, .prov-plan { color: var(--muted); }
   .badge-provider-codex .prov-plan, .badge-provider-codex .prov-sep { filter: brightness(0.78); }
 
   /* ---- One-column (phone) layout: no neighbour to match, so cards hug their content ---- */
@@ -563,14 +509,14 @@
   :root { --pct-label-w: 4.6em; --pct-col-w: 56px; }
   .ag-family-limits { grid-template-columns: var(--pct-label-w) var(--pct-col-w) minmax(0, 1fr); }
   .ag-limit-item { grid-template-columns: subgrid; }
-  .ag-limit-value { width: var(--pct-col-w); font-size: 1.05rem; line-height: 1.25; text-align: right; }
+  .ag-limit-value { width: var(--pct-col-w); font-size: 14px; line-height: 20px; text-align: right; }
   .ag-limit-reset { white-space: nowrap; }
 
   .quota-values { grid-template-columns: minmax(0, 1fr); row-gap: 6px; column-gap: 0; }
   .quota-value-row { display: grid; grid-template-columns: var(--pct-label-w) var(--pct-col-w) minmax(0, 1fr); grid-template-rows: auto; align-items: baseline; column-gap: 6px; padding: 0; border-right: 0; }
   .quota-value-row:nth-child(odd) { padding-right: 0; border-right: 0; }
   .quota-value-label { grid-column: 1; }
-  .quota-value-number { grid-column: 2; width: var(--pct-col-w); font-size: 1.05rem; line-height: 1.25; text-align: right; }
+  .quota-value-number { grid-column: 2; width: var(--pct-col-w); font-size: 14px; line-height: 20px; text-align: right; }
   .quota-value-reset { grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap; }
 
   /* Locked heading: same distance below the header divider for antigravity, GPT and Claude. */
@@ -588,7 +534,7 @@
   .ag-family-stack:has(.is-locked) { gap: 4px; }
   .ag-family-section.is-locked { padding-top: 6px; padding-bottom: 4px; }
   .ag-family-section.is-locked:first-child { padding-top: 4px; }
-  .ag-family-lock-time { font-size: 1.1rem; }
+  .ag-family-lock-time { font-size: 14px; }
   .ag-family-lock { gap: 1px; }
   .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { flex-basis: 44px; }
   .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 44px; }
@@ -601,32 +547,32 @@
   .account-card:not([data-provider="antigravity"]):not(:has(.credit-summary))::after { content: none; display: none; }
   .account-card:not([data-provider="antigravity"]) .card-quota,
   .account-card:not([data-provider="antigravity"]):has(.quota-lock-state) .card-quota,
-  .account-card:has(.quota-pending) .card-quota { flex: 1 1 auto; justify-content: center; padding: 12px 0 18px; margin: 0; }
+  .account-card:has(.quota-pending) .card-quota { flex: 1 1 auto; justify-content: center; padding: 8px 0 0; margin: 0; }
   .account-card:not([data-provider="antigravity"]) .quota-lock-state { padding: 0; }
   .account-card:has(.quota-pending) .quota-pending { transform: none; padding: 0 8px; }
   .account-card:has(.quota-pending) { padding-bottom: 10px; }
   /* credits travel with the values: wrap them into the same centred block */
   .account-card:not([data-provider="antigravity"]):has(.credit-summary) .card-quota { flex: 0 0 auto; margin-top: auto; padding-bottom: 0; }
-  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 0; margin: 0 0 auto; padding: 12px 0 18px; justify-content: flex-start; }
+  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 0; margin: 0 0 auto; padding: 8px 0 0; justify-content: flex-start; }
 
   /* Antigravity: same rule as GPT/Claude. The body (Gemini + Claude/GPT sections) is one block centred in
      the free space under the divider; the tallest antigravity card defines the row height. */
-  .account-card[data-provider="antigravity"] .card-quota { flex: 1 1 auto; justify-content: center; padding: 4px 0 8px; margin: 0; }
+  .account-card[data-provider="antigravity"] .card-quota { flex: 1 1 auto; justify-content: flex-start; padding: 8px 0 0; margin: 0; }
 
   /* ===================== Remaining quota is the hero =====================
      Each limit row reads: small label (left) | BIG remaining % | small, muted reset time (right, secondary).
      Same three-column track on every provider, so all % values still share one column. */
   :root { --pct-label-w: 4.4em; --pct-col-w: 76px; }
-  .quota-value-number, .ag-limit-value { width: var(--pct-col-w); font-size: 1.6rem; line-height: 1.3; font-weight: 800; letter-spacing: -0.03em; text-align: right; }
-  .quota-value-label, .ag-limit-label { font-size: 0.74rem; font-weight: 600; color: #475569; align-self: center; }
-  .quota-value-reset, .ag-limit-reset { font-size: 0.7rem; font-weight: 500; color: #526174; align-self: center; }
+  .quota-value-number, .ag-limit-value { width: var(--pct-col-w); font-size: 20px; line-height: 24px; font-weight: 700; letter-spacing: -0.03em; text-align: right; }
+  .quota-value-label, .ag-limit-label { font-size: 12px; font-weight: 600; color: var(--muted); align-self: center; }
+  .quota-value-reset, .ag-limit-reset { font-size: 12px; font-weight: 500; color: var(--muted); align-self: center; }
   .quota-value-row, .ag-limit-item { align-items: center; }
   .quota-values { row-gap: 4px; }
   .ag-family-limits { row-gap: 2px; }
   .ag-family-head { margin-bottom: 2px; }
   /* locked hero time and its hint keep the same visual weight as a big % */
-  .quota-lock-time, .ag-family-lock-time { font-size: 1.45rem; line-height: 1.2; }
-  .quota-lock-title, .ag-family-lock-title, .quota-lock-weekly-summary, .ag-family-lock-context, .quota-lock-weekly strong, .ag-family-lock-context strong { font-size: 0.72rem; }
+  .quota-lock-time, .ag-family-lock-time { font-size: 20px; line-height: 24px; }
+  .quota-lock-title, .ag-family-lock-title, .quota-lock-weekly-summary, .ag-family-lock-context, .quota-lock-weekly strong, .ag-family-lock-context strong { font-size: 12px; }
   .ag-family-stack:has(.is-locked) { gap: 12px; }
   .ag-family-section.is-locked + .ag-family-section:not(.is-locked) { padding-top: 2px; }
 
@@ -639,51 +585,43 @@
   .ag-family-stack { gap: 10px; }
   .ag-family-head { margin-bottom: 4px; }
   .ag-limit-item, .quota-value-row { display: grid; grid-template-columns: minmax(0, 1fr) var(--pct-col-w); grid-template-rows: auto auto; column-gap: 8px; row-gap: 1px; align-items: center; padding: 0; }
-  .ag-limit-label, .quota-value-label { grid-column: 1; grid-row: 1; align-self: end; font-size: 0.78rem; font-weight: 650; color: #334155; line-height: 1.25; }
-  .ag-limit-reset, .quota-value-reset { grid-column: 1; grid-row: 2; align-self: start; text-align: left; white-space: nowrap; font-size: 0.7rem; line-height: 1.3; }
-  .ag-limit-value, .quota-value-number { grid-column: 2; grid-row: 1 / span 2; width: var(--pct-col-w); min-width: 0; font-size: 1.4rem; line-height: 1.3; text-align: right; align-self: center; justify-self: end; }
+  .ag-limit-label, .quota-value-label { grid-column: 1; grid-row: 1; align-self: end; font-size: 12px; font-weight: 600; color: var(--text); line-height: 16px; }
+  .ag-limit-reset, .quota-value-reset { grid-column: 1; grid-row: 2; align-self: start; text-align: left; white-space: nowrap; font-size: 12px; line-height: 16px; }
+  .ag-limit-value, .quota-value-number { grid-column: 2; grid-row: 1 / span 2; width: var(--pct-col-w); min-width: 0; font-size: 20px; line-height: 24px; text-align: right; align-self: center; justify-self: end; }
 
   /* ===================== Locked state: the padlock is the headline =====================
      A filled badge (padlock + limit name) tells at a glance that this limit is exhausted. The provider
      name is not repeated (the card header has it); only the Claude/GPT section names its family. */
   .ag-family-lock-title, .quota-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
-  .ag-family-lock-title .ag-lock-limit, .quota-lock-title > span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border-radius: 999px; background: #fee2e2; color: #991b1b; font-size: 0.78rem; font-weight: 750; line-height: 1.2; }
-  .ag-family-lock-title .ag-lock-padlock, .quota-lock-title .quota-lock-icon { display: inline-block; width: 16px; height: 16px; padding: 3px; box-sizing: content-box; border-radius: 50%; background: #dc2626; color: #fff; stroke-width: 2.2; flex: 0 0 auto; }
   .ag-family-lock-title { flex-direction: row; }
   .ag-family-lock-title .ag-lock-padlock { order: -1; margin-right: -2px; position: relative; z-index: 1; }
-  .ag-family-lock-title .ag-lock-family { display: inline-flex; align-items: center; gap: 4px; color: #475569; font-size: 0.74rem; font-weight: 650; }
-  .ag-family-lock-title .ag-lock-family .ag-family-icon { display: inline-block; width: 13px; height: 13px; }
+  .ag-family-lock-title .ag-lock-family { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .ag-family-lock-title .ag-lock-family .ag-family-icon { display: inline-block; width: 14px; height: 14px; }
   /* GPT/Claude lock: padlock icon sits inside the same red pill */
   .quota-lock-title .quota-lock-icon { margin-right: 0; }
   .ag-family-lock-time, .quota-lock-time { margin-top: 2px; }
 
-  /* GPT/Claude locked cards keep their regions grayscale (a CSS filter also greys descendants), so the
-     padlock badge cannot stay red inside them. Instead of loosening that rule, draw the badge colour with
-     a contrast the grayscale cannot hide: a dark filled circle + dark pill with white padlock, which reads
      as "locked" in gray too, while antigravity (filter-free body) shows the red version. */
-  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span { background: #e2e8f0; color: #0f172a; }
-  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title .quota-lock-icon { background: #0f172a; color: #fff; }
   .account-card[data-locked="true"] .quota-lock-time, .account-card[data-locked="true"] .quota-lock-weekly,
-  .account-card[data-locked="true"] .quota-lock-weekly-summary { color: #334155; }
-  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-time { color: #475569; }
+  .account-card[data-locked="true"] .quota-lock-weekly-summary { color: var(--text); }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-time { color: var(--muted); }
 
   /* ===================== Toned-down lock marker + section divider =====================
      The lock is a small padlock glyph next to the limit name (no filled circle, no red pill): enough to say
      "this limit is used up" without shouting. Antigravity's two sections get one hairline between them. */
   .ag-family-lock-title, .quota-lock-title { gap: 5px; flex-wrap: nowrap; }
-  .ag-family-lock-title .ag-lock-limit, .quota-lock-title > span { padding: 0; border-radius: 0; background: none; color: #334155; font-size: 0.78rem; font-weight: 700; gap: 0; }
+  .ag-family-lock-title .ag-lock-limit, .quota-lock-title > span { padding: 0; border-radius: 0; background: none; color: var(--text); font-size: 12px; font-weight: 700; gap: 0; }
   .ag-family-lock-title .ag-lock-padlock, .quota-lock-title .quota-lock-icon { width: 14px; height: 14px; padding: 0; border-radius: 0; background: none; color: #b91c1c; stroke-width: 2; margin: 0; order: 0; }
-  .ag-family-lock-title .ag-lock-family { margin-left: 6px; padding-left: 8px; border-left: 1px solid rgba(148,163,184,0.5); }
-  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span { background: none; color: #334155; }
-  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title .quota-lock-icon { background: none; color: #334155; }
+  .ag-family-lock-title .ag-lock-family { margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--border); }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span { background: none; color: var(--text); }
 
   .account-card .ag-family-stack { gap: 0; }
-  .account-card .ag-family-stack > .ag-family-section + .ag-family-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(148,163,184,0.30); }
+  .account-card .ag-family-stack > .ag-family-section + .ag-family-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }
 
   /* spacing pass: the divider between the two antigravity sections replaces the old gap, so cards stay compact */
   .account-card .ag-family-stack > .ag-family-section + .ag-family-section { margin-top: 6px; padding-top: 8px; }
   .account-card .ag-family-stack:has(.is-locked) > .ag-family-section.is-locked + .ag-family-section.is-locked { padding-top: 8px; }
-  .account-card[data-provider="antigravity"] .card-quota { padding: 2px 0 6px; }
+  .account-card[data-provider="antigravity"] .card-quota { padding: 8px 0 0; }
   .ag-family-section.is-locked, .ag-family-section.is-locked:first-child { padding-bottom: 2px; }
   .account-card:not([data-provider="antigravity"]) .quota-lock-state { padding: 0; }
 
@@ -691,153 +629,120 @@
      Everything that belongs to an exhausted limit (padlock, limit name, reset time, hint) is one neutral grey,
      so the lock reads as "unavailable" and no single red/orange/indigo element shouts. The time stays the
      largest text so it is still the first thing to read. */
-  .ag-family-lock-title .ag-lock-padlock, .quota-lock-title .quota-lock-icon { color: #64748b; }
-  .ag-family-lock-title .ag-lock-limit, .quota-lock-title > span { color: #475569; }
-  .ag-family-lock-title .ag-lock-family { color: #526174; border-left-color: rgba(148,163,184,0.5); }
+  .ag-family-lock-title .ag-lock-padlock, .quota-lock-title .quota-lock-icon { color: var(--muted); }
+  .ag-family-lock-title .ag-lock-limit, .quota-lock-title > span { color: var(--muted); }
+  .ag-family-lock-title .ag-lock-family { color: var(--muted); border-left-color: var(--border); }
   .ag-family-lock-time, .ag-family-lock-time.quota-reset-primary, .ag-family-lock-time.quota-reset-weekly,
-  .quota-lock-time, .quota-lock-time.quota-reset-primary, .quota-lock-time.quota-reset-weekly { color: #475569; filter: none; }
+  .quota-lock-time, .quota-lock-time.quota-reset-primary, .quota-lock-time.quota-reset-weekly { color: var(--muted); filter: none; }
   .account-card .ag-family-lock-context, .account-card .ag-family-lock-context strong, .account-card .ag-family-lock-context .quota-reset-primary, .account-card .ag-family-lock-context .quota-reset-weekly,
-  .quota-lock-weekly, .quota-lock-weekly strong, .quota-lock-weekly small { color: #526174; filter: none; }
-  .account-card .ag-family-lock-context, .account-card .ag-family-lock-context .quota-reset-primary, .account-card .ag-family-lock-context .quota-reset-weekly { color: #526174; filter: none; }
-  .account-card .ag-family-lock-context strong, .quota-lock-weekly strong { color: #475569; }
+  .quota-lock-weekly, .quota-lock-weekly strong, .quota-lock-weekly small { color: var(--muted); filter: none; }
+  .account-card .ag-family-lock-context, .account-card .ag-family-lock-context .quota-reset-primary, .account-card .ag-family-lock-context .quota-reset-weekly { color: var(--muted); filter: none; }
+  .account-card .ag-family-lock-context strong, .quota-lock-weekly strong { color: var(--muted); }
   /* same grey ramp on GPT/Claude locked cards as on antigravity (padlock lighter, text darker, hint in between) */
-  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title .quota-lock-icon { color: #64748b; }
-  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span { color: #475569; }
-  .account-card[data-locked="true"] .quota-lock-weekly, .account-card[data-locked="true"] .quota-lock-weekly small { color: #526174; }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title .quota-lock-icon { color: var(--muted); }
+  .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span { color: var(--muted); }
+  .account-card[data-locked="true"] .quota-lock-weekly, .account-card[data-locked="true"] .quota-lock-weekly small { color: var(--muted); }
 
   /* ===================== One divider, drawn by the card itself =====================
      The line under the header is a bottom border of .card-heading, identical for every provider and state
      (antigravity, GPT, Claude; locked, empty, error, normal). The body no longer draws its own top lines. */
-  .card-heading { padding-bottom: 8px; border-bottom: 1px solid rgba(148,163,184,0.30); }
+  .card-heading { padding-bottom: 8px; border-bottom: 1px solid var(--divider); }
   .account-card .card-quota, .account-card[data-provider="antigravity"] .card-quota,
   .account-card:not([data-provider="antigravity"]) .card-quota { border-top: 0; }
   .account-card .ag-family-stack > .ag-family-section:first-child,
   .account-card .ag-family-section.is-locked:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
   .account-card .quota-group { border-top: 0; }
 
-  /* ---- Dark theme: same cool-slate identity, lower saturation; light values above are untouched ---- */
+  /* ---- Dark theme (Mid-Deep Zinc): layers separate by luminance steps and 1px borders, never shadows ---- */
   :root[data-theme='dark'] {
     color-scheme: dark;
-    --bg-body: #12151a;
-    --surface: #1a1e25;
-    --surface-lavender: #222730;
-    --border: #2b313b;
-    --border-subtle: #232832;
-    --text: #e8ecf2;
-    --muted: #9aa4b2;
-    --accent: #8fb0d6;
-    --accent-bg: #212b38;
-    --accent-hover: #b4cbe6;
-    --filter-control-border: #343b47;
-    --filter-control-bg: #1a1e25;
-    --filter-control-hover-bg: #222730;
-    --filter-control-focus: #6f93bd;
-    --filter-label-color: #9aa4b2;
-    --surface-input-off: #161a20;
-    --surface-group: #151920;
-    --glass-on-card: rgba(255,255,255,0.08);
-    --glass-on-seg: rgba(255,255,255,0.06);
+    --bg-body: #101012;
+    --bg-group: #161619;
+    --surface: #161619;
+    --row-hover: #1c1c21;
+    --row-selected: #222227;
+    --row-selected-border: #323238;
+    --text: #fafafa;
+    --muted: #a1a1aa;
+    --border: #2b2b30;
+    --divider: #242429;
+    --ctl: #f4f4f5;
+    --ctl-hover: #e4e4e7;
+    --ctl-fg: #09090b;
+    --accent: #f4f4f5;
+    --ov-bg: #1c1c21;
+    --ov-border: #3f3f46;
+    --dis-bg: #161619;
+    --dis-border: #26262d;
+    --dis-fg: #63636d;
+    --err: #ef4444;
 
-    --prov-ag-bg: #272238;  --prov-ag-border: #3d3560;  --prov-ag-text: #b3a1ec;  --prov-ag38-text: #7cb3f5;
-    --prov-codex-bg: #162720;  --prov-codex-border: #24473b;  --prov-codex-text: #6fd3ae;
-    --prov-claude-text: #e8996f;
-    --prov-neutral-bg: #1f242c;  --prov-neutral-border: #343b47;  --prov-neutral-text: #c4cbd6;
+    --prov-ag-text: #b3a1ec;  --prov-ag38-text: #7cb3f5;  --prov-codex-text: #6fd3ae;
+    --prov-claude-text: #e8996f;  --prov-neutral-text: #d4d4d8;
 
-    --status-active-bg: #16271f;   --status-active-border: #24473b;   --status-active-text: #6fd3ae;
-    --status-pending-bg: #172431;  --status-pending-border: #27415a;  --status-pending-text: #8fc3ea;
-    --status-warning-bg: #2a2417;  --status-warning-border: #4d4125;  --status-warning-text: #e8c46f;
-    --status-limited-bg: #2b2018;  --status-limited-border: #4f3a28;  --status-limited-text: #f0a56d;
-    --status-error-bg: #2c1c1c;    --status-error-border: #532f2f;    --status-error-text: #f08a8a;
-    --status-stale-bg: #1b2330;    --status-stale-border: #2f3f57;    --status-stale-text: #a9c3e3;
-    --status-disabled-bg: #1f232a; --status-disabled-border: #343b47; --status-disabled-text: #c4cbd6;
-    --status-unknown-bg: #1d2128;  --status-unknown-border: #4a5563;  --status-unknown-text: #9aa4b2;
+    --status-active-bg: rgb(16 185 129 / .15);  --status-active-border: rgb(16 185 129 / .3);  --status-active-text: #34d399;
+    --status-pending-bg: rgb(56 189 248 / .14); --status-pending-border: rgb(56 189 248 / .3);  --status-pending-text: #7dd3fc;
+    --status-warning-bg: rgb(245 158 11 / .16); --status-warning-border: rgb(245 158 11 / .32); --status-warning-text: #fbbf24;
+    --status-limited-bg: rgb(245 158 11 / .16); --status-limited-border: rgb(245 158 11 / .32); --status-limited-text: #fbbf24;
+    --status-error-bg: rgb(239 68 68 / .17);    --status-error-border: rgb(239 68 68 / .34);    --status-error-text: #f87171;
+    --status-stale-bg: #222227;    --status-stale-border: #323238;    --status-stale-text: #a1a1aa;
+    --status-disabled-bg: #222227; --status-disabled-border: #323238; --status-disabled-text: #a1a1aa;
+    --status-unknown-bg: #222227;  --status-unknown-border: #323238;  --status-unknown-text: #a1a1aa;
 
     --pct-high: #4cc9a0;
     --pct-med: #7fb0ff;
     --pct-warn: #e0a266;
     --pct-low: #f08a8a;
-    --pct-unknown: #8a94a3;
-    --current-border: #6f93bd;
+    --pct-unknown: #8a8a94;
     --reset-primary: #f0a56d;
     --reset-weekly: #a9a4f5;
   }
-  /* Card surfaces are re-declared on .account-card, so they need their own dark values. */
-  :root[data-theme='dark'] .account-card {
-    --status-active-bg: #16271f;
-    --status-pending-bg: #172431;
-    --status-warning-bg: #2a2417;
-    --status-limited-bg: #2b2018;
-    --status-error-bg: #2c1c1c;
-    --status-stale-bg: #1b2330;
-    --status-disabled-bg: #1f232a;
-    --status-unknown-bg: #1d2128;
-  }
-  :root[data-theme='dark'] .account-card[data-locked="true"] { --reset-primary: #9aa4b2; --reset-weekly: #9aa4b2; }
+  :root[data-theme='dark'] .account-card[data-locked="true"] { --reset-primary: #a1a1aa; --reset-weekly: #a1a1aa; }
   :root[data-theme='dark'] .account-card[data-provider="antigravity"][data-locked="true"] { --reset-primary: #f0a56d; --reset-weekly: #a9a4f5; }
-  /* Text and icon greys that were hard-coded for a light page. */
-  :root[data-theme='dark'] .btn-secondary:hover:not(:disabled), :root[data-theme='dark'] .filter-reset-button:hover:not(:disabled), :root[data-theme='dark'] .compact-select:hover:not(:disabled) { border-color: #4a6585; }
-  :root[data-theme='dark'] .btn-secondary { border-color: var(--filter-control-border); }
-  :root[data-theme='dark'] #fullRefreshBtn { border-color: #4a6585; }
-  :root[data-theme='dark'] #fullRefreshBtn:hover:not(:disabled) { color: #b4cbe6; }
-  :root[data-theme='dark'] .seg-btn { color: #c4cbd6; }
-  :root[data-theme='dark'] .seg-btn.active { border-color: #4a6585; background: #2a3647; color: #b4cbe6; }
-  :root[data-theme='dark'] .auth-gate-desc { color: var(--muted); }
-  :root[data-theme='dark'] .filter-reset-button { color: var(--text); }
-  :root[data-theme='dark'] .credit-reset-summary, :root[data-theme='dark'] .credit-api-summary, :root[data-theme='dark'] .ag-family-lock-title .ag-lock-family { color: #9aa4b2; }
-  :root[data-theme='dark'] .ag-family-lock-title .ag-lock-family { border-left-color: rgba(148,163,184,0.35); }
-  :root[data-theme='dark'] .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title > span, :root[data-theme='dark'] .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-title .quota-lock-icon { color: #c4cbd6; }
   :root[data-theme='dark'] .account-card .card-refresh.is-done { color: #4cc9a0; }
-  :root[data-theme='dark'] .quota-lock-icon, :root[data-theme='dark'] .ag-family-lock-title .ag-lock-padlock, :root[data-theme='dark'] .quota-lock-title .quota-lock-icon { color: #8a94a3; }
-  :root[data-theme='dark'] .quota-lock-title, :root[data-theme='dark'] .quota-lock-weekly strong, :root[data-theme='dark'] .ag-family-head, :root[data-theme='dark'] .ag-family-lock-title, :root[data-theme='dark'] .ag-family-lock-context strong, :root[data-theme='dark'] .ag-limit-label, :root[data-theme='dark'] .quota-value-label, :root[data-theme='dark'] .credit-reset-primary strong, :root[data-theme='dark'] .credit-api-summary strong, :root[data-theme='dark'] .quota-lock-weekly-summary { color: #c4cbd6; }
-  :root[data-theme='dark'] .quota-lock-note, :root[data-theme='dark'] .card-freshness, :root[data-theme='dark'] .badge-endpoint, :root[data-theme='dark'] .badge-endpoint-unknown, :root[data-theme='dark'] .prov-sep, :root[data-theme='dark'] .prov-plan, :root[data-theme='dark'] .quota-pending-title, :root[data-theme='dark'] .quota-pending-hint, :root[data-theme='dark'] .credit-reset-expiry, :root[data-theme='dark'] .ag-family-lock-context, :root[data-theme='dark'] .quota-lock-weekly, :root[data-theme='dark'] .ag-limit-reset, :root[data-theme='dark'] .quota-value-reset, :root[data-theme='dark'] .text-empty { color: #9aa4b2; }
-  :root[data-theme='dark'] .quota-lock-time, :root[data-theme='dark'] .ag-family-lock-time { color: #f0a56d; }
-  :root[data-theme='dark'] .account-card[data-locked="true"]:not([data-provider="antigravity"]) .quota-lock-time { color: #9aa4b2; }
-  :root[data-theme='dark'] .card-freshness.is-aging { color: #e0a266; }
+  :root[data-theme='dark'] .skeleton-line { background: #222227; }
+  :root[data-theme='dark'] .card-freshness.is-aging { color: #fbbf24; }
   :root[data-theme='dark'] .card-freshness.is-old { color: #f0a56d; }
-  :root[data-theme='dark'] .card-freshness.is-failed, :root[data-theme='dark'] .quota-pending.is-error, :root[data-theme='dark'] .quota-pending.is-error .quota-pending-icon, :root[data-theme='dark'] .quota-pending.is-error .quota-pending-title { color: #f08a8a; }
-  :root[data-theme='dark'] .card-freshness::before { background: #34b58a; }
-  :root[data-theme='dark'] .card-freshness.is-unknown, :root[data-theme='dark'] .quota-pending-icon { color: #6f7a8a; }
-  :root[data-theme='dark'] .card-freshness.is-unknown::before { background: #6f7a8a; }
-  :root[data-theme='dark'] .skeleton-line { background: #2a303b; }
-  :root[data-theme='dark'] .value-flash.flash-good { background-color: #1b3026; color: #6fd3ae !important; }
-  :root[data-theme='dark'] .value-flash.flash-bad { background-color: #33291a; color: #e8c46f !important; }
-  :root[data-theme='dark'] .value-flash.flash-danger { background-color: #381f1f; color: #f08a8a !important; }
-  :root[data-theme='dark'] .value-flash.flash-neutral { background-color: #232832; }
-  :root[data-theme='dark'] .ag-family-lock-title .ag-lock-limit, :root[data-theme='dark'] .quota-lock-title > span { color: #c4cbd6; }
+  :root[data-theme='dark'] .card-freshness.is-failed, :root[data-theme='dark'] .quota-pending.is-error, :root[data-theme='dark'] .quota-pending.is-error .quota-pending-icon, :root[data-theme='dark'] .quota-pending.is-error .quota-pending-title { color: #f87171; }
+  :root[data-theme='dark'] .value-flash.flash-good { background-color: rgb(16 185 129 / .15); color: #34d399 !important; }
+  :root[data-theme='dark'] .value-flash.flash-bad { background-color: rgb(245 158 11 / .16); color: #fbbf24 !important; }
+  :root[data-theme='dark'] .value-flash.flash-danger { background-color: rgb(239 68 68 / .17); color: #f87171 !important; }
+  :root[data-theme='dark'] .value-flash.flash-neutral { background-color: #222227; }
+  :root[data-theme='dark'] .ag-family-lock-title .ag-lock-family { border-left-color: var(--border); }
 
   /* Simplified Chinese: system CJK fonts before SUIT (Hangul) so Han glyphs and full-width
      punctuation come from one Chinese face; Manrope still draws Latin and digits. */
-  :lang(zh-CN) body, body:lang(zh-CN) { font-family: 'Manrope', "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", 'SUIT', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  :lang(zh-CN) body, body:lang(zh-CN) { font-family: 'Pretendard', 'Manrope', "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", 'SUIT', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 
   /* Language menu: --lm-* mapped to this page's theme tokens (dark values follow automatically).
      This page draws no shadows (flat cards, the filter popover has only a border), so the
      shared menu keeps its CSS verbatim with a transparent shadow colour. */
-  :root { --lm-bg: var(--surface); --lm-text: var(--text); --lm-line: var(--filter-control-border); --lm-muted: var(--muted); --lm-hover: var(--filter-control-hover-bg); --lm-ring: var(--filter-control-focus); --lm-accent: var(--accent); --lm-shadow: transparent; }
+  :root { --lm-bg: var(--ov-bg); --lm-text: var(--text); --lm-line: var(--ov-border); --lm-muted: var(--muted); --lm-hover: var(--row-hover); --lm-ring: var(--ctl); --lm-accent: var(--accent); --lm-shadow: transparent; }
   /* @lang-menu-css-begin */
   /* dohwi plugins: language menu popover (reference). Map the --lm-* values to the
      plugin's own theme tokens (light and dark) instead of hard-coding colours. */
   .lang-menu {
     position: fixed; z-index: 1000; min-width: 196px; max-width: calc(100vw - 16px);
-    padding: 6px; border-radius: 12px;
+    padding: 6px; border-radius: 8px;
     background: var(--lm-bg); color: var(--lm-text);
     border: 1px solid var(--lm-line);
     box-shadow: 0 12px 32px var(--lm-shadow), 0 2px 6px var(--lm-shadow);
-    font: inherit; font-size: 13.5px; line-height: 1.3;
-    animation: lang-menu-in .12s ease-out;
+    font: inherit; font-size: 13px; line-height: 20px;
+    animation: lang-menu-in 120ms ease-out;
   }
   @keyframes lang-menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .lang-menu { animation: none; } }
   .lang-menu-item {
     display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px;
-    width: 100%; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 8px;
+    width: 100%; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 6px;
     background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
   }
-  .lang-menu-item:hover, .lang-menu-item:focus-visible { background: var(--lm-hover); outline: none; }
-  .lang-menu-item:focus-visible { box-shadow: 0 0 0 2px var(--lm-ring); }
+  .lang-menu-item:hover, .lang-menu-item:focus-visible { background: var(--lm-hover); }
+  .lang-menu-item:focus-visible { outline: 2px solid var(--ctl); outline-offset: -1px; }
   .lang-menu-check { display: inline-flex; width: 16px; height: 16px; color: var(--lm-accent); visibility: hidden; }
   .lang-menu-item[aria-checked="true"] .lang-menu-check { visibility: visible; }
   .lang-menu-item[aria-checked="true"] .lang-menu-label { font-weight: 600; }
-  .lang-menu-sub { color: var(--lm-muted); font-size: 12px; white-space: nowrap; }
+  .lang-menu-sub { color: var(--lm-muted); font-size: 12px; line-height: 16px; white-space: nowrap; }
   .lang-menu-sep { height: 1px; margin: 4px 6px; background: var(--lm-line); }
   /* @lang-menu-css-end */
 

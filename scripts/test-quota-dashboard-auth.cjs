@@ -63,7 +63,8 @@ const accounts = [{ account_key: 'k1', provider: 'codex', account: 'a@example.co
     assert.equal(await page.evaluate(k => sessionStorage.getItem(k), STORE), null, 'rejected key is never stored');
     assert.equal(await page.locator('#authGate').isVisible(), true);
     assert.equal(await page.locator('#dashboardContent').isHidden(), true, 'dashboard stays hidden after a rejection');
-    assert.equal(await page.evaluate(() => document.getElementById('authKeyInput').value), '');
+    assert.equal(await page.evaluate(() => document.getElementById('authKeyInput').value), 'wrong-key', 'typed value is preserved on failure');
+    assert.equal(await page.locator('#authKeyInput').getAttribute('aria-invalid'), 'true');
 
     await page.fill('#authKeyInput', GOOD);
     await page.click('#authForm button[type=submit]');

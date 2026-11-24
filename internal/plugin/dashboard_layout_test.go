@@ -11,8 +11,8 @@ func TestDashboardUniformCardsAndWrapping(t *testing.T) {
 	for _, token := range []string{
 		"grid-auto-rows: 1fr;",
 		"grid-template-rows: auto auto;",
-		".quota-value-number { width: 64px; font-size: 1.18rem; line-height: 1.25;",
-		".ag-limit-value { font-size: 0.88rem; line-height: 1.25;",
+		".quota-value-number { width: 64px; font-size: 16px; line-height: 24px;",
+		".ag-limit-value { font-size: 14px; line-height: 20px;",
 		"container-type: inline-size;",
 		"@container (max-width: 300px)",
 		".quota-values { grid-template-columns: minmax(0, 1fr); }",
@@ -21,9 +21,8 @@ func TestDashboardUniformCardsAndWrapping(t *testing.T) {
 		".ag-limit-reset { grid-column: 1 / -1; }",
 		".ag-limit-item { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1;",
 		".ag-limit-item { grid-template-columns: minmax(0, 1fr) 54px; row-gap: 2px; }",
-		"--status-active-bg: #f5faf7;", "--status-limited-bg: #fcf8f4;",
-		"--account-border: var(--border);",
-		"border: 1px solid var(--account-border);",
+		"--status-active-bg: #ecfdf5;", "--status-limited-bg: #fffbeb;",
+		"--account-border: transparent;",
 		".quota-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 5px;",
 		`<div class="quota-lock-title"><svg class="quota-lock-icon"`,
 		`.account-card[data-locked="true"] > .credit-summary { filter: grayscale(1); }`,
@@ -63,14 +62,14 @@ func TestDashboardUniformCardsAndWrapping(t *testing.T) {
 
 func TestDashboardAntigravityLockedFamilyFlatCentered(t *testing.T) {
 	for _, token := range []string{
-		".ag-family-section.is-locked { margin: 0; padding: 6px 0; border: 0; border-top: 1px solid rgba(148,163,184,0.28); border-radius: 0; background: transparent; }",
+		".ag-family-section.is-locked { margin: 0; padding: 6px 0; border: 0; border-top: 1px solid var(--divider); border-radius: 0; background: transparent; }",
 		".ag-family-lock { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; text-align: center; }",
 		".ag-family-lock-title { display: inline-flex; align-items: center; justify-content: center; gap: 5px;",
-		".ag-family-lock-time { margin-top: 3px; font-size: 1.02rem; line-height: 1.2; font-weight: 850; letter-spacing: -0.01em; color: #c2410c; font-variant-numeric: tabular-nums; text-align: center; }",
-		".ag-family-lock-context { width: min(100%, 240px); margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(148,163,184,0.28); color: #64748b; text-align: center;",
+		".ag-family-lock-time { margin-top: 3px; font-size: 14px;",
+		".ag-family-lock-context { width: min(100%, 240px); margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--divider);",
 		".account-card[data-provider=\"antigravity\"][data-locked=\"true\"] > .card-heading,",
 		".account-card[data-provider=\"antigravity\"][data-locked=\"true\"] > .card-quota { filter: none; }",
-		".account-card[data-provider=\"antigravity\"][data-locked=\"true\"] { --reset-primary: #c2410c; --reset-weekly: #4338ca; }",
+		".account-card[data-provider=\"antigravity\"][data-locked=\"true\"] { --reset-primary: #b45309; --reset-weekly: #4338ca; }",
 		"<div class=\"ag-family-lock-title\">'+lockTitle+'</div>",
 	} {
 		if !strings.Contains(dashboard.HTML, token) {

@@ -56,7 +56,7 @@ function readHostKey() {
   } catch (e) { return ''; }
 }
 function authError() { var err = new Error('auth'); err.authRequired = true; return err; }
-function noteKeyAccepted() { if (!keyVerified) { keyVerified = true; writeStoredKey(mgmtKey); } }
+function noteKeyAccepted() { if (!keyVerified) { keyVerified = true; writeStoredKey(mgmtKey); var typed = document.getElementById('authKeyInput'); if (typed) typed.value = ''; } }
 function showAuthGate(messageKey) {
   if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
   snapshotEpoch++;
@@ -73,7 +73,12 @@ function showAuthGate(messageKey) {
   if (heading) heading.style.display = 'none';
   if (gate) gate.style.display = 'block';
   if (message) { message.textContent = messageKey ? t(messageKey) : ''; message.style.display = messageKey ? 'block' : 'none'; }
-  if (input) { input.value = ''; try { input.focus(); } catch (e) {} }
+  if (input) {
+    // Keep what the user typed so a typo can be fixed; mark the field only when an error is shown.
+    if (messageKey) input.setAttribute('aria-invalid', 'true'); else input.removeAttribute('aria-invalid');
+    if (messageKey) input.setAttribute('aria-describedby', 'authMessage'); else input.removeAttribute('aria-describedby');
+    try { input.focus(); } catch (e) {}
+  }
 }
 function hideAuthGate() {
   var gate = document.getElementById('authGate'), heading = document.getElementById('pageHeading');
@@ -101,7 +106,7 @@ function initAuthGate() {
     var input = document.getElementById('authKeyInput'), value = input ? String(input.value || '').trim() : '';
     if (!value) { showAuthGate('auth.empty'); return; }
     mgmtKey = value; keyVerified = false; hostKeyFromStore = false;
-    if (input) input.value = '';
+    if (input) input.removeAttribute('aria-invalid');
     hideAuthGate();
     cachedAccounts = [];
     loadDashboard(true);

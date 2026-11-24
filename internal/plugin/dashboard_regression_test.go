@@ -19,7 +19,7 @@ func TestDashboardRegressionTokens(t *testing.T) {
 		".quota-lock-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 58px;",
 		".card-heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; }",
 		".card-quota { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; }",
-		".credit-summary { display: flex; flex-direction: column; gap: 4px; margin-top: 0;",
+		".credit-summary { display: flex; flex-direction: column; align-items: center;",
 		"staleNoticeBox",
 		"accountStatusLive",
 		"FETCH_TIMEOUT_MS = 16000",
@@ -137,15 +137,11 @@ func TestRegressionDashboardHTMLFeatures(t *testing.T) {
 // TestRegressionPastelTokensAndProviderIcons verifies pastel design tokens and SVG icons.
 func TestRegressionPastelTokensAndProviderIcons(t *testing.T) {
 	requiredTokens := []string{
-		"--bg-body: #f7f8fa;",
-		"--prov-ag-bg: #f2efff;",
-		"--prov-ag-border: #ddd6fe;",
-		"--prov-ag-text: #5b4bb7;",
-		"--prov-codex-bg: #eaf8f6;",
-		"--prov-codex-border: #bfe8e2;",
-		"--prov-codex-text: #0f6b64;",
-		"--status-active-bg: #f5faf7;",
-		"--status-active-text: #065f46;",
+		"--bg-body: #ffffff;",
+				"--prov-ag-text: #5b4bb7;",
+				"--prov-codex-text: #0f6b64;",
+		"--status-active-bg: #ecfdf5;",
+		"--status-active-text: #047857;",
 		"--pct-high: #047857;",
 		"aria-hidden=\"true\"",
 		"providerIcon",
@@ -1008,7 +1004,7 @@ func TestRegressionAGFamilyIconsAndPadlockContract(t *testing.T) {
 // TestResetCountdownAccentColorClasses verifies Go-level static tokens for primary/weekly countdown accents.
 func TestResetCountdownAccentColorClasses(t *testing.T) {
 	requiredTokens := []string{
-		"--reset-primary: #c2410c;",
+		"--reset-primary: #b45309;",
 		"--reset-weekly: #4338ca;",
 		".quota-reset-primary",
 		".quota-reset-weekly",
@@ -1205,10 +1201,10 @@ func TestDashboardCompactFilterAndNoVisualShadows(t *testing.T) {
 		}
 	}
 	for _, required := range []string{
-		"--filter-control-height: 38px;", "--filter-control-radius: 8px;", "--filter-control-border: #c7ced8;",
-		"--filter-control-focus: #2f6fb0;", "--filter-label-color: #667085;", "--filter-gap: 10px;",
+		"--filter-control-height: 32px;", "--filter-control-radius: 6px;", "--filter-control-border: var(--border);",
+		"--filter-control-focus: var(--ctl);", "--filter-label-color: var(--muted);", "--filter-gap: 8px;",
 		`id="providerFilter" class="compact-select"`, `id="endpointFilter" class="compact-select"`, `id="statusFilter" class="compact-select"`,
-		`id="resetFiltersBtn"`, "appearance: none;", "outline: 2px solid var(--filter-control-focus);", "@media (max-width: 359px)",
+		`id="resetFiltersBtn"`, "appearance: none;", "outline: 2px solid var(--ctl);", "@media (max-width: 359px)",
 	} {
 		if !strings.Contains(dashboard.HTML, required) {
 			t.Errorf("dashboard.HTML missing compact filter contract %q", required)
