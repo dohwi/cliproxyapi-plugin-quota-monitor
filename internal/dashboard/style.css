@@ -1,21 +1,27 @@
   :root {
     color-scheme: light dark;
     --dashboard-top-offset: 88px; /* clears the console's floating buttons (to y=76px); never varied by media queries */
-    /* Achromatic hybrid zero-shadow palette */
+    /* Clean neutral surfaces with brand blue accent & subtle semantic card tints */
     --bg-body: #ffffff;
     --bg-group: #f5f5f7;
     --surface: #f5f5f7;
     --row-hover: #ededf0;
     --row-selected: #ffffff;
-    --row-selected-border: #e2e2e7;
+    --row-selected-border: #d4d4d8;
     --text: #09090b;
     --muted: #52525b;
     --border: #d4d4d8;
     --divider: #e4e4e7;
-    --ctl: #000000;
-    --ctl-hover: #27272a;
+    --ctl: #2563eb;
+    --ctl-hover: #1d4ed8;
     --ctl-fg: #ffffff;
-    --accent: #000000;
+    --accent: #2563eb;
+    --current-border: #2563eb;
+    --card-active-bg: #f3faf6;
+    --card-pending-bg: #f4f9fc;
+    --card-warning-bg: #fdfaf0;
+    --card-limited-bg: #fdf6f0;
+    --card-error-bg: #fdf4f4;
     --ov-bg: #ffffff;
     --ov-border: #c7c7cf;
     --dis-bg: #f5f5f7;
@@ -217,12 +223,17 @@
   .card-quota { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; }
   .quota-groups { display: flex; flex-direction: column; gap: 5px; margin-top: 0; min-width: 0; }
   /* Fill the shared row while allowing it to grow for the largest card's wrapped content. */
-  .account-card { background: var(--bg-group); border: 1px solid transparent; border-radius: 8px; padding: 10px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; min-height: 226px; height: 100%; position: relative; overflow-wrap: anywhere; container-type: inline-size; }
-  /* Cards are neutral tinted groups; status is carried by badges and percentage colours, never by fills. */
+  .account-card { background: var(--bg-group); border: 2px solid transparent; border-radius: 8px; padding: 10px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; min-height: 226px; height: 100%; position: relative; overflow-wrap: anywhere; container-type: inline-size; }
+  /* Soft semantic card tints keep available/warning/limited/error scannable without harsh borders. */
+  .account-card[data-availability="active"] { background: var(--card-active-bg); }
+  .account-card[data-availability="pending"] { background: var(--card-pending-bg); }
+  .account-card[data-availability="warning"] { background: var(--card-warning-bg); }
+  .account-card[data-availability="limited"] { background: var(--card-limited-bg); }
+  .account-card[data-availability="error"] { background: var(--card-error-bg); }
   .account-card[data-availability="disabled"], .account-card[data-availability="unavailable"] { background: var(--dis-bg); }
   .account-card[data-availability="disabled"] > .card-heading, .account-card[data-availability="disabled"] > .card-quota { color: var(--dis-fg); }
   /* Locked quotas are visually inactive; keep countdowns readable and text selectable. */
-  .account-card[data-locked="true"] { --reset-primary: var(--muted); --reset-weekly: var(--muted); }
+  .account-card[data-locked="true"] { background: var(--bg-group); --reset-primary: var(--muted); --reset-weekly: var(--muted); }
   .account-card[data-locked="true"] > .card-heading,
   .account-card[data-locked="true"] > .card-quota,
   .account-card[data-locked="true"] > .credit-summary { filter: grayscale(1); }
@@ -233,8 +244,8 @@
   /* Because .card-heading carries filter: grayscale(1), it becomes the containing block for absolute children.
      Offset from heading's origin so the refresh button stays pinned 6px from the card edge. */
   .account-card[data-locked="true"]:not([data-provider="antigravity"]) > .card-heading .card-refresh { top: -4px; right: -5px; }
-  /* Recent usage: Hairline Inset Fill. Inactive cards keep a transparent 1px border so nothing shifts. */
-  .account-card[data-current="true"] { background: var(--row-selected); border: 1px solid var(--row-selected-border); }
+  /* Current account: unmistakable 2px brand-blue border; inactive cards hold 2px transparent border so layout never shifts. */
+  .account-card[data-current="true"] { border: 2px solid var(--current-border); }
 
   /* Numeric quota rows integrated into the card: no meter/bar and no nested card. */
   .quota-group { min-width: 0; margin-top: 0; padding: 6px 0 0; border: 0; border-top: 1px solid var(--divider); border-radius: 0; background: transparent; }
@@ -666,10 +677,16 @@
     --muted: #a1a1aa;
     --border: #2b2b30;
     --divider: #242429;
-    --ctl: #f4f4f5;
-    --ctl-hover: #e4e4e7;
-    --ctl-fg: #09090b;
-    --accent: #f4f4f5;
+    --ctl: #60a5fa;
+    --ctl-hover: #93c5fd;
+    --ctl-fg: #0b1220;
+    --accent: #60a5fa;
+    --current-border: #60a5fa;
+    --card-active-bg: #13201a;
+    --card-pending-bg: #141c24;
+    --card-warning-bg: #211c14;
+    --card-limited-bg: #221914;
+    --card-error-bg: #231517;
     --ov-bg: #1c1c21;
     --ov-border: #3f3f46;
     --dis-bg: #161619;

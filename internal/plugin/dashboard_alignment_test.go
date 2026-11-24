@@ -16,7 +16,7 @@ func TestDashboardAccountSummaryRemoved(t *testing.T) {
 
 func TestDashboardCompactControlAlignment(t *testing.T) {
 	for _, token := range []string{
-		"padding: 0 14px 16px;", "--bg-body: #ffffff;", "--accent: #000000;",
+		"padding: 0 14px 16px;", "--bg-body: #ffffff;", "--accent: #2563eb;",
 		".page-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;",
 		"padding: 0 30px 0 10px;", "font-family: inherit; font-size: 14px; font-weight: 500; line-height: 20px; text-align: left; text-align-last: left;",
 		".toolbar { display: flex; flex-wrap: wrap; justify-content: flex-start;",
@@ -48,12 +48,12 @@ func TestDashboardSemanticSurfaceHierarchy(t *testing.T) {
 		"--dashboard-top-offset: 88px;", "--border: #d4d4d8;", "--radius: 8px;",
 		`<h1 data-i18n="page.heading">계정 쿼터</h1>`,
 		`<label for="providerFilter" data-i18n="filter.provider">프로바이더</label>`, `<label for="endpointFilter" data-i18n="filter.endpoint">엔드포인트</label>`,
-		".account-card { background: var(--bg-group); border: 1px solid transparent; border-radius: 8px;",
-		"--bg-group: #f5f5f7;", "--row-selected: #ffffff;", "--row-selected-border: #e2e2e7;",
+		".account-card { background: var(--bg-group); border: 2px solid transparent; border-radius: 8px;",
+		"--bg-group: #f5f5f7;", "--current-border: #2563eb;",
 		"--status-active-bg: #ecfdf5;", "--status-error-bg: #fef2f2;",
-		`.account-card[data-current="true"] { background: var(--row-selected); border: 1px solid var(--row-selected-border); }`,
+		`.account-card[data-current="true"] { border: 2px solid var(--current-border); }`,
 		`.account-card { min-height: 226px; height: 100%; padding: 9px 10px; }`,
-		`.account-card[data-locked="true"] { --reset-primary: var(--muted); --reset-weekly: var(--muted); }`,
+		`.account-card[data-locked="true"] { background: var(--bg-group); --reset-primary: var(--muted); --reset-weekly: var(--muted); }`,
 		`if (lockedWindowInfo(acc, availability)) card.setAttribute('data-locked', 'true');`,
 		"card.setAttribute('role', 'group');", "card.setAttribute('aria-label', String(acc.account || acc.alias || t('card.account')) + ' · ' + availability.label +", "container-type: inline-size;", "@container (max-width: 300px)", "@container (max-width: 240px)",
 	} {
@@ -62,7 +62,7 @@ func TestDashboardSemanticSurfaceHierarchy(t *testing.T) {
 		}
 	}
 	for _, obsolete := range []string{
-		"--card-state-bg:", "border: 2px solid var(--current-border)", "--dashboard-top-offset: 128px;", "--dashboard-top-offset: 96px;", "--dashboard-top-offset: 64px;", ".account-card::before", "--availability-accent:",
+		"--card-state-bg:", "--dashboard-top-offset: 128px;", "--dashboard-top-offset: 96px;", "--dashboard-top-offset: 64px;", ".account-card::before", "--availability-accent:",
 		".filter-field label { position: absolute;", "background: #f0fdf4;", "background-color: #f8f7ff;",
 		"availabilityEl", ".availability-state", "filter: saturate",
 	} {

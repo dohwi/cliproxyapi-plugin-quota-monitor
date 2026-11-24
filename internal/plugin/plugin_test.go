@@ -2059,12 +2059,12 @@ func TestDashboardSUITFontAndBodyFamily(t *testing.T) {
 	}
 }
 
-// TestCurrentAccountCardBorderCSS verifies that current_account cards use the Hairline Inset Fill
-// (no thick coloured ring) while every card keeps a 1px border so selection never shifts layout.
+// TestCurrentAccountCardBorderCSS verifies that current_account cards display a distinct
+// 2px brand-blue border while every card keeps a 2px border slot so selection never shifts layout.
 func TestCurrentAccountCardBorderCSS(t *testing.T) {
 	required := []string{
-		`.account-card[data-current="true"] { background: var(--row-selected); border: 1px solid var(--row-selected-border); }`,
-		"border: 1px solid transparent;",
+		`.account-card[data-current="true"] { border: 2px solid var(--current-border); }`,
+		"border: 2px solid transparent;",
 		` .account-card { min-height: 226px; height: 100%; padding: 9px 10px; }`,
 		`data-current="true"`,
 	}
