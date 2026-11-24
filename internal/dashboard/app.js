@@ -72,6 +72,7 @@ function showAuthGate(messageKey) {
   // The dashboard title and subtitle have nothing to describe until a key is accepted.
   if (heading) heading.style.display = 'none';
   if (gate) gate.style.display = 'block';
+  if (document.body && document.body.classList) document.body.classList.add('auth-gate-open');
   if (message) { message.textContent = messageKey ? t(messageKey) : ''; message.style.display = messageKey ? 'block' : 'none'; }
   if (input) {
     // Keep what the user typed so a typo can be fixed; mark the field only when an error is shown.
@@ -83,6 +84,7 @@ function showAuthGate(messageKey) {
 function hideAuthGate() {
   var gate = document.getElementById('authGate'), heading = document.getElementById('pageHeading');
   if (gate) gate.style.display = 'none';
+  if (document.body && document.body.classList) document.body.classList.remove('auth-gate-open');
   if (heading) heading.style.display = '';
 }
 function dropKeyAndPrompt() {
