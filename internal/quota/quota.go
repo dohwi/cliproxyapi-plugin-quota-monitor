@@ -211,6 +211,10 @@ type AccountQuota struct {
 	// registered auth-file models ("4" when gemini-4* is registered, "3.8"
 	// otherwise). Empty when unknown or non-Antigravity.
 	ModelTier string `json:"model_tier,omitempty"`
+	// ModelTierDemoteMisses counts consecutive "3.8" probes observed for an
+	// account previously classified as "4" so a single partial model catalog
+	// cannot flap AGY (4) to AGY (3.8).
+	ModelTierDemoteMisses int `json:"-"`
 	projectID string `json:"-"`
 	accountID string `json:"-"`
 	// authFileName is the stable auth file name (e.g. "user.json") used as
@@ -2822,7 +2826,7 @@ const (
 	AntigravityTier4  = "4"
 	AntigravityTier38 = "3.8"
 
-	maxAuthFileModels = 512
+	maxAuthFileModels = 2048
 )
 
 // NormalizeAntigravityTier returns an allowlisted Antigravity model tier

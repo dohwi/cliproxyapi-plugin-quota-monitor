@@ -892,6 +892,34 @@ func sanitizeModelTier(provider, raw string) string {
 	return quotamonitor.NormalizeAntigravityTier(raw)
 }
 
+const antigravityTier4DemoteThreshold = 3
+
+// mergeAntigravityModelTier updates an Antigravity account's model tier while
+// guarding a confirmed "4" account against transient partial model catalogs
+// that temporarily omit gemini-4* and classify as "3.8".
+func mergeAntigravityModelTier(a *quotamonitor.AccountQuota, fetched string) {
+	if a == nil {
+		return
+	}
+	tier := quotamonitor.NormalizeAntigravityTier(fetched)
+	if tier == "" {
+		return
+	}
+	if tier == quotamonitor.AntigravityTier4 {
+		a.ModelTier = quotamonitor.AntigravityTier4
+		a.ModelTierDemoteMisses = 0
+		return
+	}
+	if quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTier4 {
+		a.ModelTierDemoteMisses++
+		if a.ModelTierDemoteMisses < antigravityTier4DemoteThreshold {
+			return
+		}
+	}
+	a.ModelTier = tier
+	a.ModelTierDemoteMisses = 0
+}
+
 func accountUnitKey(a quotamonitor.AccountQuota) string {
 	p := strings.ToLower(strings.TrimSpace(a.Provider))
 	if p == "antigravity" {
@@ -1890,7 +1918,7 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 		} else {
 			if strings.EqualFold(a.Provider, "antigravity") {
 				if tier, tierErr := client.FetchAntigravityModelTier(probeCtx, *a); tierErr == nil && tier != "" {
-					a.ModelTier = tier
+					mergeAntigravityModelTier(a, tier)
 				}
 			}
 			wins, err = client.FetchActiveQuota(probeCtx, *a)
@@ -2061,6 +2089,7 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 				}
 				if p.ModelTier != "" && a.ModelTier == "" {
 					a.ModelTier = p.ModelTier
+					a.ModelTierDemoteMisses = p.ModelTierDemoteMisses
 				}
 				a.APICredits = mergeAPICredits(a.APICredits, p.APICredits)
 				a.ResetCredits = mergeResetCredits(a.ResetCredits, p.ResetCredits)
@@ -2106,6 +2135,7 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 			}
 			if a.ModelTier == "" && p.ModelTier != "" {
 				a.ModelTier = p.ModelTier
+				a.ModelTierDemoteMisses = p.ModelTierDemoteMisses
 			}
 			a.APICredits = mergeAPICredits(p.APICredits, a.APICredits)
 			a.ResetCredits = mergeResetCredits(p.ResetCredits, a.ResetCredits)

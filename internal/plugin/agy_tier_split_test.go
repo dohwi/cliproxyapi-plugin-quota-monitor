@@ -117,6 +117,71 @@ func TestAntigravityCurrentAccountSplitByModelTier(t *testing.T) {
 	}
 }
 
+func TestAntigravityModelTierDemoteGuard(t *testing.T) {
+	reset(t)
+	var omitGemini4 atomic.Bool
+	configureTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/management/auth-files":
+			_, _ = w.Write([]byte(`{"files":[{"name":"ag-ultra.json","provider":"antigravity","auth_index":"1","account":"ultra@example.com"}]}`))
+		case "/management/auth-files/models":
+			if omitGemini4.Load() {
+				_, _ = w.Write([]byte(`{"models":[{"id":"gemini-3.8-flash"},{"id":"gemini-claude-opus-4.6"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"models":[{"id":"gemini-3.8-flash"},{"id":"gemini-4-argon"}]}`))
+		case "/management/api-call":
+			_, _ = w.Write([]byte(`{"status_code":200,"body":"{\"groups\":[{\"displayName\":\"Gemini Models\",\"buckets\":[{\"displayName\":\"Five Hour Limit Remaining\",\"bucketId\":\"gemini-5h\",\"window\":\"5h\",\"remainingFraction\":0.95}]}]}"}`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+
+	forceCollect := func() string {
+		state.mu.Lock()
+		state.cachedAt = time.Time{}
+		state.lastForceAt = time.Time{}
+		for k := range state.probeDue {
+			state.probeDue[k] = now().Add(-time.Second)
+		}
+		state.mu.Unlock()
+		res := collectAccounts(context.Background(), true)
+		if res.err != nil || len(res.accounts) != 1 {
+			t.Fatalf("collect failed: len=%d err=%v", len(res.accounts), res.err)
+		}
+		return res.accounts[0].ModelTier
+	}
+
+	if got := forceCollect(); got != quotamonitor.AntigravityTier4 {
+		t.Fatalf("initial tier = %q, want 4", got)
+	}
+
+	// Two transient "3.8" catalogs must not demote a confirmed "4" account.
+	omitGemini4.Store(true)
+	for i := 1; i < antigravityTier4DemoteThreshold; i++ {
+		if got := forceCollect(); got != quotamonitor.AntigravityTier4 {
+			t.Fatalf("transient miss #%d demoted early: got %q, want 4", i, got)
+		}
+	}
+
+	// A recovered "4" catalog resets the demotion counter.
+	omitGemini4.Store(false)
+	if got := forceCollect(); got != quotamonitor.AntigravityTier4 {
+		t.Fatalf("recovered tier = %q, want 4", got)
+	}
+
+	// Three consecutive "3.8" catalogs finally demote the account.
+	omitGemini4.Store(true)
+	for i := 1; i < antigravityTier4DemoteThreshold; i++ {
+		if got := forceCollect(); got != quotamonitor.AntigravityTier4 {
+			t.Fatalf("post-reset miss #%d demoted early: got %q, want 4", i, got)
+		}
+	}
+	if got := forceCollect(); got != quotamonitor.AntigravityTier38 {
+		t.Fatalf("miss #%d should demote to 3.8, got %q", antigravityTier4DemoteThreshold, got)
+	}
+}
+
 func TestDashboardAntigravityTierSplitNodeContract(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node not available")
