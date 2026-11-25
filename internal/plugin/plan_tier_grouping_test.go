@@ -220,6 +220,21 @@ const claudeUltraCard = byId.accountsList.children[11];
 assert.strictEqual(claudeUltraCard.getAttribute('data-plan-type'), 'ultra');
 assert(findProvHTML(claudeUltraCard).includes('Claude') && findProvHTML(claudeUltraCard).includes('Ultra'), 'Claude Ultra badge: ' + findProvHTML(claudeUltraCard));
 
+// 2b. Antigravity limited-pool cards use official AI Pro Trial / Trial/Free / Free labels, never Lite.
+const agLimitedAccounts = [
+  { account_key: 'ag-trial-pro', provider: 'antigravity', plan_type: 'pro', model_tier: 'lite', endpoint: 'direct', status: 'known', account: 'atp@x', windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', remaining_percent: 90 }] },
+  { account_key: 'ag-trial-unknown', provider: 'antigravity', plan_type: '', model_tier: 'lite', endpoint: 'direct', status: 'known', account: 'atu@x', windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', remaining_percent: 90 }] },
+  { account_key: 'ag-trial-free', provider: 'antigravity', plan_type: 'free', model_tier: 'lite', endpoint: 'direct', status: 'known', account: 'atf@x', windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', remaining_percent: 90 }] },
+];
+ctx.cachedAccounts = agLimitedAccounts;
+ctx.renderAccounts(agLimitedAccounts);
+const agTrialProHTML = findProvHTML(byId.accountsList.children[0]);
+const agTrialUnknownHTML = findProvHTML(byId.accountsList.children[1]);
+const agTrialFreeHTML = findProvHTML(byId.accountsList.children[2]);
+assert(agTrialProHTML.includes('AI Pro Trial') && !agTrialProHTML.includes('Lite'), 'AG pro limited badge: ' + agTrialProHTML);
+assert(agTrialUnknownHTML.includes('Trial/Free') && !agTrialUnknownHTML.includes('Lite'), 'AG unknown limited badge: ' + agTrialUnknownHTML);
+assert(agTrialFreeHTML.includes('Free') && !agTrialFreeHTML.includes('Lite'), 'AG free limited badge: ' + agTrialFreeHTML);
+
 // 3. Fleet availability promotes official single-tier labels (AGY · AI Ultra, AGY · AI Pro Trial) and never shows arbitrary Lite.
 ctx.renderFleetAvailability([
   { key: 'claude', label: 'Claude', remaining_percent: 9.1, accounts: 2, tiers: [{ tier: 'ultra', label: 'Ultra', remaining_percent: 0, accounts: 1 }, { tier: 'pro', label: 'Pro', remaining_percent: 100, accounts: 1 }] },

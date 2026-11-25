@@ -2729,8 +2729,12 @@ function renderAccounts(accounts) {
     provEl.className = 'badge-provider ' + provBadgeClass;
     var provBaseLabel = (pKey === 'antigravity' && planType) ? formatProviderLabel(acc.provider) : accountProviderUnit(acc);
     var planDisplay = formatPlanLabel(pKey, planType);
-    if (pKey === 'antigravity' && modelTier === 'lite' && planType !== 'free') {
-      planDisplay = planDisplay ? (planDisplay + ' · Lite') : 'Lite';
+    if (pKey === 'antigravity' && modelTier === 'lite') {
+      if (planType === 'pro') {
+        planDisplay = 'AI Pro Trial';
+      } else if (!planDisplay) {
+        planDisplay = 'Trial/Free';
+      }
     }
     var provHTML = providerIcon(acc.provider, 14);
     if (planDisplay) {
