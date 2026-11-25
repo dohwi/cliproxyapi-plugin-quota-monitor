@@ -24,7 +24,7 @@ const ctx = { console, Math, Number, Array, Object, String, Date, isNaN, isFinit
 vm.createContext(ctx);vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],ctx);
 function assert(ok,msg){if(!ok)throw new Error(msg);}
 assert(ctx.getProviderKey(' CLAUDE ')==='claude','official provider key');
-assert(ctx.formatProviderLabel('Claude')==='claude','official provider label matches lowercase provider style');
+assert(ctx.formatProviderLabel('claude')==='Claude','official provider label capitalizes first letter');
 for (const provider of ['codex','claude','antigravity','unknown']) {
  const credits=ctx.renderCreditSummary({provider,reset_credits:{available_count:2,nearest_expiry:'2026-11-01T00:00:00Z'}});
  assert(credits.includes('리셋권 2장 보유') && credits.includes('가장 빠른 만료일'),'reset rights render for every provider '+provider);

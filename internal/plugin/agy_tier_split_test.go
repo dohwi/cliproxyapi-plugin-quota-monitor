@@ -281,26 +281,26 @@ const accs = [
 ];
 ctx.populateProviderSegmented(accs);
 const optVals = byId.providerFilter.options.map(o => o.value);
-assert.strictEqual(JSON.stringify(optVals), JSON.stringify(['all', 'antigravity', 'codex', 'claude']), 'unexpected filter options: ' + JSON.stringify(optVals));
-assert.strictEqual(byId.providerFilter.options[1].textContent, 'antigravity (3)');
+assert.strictEqual(JSON.stringify(optVals), JSON.stringify(['all', 'Antigravity', 'Codex', 'Claude']), 'unexpected filter options: ' + JSON.stringify(optVals));
+assert.strictEqual(byId.providerFilter.options[1].textContent, 'Antigravity (3)');
 
 // 3. Sorting puts AGY (4) before AGY (3.8) before codex before claude.
 const sorted = ctx.sortAccountsByEndpoint(accs).map(a => a.account_key);
 assert.strictEqual(JSON.stringify(sorted), JSON.stringify(['k-4', 'k-38a', 'k-38b', 'k-cx', 'k-cl']), 'unexpected sort order: ' + JSON.stringify(sorted));
 
-// 4. Filtering by antigravity returns all antigravity accounts sorted by tier.
+// 4. Filtering by Antigravity returns all antigravity accounts sorted by tier.
 let renderedKeys = [];
 const origRender = ctx.renderAccounts;
 ctx.cachedAccounts = accs;
 ctx.renderAccounts = list => { renderedKeys = Array.from(list, a => a.account_key); };
-ctx.selectedProvider = 'antigravity';
+ctx.selectedProvider = 'Antigravity';
 ctx.applyFilters();
-assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-4', 'k-38a', 'k-38b']), 'antigravity filter failed: ' + JSON.stringify(renderedKeys));
+assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-4', 'k-38a', 'k-38b']), 'Antigravity filter failed: ' + JSON.stringify(renderedKeys));
 
-// 5. Card rendering uses AGY (4) / AGY (3.8) badges and ignores hostile model_tier.
+// 5. Card rendering ignores hostile model_tier.
 ctx.renderAccounts = origRender;
 const hostile = { account_key: 'k-x', provider: 'antigravity', model_tier: '<img onerror=alert(1)>', account: 'h@x', status: 'known', endpoint: 'direct', windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', remaining_percent: 50 }] };
-assert.strictEqual(ctx.accountProviderUnit(hostile), 'antigravity', 'hostile model_tier must be ignored');
+assert.strictEqual(ctx.accountProviderUnit(hostile), 'Antigravity', 'hostile model_tier must be ignored');
 ctx.renderAccounts([accs[3], accs[1], hostile]);
 assert.strictEqual(byId.accountsList.children.length, 3);
 const card4 = byId.accountsList.children[0];

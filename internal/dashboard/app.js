@@ -1000,11 +1000,14 @@ function fmtPct(x) {
 }
 
 function formatProviderLabel(p) {
-  if (!p) return 'unknown';
+  if (!p) return 'Unknown';
   var lower = String(p).toLowerCase().trim();
-  if (lower === 'claude') return 'claude';
+  if (lower === 'antigravity') return 'Antigravity';
+  if (lower === 'codex') return 'Codex';
+  if (lower === 'claude') return 'Claude';
   if (lower === 'openai compatible-b.ai' || lower === 'compatible-b.ai' || lower === 'b.ai') return 'b.ai';
-  return p;
+  var s = String(p).trim();
+  return s ? (s.charAt(0).toUpperCase() + s.slice(1)) : 'Unknown';
 }
 
 function getProviderKey(p) {

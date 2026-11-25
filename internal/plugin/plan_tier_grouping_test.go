@@ -204,21 +204,21 @@ function findProvClass(card) {
 
 const agUltraCard = byId.accountsList.children[0];
 assert.strictEqual(agUltraCard.getAttribute('data-plan-type'), 'ultra');
-assert(findProvHTML(agUltraCard).includes('antigravity') && findProvHTML(agUltraCard).includes('AI Ultra'), 'AG ultra badge: ' + findProvHTML(agUltraCard));
+assert(findProvHTML(agUltraCard).includes('Antigravity') && findProvHTML(agUltraCard).includes('AI Ultra'), 'AG ultra badge: ' + findProvHTML(agUltraCard));
 assert(!findProvClass(agUltraCard).includes('badge-provider-antigravity-38'), 'AG ultra must not use secondary color');
 
 const agFreeCard = byId.accountsList.children[3];
 assert.strictEqual(agFreeCard.getAttribute('data-plan-type'), 'free');
-assert(findProvHTML(agFreeCard).includes('antigravity') && findProvHTML(agFreeCard).includes('Free'), 'AG free badge: ' + findProvHTML(agFreeCard));
+assert(findProvHTML(agFreeCard).includes('Antigravity') && findProvHTML(agFreeCard).includes('Free'), 'AG free badge: ' + findProvHTML(agFreeCard));
 assert(findProvClass(agFreeCard).includes('badge-provider-antigravity-38'), 'AG free should use secondary color');
 
 const codexPro100Card = byId.accountsList.children[6];
 assert.strictEqual(codexPro100Card.getAttribute('data-plan-type'), 'pro_100');
-assert(findProvHTML(codexPro100Card).includes('Pro 100'), 'Codex Pro 100 badge: ' + findProvHTML(codexPro100Card));
+assert(findProvHTML(codexPro100Card).includes('Codex') && findProvHTML(codexPro100Card).includes('Pro 100'), 'Codex Pro 100 badge: ' + findProvHTML(codexPro100Card));
 
 const claudeUltraCard = byId.accountsList.children[11];
 assert.strictEqual(claudeUltraCard.getAttribute('data-plan-type'), 'ultra');
-assert(findProvHTML(claudeUltraCard).includes('Ultra'), 'Claude Ultra badge: ' + findProvHTML(claudeUltraCard));
+assert(findProvHTML(claudeUltraCard).includes('Claude') && findProvHTML(claudeUltraCard).includes('Ultra'), 'Claude Ultra badge: ' + findProvHTML(claudeUltraCard));
 
 // 3. Fleet availability renders AGY + AGY (Lite) chips when pools differ and includes tier breakdown in tooltips.
 ctx.renderFleetAvailability([

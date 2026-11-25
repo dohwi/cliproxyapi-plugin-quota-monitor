@@ -578,7 +578,7 @@ cards.forEach((c, idx) => {
   assert(badge && badge.className.indexOf('badge-provider') !== -1, 'badge-provider exists');
   assert(badge._html.indexOf('<svg') !== -1, 'badge has inline SVG icon');
   assert(badge._html.indexOf('aria-hidden="true"') !== -1, 'badge icon is aria-hidden');
-  const expectedText = testAccounts[idx].provider;
+  const expectedText = ctx.formatProviderLabel(testAccounts[idx].provider);
   assert(badge._html.indexOf(expectedText) !== -1, 'badge keeps provider text label');
   // Separate colored badge-plan must not exist
   const separatePlanBadge = meta._children.find(x => x.className.indexOf('badge-plan') !== -1);
