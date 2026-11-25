@@ -2204,12 +2204,14 @@ func TestClassifyAntigravityModels(t *testing.T) {
 	}{
 		{"empty", nil, ""},
 		{"blank only", []string{"", "   "}, ""},
-		{"pro 3.8 only", []string{"gemini-3.8-flash", "gemini-3.1-flash-image", "gemini-claude-opus-4.6"}, AntigravityTier38},
-		{"ultra gemini-4", []string{"gemini-3.8-flash", "gemini-4-argon", "gemini-claude-opus-5.5"}, AntigravityTier4},
-		{"prefixed gemini-4", []string{"ultra/GEMINI-4-Neon"}, AntigravityTier4},
-		{"dotted gemini-4", []string{"gemini-4.0-pro"}, AntigravityTier4},
-		{"exact gemini-4", []string{"gemini-4"}, AntigravityTier4},
-		{"non-4 lookalike", []string{"gemini-40-flash"}, AntigravityTier38},
+		{"pro 3.8 only", []string{"gemini-3.8-flash", "gemini-3.1-flash-image", "gemini-claude-opus-4.6"}, AntigravityTierLite},
+		{"pro trial with gemini-4-hydrogen only", []string{"gemini-3.8-flash", "gemini-4-hydrogen", "gemini-claude-opus-4.6"}, AntigravityTierLite},
+		{"ultra frontier gemini-4", []string{"gemini-3.8-flash", "gemini-4-argon", "gemini-claude-opus-5.5"}, AntigravityTierFull},
+		{"claude 5.5 frontier", []string{"gemini-3.8-flash", "gemini-claude-opus-5.5"}, AntigravityTierFull},
+		{"prefixed gemini-4", []string{"ultra/GEMINI-4-Neon"}, AntigravityTierFull},
+		{"dotted gemini-4", []string{"gemini-4.0-pro"}, AntigravityTierFull},
+		{"exact gemini-4", []string{"gemini-4"}, AntigravityTierFull},
+		{"non-4 lookalike", []string{"gemini-40-flash"}, AntigravityTierLite},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2250,7 +2252,7 @@ func TestFetchAuthFileModelsAndTier(t *testing.T) {
 		case "antigravity-ultra@example.com.json":
 			_, _ = w.Write([]byte(`{"models":[{"id":"gemini-3.8-flash"},{"id":"gemini-4-argon"}]}`))
 		case "antigravity-pro@example.com.json":
-			_, _ = w.Write([]byte(`{"models":[{"id":"gemini-3.8-flash"},{"id":"gemini-claude-opus-4.6"}]}`))
+			_, _ = w.Write([]byte(`{"models":[{"id":"gemini-3.8-flash"},{"id":"gemini-4-hydrogen"},{"id":"gemini-claude-opus-4.6"}]}`))
 		case "antigravity-autherr.json":
 			w.WriteHeader(http.StatusUnauthorized)
 		default:
@@ -2268,16 +2270,16 @@ func TestFetchAuthFileModelsAndTier(t *testing.T) {
 
 	ultra := AccountQuota{Provider: "antigravity", authFileName: "antigravity-ultra@example.com.json"}
 	tier, err := client.FetchAntigravityModelTier(context.Background(), ultra)
-	if err != nil || tier != AntigravityTier4 {
-		t.Fatalf("ultra tier = %q, err = %v, want %q", tier, err, AntigravityTier4)
+	if err != nil || tier != AntigravityTierFull {
+		t.Fatalf("ultra tier = %q, err = %v, want %q", tier, err, AntigravityTierFull)
 	}
 	if seenPath != "/v0/management/auth-files/models" || seenQueryName != "antigravity-ultra@example.com.json" || seenAuth != "Bearer secret-key" || seenKey != "secret-key" {
 		t.Fatalf("unexpected request: path=%q name=%q auth=%q key=%q", seenPath, seenQueryName, seenAuth, seenKey)
 	}
 
 	pro := AccountQuota{Provider: "antigravity", authFileName: "antigravity-pro@example.com.json"}
-	if tier, err := client.FetchAntigravityModelTier(context.Background(), pro); err != nil || tier != AntigravityTier38 {
-		t.Fatalf("pro tier = %q, err = %v, want %q", tier, err, AntigravityTier38)
+	if tier, err := client.FetchAntigravityModelTier(context.Background(), pro); err != nil || tier != AntigravityTierLite {
+		t.Fatalf("pro tier = %q, err = %v, want %q", tier, err, AntigravityTierLite)
 	}
 
 	authErrAcc := AccountQuota{Provider: "antigravity", authFileName: "antigravity-autherr.json"}

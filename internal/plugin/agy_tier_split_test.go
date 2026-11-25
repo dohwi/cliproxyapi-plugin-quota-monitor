@@ -50,11 +50,11 @@ func TestAntigravityModelTierCollectionAndSanitization(t *testing.T) {
 	for _, a := range first.accounts {
 		byAcc[a.Account] = a
 	}
-	if byAcc["ultra@example.com"].ModelTier != quotamonitor.AntigravityTier4 {
-		t.Fatalf("ultra model_tier = %q, want 4", byAcc["ultra@example.com"].ModelTier)
+	if byAcc["ultra@example.com"].ModelTier != quotamonitor.AntigravityTierFull {
+		t.Fatalf("ultra model_tier = %q, want full", byAcc["ultra@example.com"].ModelTier)
 	}
-	if byAcc["pro@example.com"].ModelTier != quotamonitor.AntigravityTier38 {
-		t.Fatalf("pro model_tier = %q, want 3.8", byAcc["pro@example.com"].ModelTier)
+	if byAcc["pro@example.com"].ModelTier != quotamonitor.AntigravityTierLite {
+		t.Fatalf("pro model_tier = %q, want lite", byAcc["pro@example.com"].ModelTier)
 	}
 
 	// Transient models endpoint failure must retain last-good model_tier.
@@ -74,7 +74,7 @@ func TestAntigravityModelTierCollectionAndSanitization(t *testing.T) {
 	for _, a := range second.accounts {
 		byAcc[a.Account] = a
 	}
-	if byAcc["ultra@example.com"].ModelTier != quotamonitor.AntigravityTier4 || byAcc["pro@example.com"].ModelTier != quotamonitor.AntigravityTier38 {
+	if byAcc["ultra@example.com"].ModelTier != quotamonitor.AntigravityTierFull || byAcc["pro@example.com"].ModelTier != quotamonitor.AntigravityTierLite {
 		t.Fatalf("model_tier lost on transient error: ultra=%q pro=%q", byAcc["ultra@example.com"].ModelTier, byAcc["pro@example.com"].ModelTier)
 	}
 
@@ -84,8 +84,8 @@ func TestAntigravityModelTierCollectionAndSanitization(t *testing.T) {
 		{AccountKey: "k2", Provider: "antigravity", Account: "b@x.com", ModelTier: "<script>alert(1)</script>"},
 		{AccountKey: "k3", Provider: "codex", Account: "c@x.com", ModelTier: "4"},
 	})
-	if safe[0].ModelTier != "4" || safe[1].ModelTier != "" || safe[2].ModelTier != "" {
-		t.Fatalf("sanitized tiers = [%q, %q, %q], want [4, \"\", \"\"]", safe[0].ModelTier, safe[1].ModelTier, safe[2].ModelTier)
+	if safe[0].ModelTier != quotamonitor.AntigravityTierFull || safe[1].ModelTier != "" || safe[2].ModelTier != "" {
+		t.Fatalf("sanitized tiers = [%q, %q, %q], want [full, \"\", \"\"]", safe[0].ModelTier, safe[1].ModelTier, safe[2].ModelTier)
 	}
 }
 
@@ -149,33 +149,33 @@ func TestAntigravityModelTierDemoteGuard(t *testing.T) {
 		return res.accounts[0].ModelTier
 	}
 
-	if got := forceCollect(); got != quotamonitor.AntigravityTier4 {
-		t.Fatalf("initial tier = %q, want 4", got)
+	if got := forceCollect(); got != quotamonitor.AntigravityTierFull {
+		t.Fatalf("initial tier = %q, want full", got)
 	}
 
-	// Two transient "3.8" catalogs must not demote a confirmed "4" account.
+	// Two transient "lite" catalogs must not demote a confirmed "full" account.
 	omitGemini4.Store(true)
 	for i := 1; i < antigravityTier4DemoteThreshold; i++ {
-		if got := forceCollect(); got != quotamonitor.AntigravityTier4 {
-			t.Fatalf("transient miss #%d demoted early: got %q, want 4", i, got)
+		if got := forceCollect(); got != quotamonitor.AntigravityTierFull {
+			t.Fatalf("transient miss #%d demoted early: got %q, want full", i, got)
 		}
 	}
 
-	// A recovered "4" catalog resets the demotion counter.
+	// A recovered "full" catalog resets the demotion counter.
 	omitGemini4.Store(false)
-	if got := forceCollect(); got != quotamonitor.AntigravityTier4 {
-		t.Fatalf("recovered tier = %q, want 4", got)
+	if got := forceCollect(); got != quotamonitor.AntigravityTierFull {
+		t.Fatalf("recovered tier = %q, want full", got)
 	}
 
-	// Three consecutive "3.8" catalogs finally demote the account.
+	// Three consecutive "lite" catalogs finally demote the account.
 	omitGemini4.Store(true)
 	for i := 1; i < antigravityTier4DemoteThreshold; i++ {
-		if got := forceCollect(); got != quotamonitor.AntigravityTier4 {
-			t.Fatalf("post-reset miss #%d demoted early: got %q, want 4", i, got)
+		if got := forceCollect(); got != quotamonitor.AntigravityTierFull {
+			t.Fatalf("post-reset miss #%d demoted early: got %q, want full", i, got)
 		}
 	}
-	if got := forceCollect(); got != quotamonitor.AntigravityTier38 {
-		t.Fatalf("miss #%d should demote to 3.8, got %q", antigravityTier4DemoteThreshold, got)
+	if got := forceCollect(); got != quotamonitor.AntigravityTierLite {
+		t.Fatalf("miss #%d should demote to lite, got %q", antigravityTier4DemoteThreshold, got)
 	}
 }
 
@@ -306,8 +306,8 @@ assert.strictEqual(byId.accountsList.children.length, 3);
 const card4 = byId.accountsList.children[0];
 const card38 = byId.accountsList.children[1];
 const cardHostile = byId.accountsList.children[2];
-assert.strictEqual(card4.getAttribute('data-model-tier'), '4');
-assert.strictEqual(card38.getAttribute('data-model-tier'), '3.8');
+assert.strictEqual(card4.getAttribute('data-model-tier'), 'full');
+assert.strictEqual(card38.getAttribute('data-model-tier'), 'lite');
 assert.strictEqual(cardHostile.getAttribute('data-model-tier'), undefined);
 
 console.log('OK_AGY_TIER_SPLIT');

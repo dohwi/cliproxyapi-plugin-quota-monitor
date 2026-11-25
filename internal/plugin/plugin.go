@@ -29,7 +29,7 @@ import (
 
 const (
 	pluginName                = "quota-monitor"
-	pluginVersion             = "0.8.0"
+	pluginVersion             = "0.8.1"
 	pluginAuthor              = "dohwi"
 	pluginRepo                = "https://github.com/dohwi/cliproxyapi-plugin-quota-monitor"
 	pluginSchemaVersion       = 6
@@ -892,11 +892,14 @@ func sanitizeModelTier(provider, raw string) string {
 	return quotamonitor.NormalizeAntigravityTier(raw)
 }
 
-const antigravityTier4DemoteThreshold = 3
+const (
+	antigravityTier4DemoteThreshold = 3
+	antigravityModelPoolCacheTTL    = 30 * time.Minute
+)
 
-// mergeAntigravityModelTier updates an Antigravity account's model tier while
-// guarding a confirmed "4" account against transient partial model catalogs
-// that temporarily omit gemini-4* and classify as "3.8".
+// mergeAntigravityModelTier updates an Antigravity account's model pool while
+// guarding a confirmed "full" account against transient partial model catalogs
+// that temporarily omit frontier models and classify as "lite".
 func mergeAntigravityModelTier(a *quotamonitor.AccountQuota, fetched string) {
 	if a == nil {
 		return
@@ -905,12 +908,12 @@ func mergeAntigravityModelTier(a *quotamonitor.AccountQuota, fetched string) {
 	if tier == "" {
 		return
 	}
-	if tier == quotamonitor.AntigravityTier4 {
-		a.ModelTier = quotamonitor.AntigravityTier4
+	if tier == quotamonitor.AntigravityTierFull {
+		a.ModelTier = quotamonitor.AntigravityTierFull
 		a.ModelTierDemoteMisses = 0
 		return
 	}
-	if quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTier4 {
+	if quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierFull {
 		a.ModelTierDemoteMisses++
 		if a.ModelTierDemoteMisses < antigravityTier4DemoteThreshold {
 			return
@@ -1914,8 +1917,12 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 			}
 		} else {
 			if strings.EqualFold(a.Provider, "antigravity") {
-				if tier, tierErr := client.FetchAntigravityModelTier(probeCtx, *a); tierErr == nil && tier != "" {
-					mergeAntigravityModelTier(a, tier)
+				modelPoolStale := a.ModelTier == "" || a.ModelTierCheckedAt.IsZero() || now().Sub(a.ModelTierCheckedAt) >= antigravityModelPoolCacheTTL
+				if force || modelPoolStale {
+					if tier, tierErr := client.FetchAntigravityModelTier(probeCtx, *a); tierErr == nil && tier != "" {
+						mergeAntigravityModelTier(a, tier)
+						a.ModelTierCheckedAt = now()
+					}
 				}
 			}
 			wins, err = client.FetchActiveQuota(probeCtx, *a)
@@ -2092,6 +2099,7 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 				if p.ModelTier != "" && a.ModelTier == "" {
 					a.ModelTier = p.ModelTier
 					a.ModelTierDemoteMisses = p.ModelTierDemoteMisses
+					a.ModelTierCheckedAt = p.ModelTierCheckedAt
 				}
 				a.APICredits = mergeAPICredits(a.APICredits, p.APICredits)
 				a.ResetCredits = mergeResetCredits(a.ResetCredits, p.ResetCredits)
@@ -2138,6 +2146,7 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 			if a.ModelTier == "" && p.ModelTier != "" {
 				a.ModelTier = p.ModelTier
 				a.ModelTierDemoteMisses = p.ModelTierDemoteMisses
+				a.ModelTierCheckedAt = p.ModelTierCheckedAt
 			}
 			a.APICredits = mergeAPICredits(p.APICredits, a.APICredits)
 			a.ResetCredits = mergeResetCredits(p.ResetCredits, a.ResetCredits)

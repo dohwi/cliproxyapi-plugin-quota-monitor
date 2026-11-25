@@ -185,6 +185,49 @@ func TestComputeUnifiesAntigravityWithTierWeights(t *testing.T) {
 	}
 }
 
+func TestComputeAutoSplitsAntigravityWhenModelPoolsDiffer(t *testing.T) {
+	accounts := []quotamonitor.AccountQuota{
+		{
+			Provider: "antigravity", PlanType: "ultra", ModelTier: quotamonitor.AntigravityTierFull, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{
+				availWin("Gemini Models / Five Hour Limit Remaining", 300, 99),
+				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100),
+			},
+		},
+		{
+			Provider: "antigravity", PlanType: "pro", ModelTier: quotamonitor.AntigravityTierLite, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{
+				availWin("Gemini Models / Five Hour Limit Remaining", 300, 80),
+				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 20),
+			},
+		},
+		{
+			Provider: "antigravity", PlanType: "pro", ModelTier: quotamonitor.AntigravityTierLite, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{
+				availWin("Gemini Models / Five Hour Limit Remaining", 300, 60),
+				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 40),
+			},
+		},
+	}
+
+	entries := Compute(accounts)
+	if len(entries) != 4 {
+		t.Fatalf("entries = %#v, want 4 split AGY entries (full + lite)", entries)
+	}
+	if e := availEntry(t, entries, "antigravity_gemini"); e.RemainingPercent != 99 || e.Accounts != 1 || e.Label != "AGY · Gemini" {
+		t.Fatalf("antigravity_gemini = %+v", e)
+	}
+	if e := availEntry(t, entries, "antigravity_claude"); e.RemainingPercent != 100 || e.Accounts != 1 || e.Label != "AGY · Claude/GPT" {
+		t.Fatalf("antigravity_claude = %+v", e)
+	}
+	if e := availEntry(t, entries, "antigravity_lite_gemini"); e.RemainingPercent != 70 || e.Accounts != 2 || e.Label != "AGY (Lite) · Gemini" || e.Short != "AGL" {
+		t.Fatalf("antigravity_lite_gemini = %+v", e)
+	}
+	if e := availEntry(t, entries, "antigravity_lite_claude"); e.RemainingPercent != 30 || e.Accounts != 2 || e.Label != "AGY (Lite) · Claude/GPT" || e.Short != "AGL" {
+		t.Fatalf("antigravity_lite_claude = %+v", e)
+	}
+}
+
 func TestComputeWeightsFleetAvailabilityByTierCapacity(t *testing.T) {
 	accounts := []quotamonitor.AccountQuota{
 		// Claude: Ultra (weight 10) at 0% + Pro (weight 1) at 100% -> 100/11 = 9.1%

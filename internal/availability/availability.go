@@ -291,15 +291,47 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 			return fn(a)
 		}
 	}
+	// Only split Antigravity into Full (AGY) vs Lite (AGY (Lite)) when
+	// accounts actually span both model pools. When every account shares the
+	// same model pool, keep a single unified AGY pool.
+	hasAGFull, hasAGLite := false, false
+	for _, a := range accounts {
+		if !strings.EqualFold(strings.TrimSpace(a.Provider), "antigravity") {
+			continue
+		}
+		if !accountCountsTowardAvailability(a, a.Windows) {
+			continue
+		}
+		switch quotamonitor.NormalizeAntigravityTier(a.ModelTier) {
+		case quotamonitor.AntigravityTierFull:
+			hasAGFull = true
+		case quotamonitor.AntigravityTierLite:
+			hasAGLite = true
+		}
+	}
+	splitAGByPool := hasAGFull && hasAGLite
+
+	agPool := func(wantLite bool, familyRe *regexp.Regexp) func(quotamonitor.AccountQuota) (float64, bool) {
+		return provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
+			if splitAGByPool {
+				isLite := quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite
+				if isLite != wantLite {
+					return 0, false
+				}
+			} else if wantLite {
+				return 0, false
+			}
+			return antigravityAvailability(a, familyRe)
+		})
+	}
+
 	families := []family{
 		{"claude", "Claude", "CC", provider("claude", claudeAvailability)},
 		{"codex", "GPT", "GPT", provider("codex", codexAvailability)},
-		{"antigravity_gemini", "AGY · Gemini", "AG", provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
-			return antigravityAvailability(a, antigravityGeminiPattern)
-		})},
-		{"antigravity_claude", "AGY · Claude/GPT", "AG", provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
-			return antigravityAvailability(a, antigravityClaudePattern)
-		})},
+		{"antigravity_gemini", "AGY · Gemini", "AG", agPool(false, antigravityGeminiPattern)},
+		{"antigravity_claude", "AGY · Claude/GPT", "AG", agPool(false, antigravityClaudePattern)},
+		{"antigravity_lite_gemini", "AGY (Lite) · Gemini", "AGL", agPool(true, antigravityGeminiPattern)},
+		{"antigravity_lite_claude", "AGY (Lite) · Claude/GPT", "AGL", agPool(true, antigravityClaudePattern)},
 	}
 	entries := make([]Entry, 0, len(families))
 	for _, f := range families {

@@ -207,14 +207,17 @@ type AccountQuota struct {
 	// from proxy_url in the raw auth file via EndpointResolver.
 	// URL/host/IP/token details are never stored.
 	Endpoint EndpointKind `json:"endpoint,omitempty"`
-	// ModelTier is an allowlisted Antigravity capability tier derived from
-	// registered auth-file models ("4" when gemini-4* is registered, "3.8"
-	// otherwise). Empty when unknown or non-Antigravity.
+	// ModelTier is an allowlisted Antigravity model pool derived from
+	// registered auth-file models ("full" when frontier models beyond
+	// gemini-4-hydrogen are registered, "lite" otherwise). Empty when unknown.
 	ModelTier string `json:"model_tier,omitempty"`
-	// ModelTierDemoteMisses counts consecutive "3.8" probes observed for an
-	// account previously classified as "4" so a single partial model catalog
-	// cannot flap AGY (4) to AGY (3.8).
+	// ModelTierDemoteMisses counts consecutive "lite" probes observed for an
+	// account previously classified as "full" so a single partial model catalog
+	// cannot flap Full to Lite.
 	ModelTierDemoteMisses int `json:"-"`
+	// ModelTierCheckedAt tracks when ModelTier was last resolved from
+	// /management/auth-files/models so the pool classification can be cached.
+	ModelTierCheckedAt time.Time `json:"-"`
 	projectID string `json:"-"`
 	accountID string `json:"-"`
 	// authFileName is the stable auth file name (e.g. "user.json") used as
@@ -3091,29 +3094,50 @@ func (c *Client) FetchAuthFiles(ctx context.Context) ([]AccountQuota, error) {
 }
 
 const (
+	AntigravityTierFull = "full"
+	AntigravityTierLite = "lite"
+
+	// Legacy aliases accepted by NormalizeAntigravityTier for compatibility.
 	AntigravityTier4  = "4"
 	AntigravityTier38 = "3.8"
 
 	maxAuthFileModels = 2048
 )
 
-// NormalizeAntigravityTier returns an allowlisted Antigravity model tier
-// ("4" or "3.8"), or "" for any other value.
+// NormalizeAntigravityTier returns an allowlisted Antigravity model pool
+// ("full" or "lite"), mapping legacy "4"/"3.8" values, or "" otherwise.
 func NormalizeAntigravityTier(raw string) string {
-	switch strings.TrimSpace(raw) {
-	case AntigravityTier4:
-		return AntigravityTier4
-	case AntigravityTier38:
-		return AntigravityTier38
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case AntigravityTierFull, AntigravityTier4:
+		return AntigravityTierFull
+	case AntigravityTierLite, AntigravityTier38:
+		return AntigravityTierLite
 	default:
 		return ""
 	}
 }
 
+// isAntigravityFrontierModel reports whether a normalized model basename
+// belongs to the paid frontier pool. gemini-4-hydrogen is granted to all
+// Antigravity tiers (including trial and free) and therefore does not
+// distinguish the Full pool from the Lite pool.
+func isAntigravityFrontierModel(base string) bool {
+	if base == "gemini-4-hydrogen" || strings.HasPrefix(base, "gemini-4-hydrogen-") {
+		return false
+	}
+	if base == "gemini-4" || strings.HasPrefix(base, "gemini-4-") || strings.HasPrefix(base, "gemini-4.") {
+		return true
+	}
+	if strings.HasPrefix(base, "gemini-claude-opus-5") || strings.HasPrefix(base, "gemini-claude-sonnet-5") {
+		return true
+	}
+	return false
+}
+
 // ClassifyAntigravityModels classifies an Antigravity account's registered
-// model list into AntigravityTier4 when any gemini-4 model is registered,
-// AntigravityTier38 when at least one valid model ID is registered without
-// gemini-4, and "" when no registered model IDs are known.
+// model list into AntigravityTierFull when any frontier model (beyond
+// gemini-4-hydrogen) is registered, AntigravityTierLite when at least one
+// valid model ID is registered without a frontier model, and "" when empty.
 func ClassifyAntigravityModels(modelIDs []string) string {
 	hasAny := false
 	for _, raw := range modelIDs {
@@ -3126,14 +3150,14 @@ func ClassifyAntigravityModels(modelIDs []string) string {
 		if slash := strings.LastIndex(base, "/"); slash >= 0 {
 			base = base[slash+1:]
 		}
-		if base == "gemini-4" || strings.HasPrefix(base, "gemini-4-") || strings.HasPrefix(base, "gemini-4.") {
-			return AntigravityTier4
+		if isAntigravityFrontierModel(base) {
+			return AntigravityTierFull
 		}
 	}
 	if !hasAny {
 		return ""
 	}
-	return AntigravityTier38
+	return AntigravityTierLite
 }
 
 // ParseAuthFileModelsJSON extracts bounded model IDs from CLIProxyAPI's

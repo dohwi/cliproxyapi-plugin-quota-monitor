@@ -220,16 +220,18 @@ const claudeUltraCard = byId.accountsList.children[11];
 assert.strictEqual(claudeUltraCard.getAttribute('data-plan-type'), 'ultra');
 assert(findProvHTML(claudeUltraCard).includes('Ultra'), 'Claude Ultra badge: ' + findProvHTML(claudeUltraCard));
 
-// 3. Fleet availability renders unified AGY chip and includes tier breakdown in tooltips.
+// 3. Fleet availability renders AGY + AGY (Lite) chips when pools differ and includes tier breakdown in tooltips.
 ctx.renderFleetAvailability([
   { key: 'claude', label: 'Claude', remaining_percent: 9.1, accounts: 2, tiers: [{ tier: 'ultra', label: 'Ultra', remaining_percent: 0, accounts: 1 }, { tier: 'pro', label: 'Pro', remaining_percent: 100, accounts: 1 }] },
-  { key: 'antigravity_gemini', label: 'AGY · Gemini', remaining_percent: 96, accounts: 4, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 99, accounts: 1 }, { tier: 'pro', label: 'AI Pro', remaining_percent: 90, accounts: 3 }] },
-  { key: 'antigravity_claude', label: 'AGY · Claude/GPT', remaining_percent: 95, accounts: 4, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 98, accounts: 1 }, { tier: 'pro', label: 'AI Pro', remaining_percent: 88, accounts: 3 }] },
+  { key: 'antigravity_gemini', label: 'AGY · Gemini', remaining_percent: 99, accounts: 1, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 99, accounts: 1 }] },
+  { key: 'antigravity_claude', label: 'AGY · Claude/GPT', remaining_percent: 98, accounts: 1, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 98, accounts: 1 }] },
+  { key: 'antigravity_lite_gemini', label: 'AGY (Lite) · Gemini', remaining_percent: 90, accounts: 3, tiers: [{ tier: 'pro', label: 'AI Pro', remaining_percent: 90, accounts: 3 }] },
+  { key: 'antigravity_lite_claude', label: 'AGY (Lite) · Claude/GPT', remaining_percent: 88, accounts: 3, tiers: [{ tier: 'pro', label: 'AI Pro', remaining_percent: 88, accounts: 3 }] },
 ]);
 const fleetHTML = byId.fleetAvailability.innerHTML;
-assert(fleetHTML.includes('>AGY<') && !fleetHTML.includes('AGY (Free)'), 'expected unified AGY chip: ' + fleetHTML);
+assert(fleetHTML.includes('>AGY<') && fleetHTML.includes('>AGY (Lite)<'), 'expected AGY and AGY (Lite) chips: ' + fleetHTML);
 assert(fleetHTML.includes('Ultra 0%') && fleetHTML.includes('Pro 100%'), 'expected tier breakdown in Claude tooltip: ' + fleetHTML);
-assert(fleetHTML.includes('AI Ultra 99%') && fleetHTML.includes('AI Pro 90%'), 'expected tier breakdown in AGY tooltip: ' + fleetHTML);
+assert(fleetHTML.includes('AI Ultra 99%') && fleetHTML.includes('AI Pro 90%'), 'expected tier breakdown in AGY tooltips: ' + fleetHTML);
 
 console.log('OK_TIER_EP_GROUPING');
 `
