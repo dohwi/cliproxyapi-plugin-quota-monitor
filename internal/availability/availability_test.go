@@ -220,10 +220,10 @@ func TestComputeAutoSplitsAntigravityWhenModelPoolsDiffer(t *testing.T) {
 	if e := availEntry(t, entries, "antigravity_claude"); e.RemainingPercent != 100 || e.Accounts != 1 || e.Label != "AGY · Claude/GPT" {
 		t.Fatalf("antigravity_claude = %+v", e)
 	}
-	if e := availEntry(t, entries, "antigravity_lite_gemini"); e.RemainingPercent != 70 || e.Accounts != 2 || e.Label != "AGY (Lite) · Gemini" || e.Short != "AGL" {
+	if e := availEntry(t, entries, "antigravity_lite_gemini"); e.RemainingPercent != 70 || e.Accounts != 2 || e.Label != "AGY (AI Pro Trial) · Gemini" || e.Short != "AGT" || len(e.Tiers) != 1 || e.Tiers[0].Label != "AI Pro Trial" {
 		t.Fatalf("antigravity_lite_gemini = %+v", e)
 	}
-	if e := availEntry(t, entries, "antigravity_lite_claude"); e.RemainingPercent != 30 || e.Accounts != 2 || e.Label != "AGY (Lite) · Claude/GPT" || e.Short != "AGL" {
+	if e := availEntry(t, entries, "antigravity_lite_claude"); e.RemainingPercent != 30 || e.Accounts != 2 || e.Label != "AGY (AI Pro Trial) · Claude/GPT" || e.Short != "AGT" || len(e.Tiers) != 1 || e.Tiers[0].Label != "AI Pro Trial" {
 		t.Fatalf("antigravity_lite_claude = %+v", e)
 	}
 }

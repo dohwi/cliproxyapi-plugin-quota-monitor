@@ -2207,13 +2207,12 @@ function renderFleetAvailability(entries) {
   var el = document.getElementById('fleetAvailability');
   if (!el) return;
   var list = Array.isArray(entries) ? entries : [];
-  // Each Antigravity unit (paid AGY, AGY (Free), or legacy 4/3.8)
-  // collapses its Gemini and Claude/GPT families into one chip.
+  // Each Antigravity pool collapses its Gemini and Claude/GPT families into one chip.
   var agyGroupByKey = {
-    antigravity_gemini: 'AGY',
-    antigravity_claude: 'AGY',
-    antigravity_lite_gemini: 'AGY (Lite)',
-    antigravity_lite_claude: 'AGY (Lite)',
+    antigravity_gemini: 'agy_full',
+    antigravity_claude: 'agy_full',
+    antigravity_lite_gemini: 'agy_limited',
+    antigravity_lite_claude: 'agy_limited',
     antigravity_4_gemini: 'AGY (4)',
     antigravity_4_claude: 'AGY (4)',
     antigravity_3_8_gemini: 'AGY (3.8)',
@@ -2227,12 +2226,22 @@ function renderFleetAvailability(entries) {
     if (!isFinite(rem)) continue;
     var count = Number(e.accounts) || 0;
     var tierSummary = formatFleetTiers(e.tiers);
-    var agyLabel = agyGroupByKey[e.key];
-    if (agyLabel) {
-      var agy = agyChips[agyLabel];
+    var agyGroup = agyGroupByKey[e.key];
+    if (agyGroup) {
+      var agy = agyChips[agyGroup];
       if (!agy) {
-        agy = { label: agyLabel, provider: 'antigravity', title: '', values: [], accounts: 0 };
-        agyChips[agyLabel] = agy;
+        var chipLabel = agyGroup;
+        if (agyGroup === 'agy_full') {
+          chipLabel = (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label)
+            ? ('AGY · ' + String(e.tiers[0].label))
+            : 'AGY';
+        } else if (agyGroup === 'agy_limited') {
+          chipLabel = (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label)
+            ? ('AGY · ' + String(e.tiers[0].label))
+            : 'AGY · Trial/Free';
+        }
+        agy = { label: chipLabel, provider: 'antigravity', title: '', values: [], accounts: 0 };
+        agyChips[agyGroup] = agy;
         chips.push(agy);
       }
       agy.values.push(rem);

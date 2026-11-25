@@ -330,12 +330,13 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 		{"codex", "GPT", "GPT", provider("codex", codexAvailability)},
 		{"antigravity_gemini", "AGY · Gemini", "AG", agPool(false, antigravityGeminiPattern)},
 		{"antigravity_claude", "AGY · Claude/GPT", "AG", agPool(false, antigravityClaudePattern)},
-		{"antigravity_lite_gemini", "AGY (Lite) · Gemini", "AGL", agPool(true, antigravityGeminiPattern)},
-		{"antigravity_lite_claude", "AGY (Lite) · Claude/GPT", "AGL", agPool(true, antigravityClaudePattern)},
+		{"antigravity_lite_gemini", "AGY (Trial/Free) · Gemini", "AGT", agPool(true, antigravityGeminiPattern)},
+		{"antigravity_lite_claude", "AGY (Trial/Free) · Claude/GPT", "AGT", agPool(true, antigravityClaudePattern)},
 	}
 	entries := make([]Entry, 0, len(families))
 	for _, f := range families {
 		weightedSum, weightTotal, n := 0.0, 0.0, 0
+		isLitePool := strings.HasPrefix(f.key, "antigravity_lite_")
 		type tierAgg struct {
 			tier   string
 			meta   tierMeta
@@ -348,6 +349,9 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 			if v, ok := f.value(a); ok {
 				plan := quotamonitor.NormalizePlanType(a.Provider, a.PlanType)
 				meta := tierInfo(a.Provider, plan)
+				if isLitePool && plan == "pro" {
+					meta.label = "AI Pro Trial"
+				}
 				weightedSum += v * meta.weight
 				weightTotal += meta.weight
 				n++
@@ -395,6 +399,13 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 					return tiers[i].Tier < tiers[j].Tier
 				})
 				entry.Tiers = tiers
+				if isLitePool && len(tiers) == 1 && tiers[0].Label != "" && tiers[0].Label != "Other" {
+					suffix := "Gemini"
+					if strings.HasSuffix(f.key, "_claude") {
+						suffix = "Claude/GPT"
+					}
+					entry.Label = "AGY (" + tiers[0].Label + ") · " + suffix
+				}
 			}
 			entries = append(entries, entry)
 		}
