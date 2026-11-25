@@ -14,8 +14,9 @@ func TestNormalizePlanTypesAcrossProviders(t *testing.T) {
 		raw  string
 		want string
 	}{
-		{"default_claude_max_20x", "max_20x"},
-		{"claude_max_5x", "max_5x"},
+		{"claude_ultra", "ultra"},
+		{"default_claude_max_20x", "ultra"},
+		{"claude_max_5x", "max"},
 		{"claude_max", "max"},
 		{"claude_pro", "pro"},
 		{"claude_team", "team"},
@@ -56,10 +57,13 @@ func TestNormalizePlanTypesAcrossProviders(t *testing.T) {
 		raw  string
 		want string
 	}{
-		{"prolite", "pro_lite"},
-		{"pro_lite", "pro_lite"},
-		{"pro_5x", "pro_lite"},
-		{"pro_20x", "pro_20x"},
+		{"prolite", "pro_100"},
+		{"pro_lite", "pro_100"},
+		{"pro_100", "pro_100"},
+		{"pro_5x", "pro_100"},
+		{"pro_200", "pro_200"},
+		{"pro_20x", "pro_200"},
+		{"pro_500", "pro_500"},
 		{"pro", "pro"},
 		{"ChatGPT_Business", "team"},
 		{"edu", "edu"},
@@ -81,8 +85,8 @@ func TestParseClaudePlanType(t *testing.T) {
 		body string
 		want string
 	}{
-		{"rate_limit_tier wins over generic org", `{"organization":{"organization_type":"claude_max","rate_limit_tier":"default_claude_max_20x"}}`, "max_20x"},
-		{"max 5x tier", `{"organization":{"organization_type":"claude_max","rate_limit_tier":"default_claude_max_5x"}}`, "max_5x"},
+		{"rate_limit_tier wins over generic org", `{"organization":{"organization_type":"claude_max","rate_limit_tier":"default_claude_max_20x"}}`, "ultra"},
+		{"max 5x tier", `{"organization":{"organization_type":"claude_max","rate_limit_tier":"default_claude_max_5x"}}`, "max"},
 		{"org type only", `{"organization":{"organization_type":"claude_team"}}`, "team"},
 		{"account bool max", `{"account":{"has_claude_max":true,"has_claude_pro":true}}`, "max"},
 		{"account bool pro", `{"account":{"has_claude_max":false,"has_claude_pro":true}}`, "pro"},
@@ -178,8 +182,8 @@ func TestFetchClaudeAndAntigravityPlan(t *testing.T) {
 	}
 
 	cPlan, err := client.FetchClaudePlan(context.Background(), AccountQuota{Provider: "claude", AuthIndex: "c1"})
-	if err != nil || cPlan != "max_5x" {
-		t.Fatalf("FetchClaudePlan = (%q, %v), want (max_5x, nil)", cPlan, err)
+	if err != nil || cPlan != "max" {
+		t.Fatalf("FetchClaudePlan = (%q, %v), want (max, nil)", cPlan, err)
 	}
 
 	agPlan, err := client.FetchAntigravityPlan(context.Background(), AccountQuota{Provider: "antigravity", AuthIndex: "a1", projectID: "proj-1"})

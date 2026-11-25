@@ -79,7 +79,7 @@ func TestProbeAndSanitizePlansForAllProviders(t *testing.T) {
 	wantPlans := map[string]string{
 		"ag-u": "ultra",
 		"ag-f": "free",
-		"cl-1": "max_20x",
+		"cl-1": "ultra",
 		"cx-1": "team",
 	}
 	for _, a := range safe {
@@ -171,23 +171,23 @@ const accounts = [
   { account_key: 'ag-pro-1', provider: 'antigravity', plan_type: 'pro', model_tier: '4', endpoint: 'warp1', status: 'known', account: 'ap1@x', windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', remaining_percent: 90 }] },
 
   { account_key: 'cx-plus-w1', provider: 'codex', plan_type: 'plus', endpoint: 'warp1', status: 'known', account: 'xp1@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
-  { account_key: 'cx-prolite-dir', provider: 'codex', plan_type: 'pro_lite', endpoint: 'direct', status: 'known', account: 'xpl@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
+  { account_key: 'cx-pro100-dir', provider: 'codex', plan_type: 'pro_100', endpoint: 'direct', status: 'known', account: 'xpl@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
   { account_key: 'cx-team-w2', provider: 'codex', plan_type: 'team', endpoint: 'warp2', status: 'known', account: 'xt2@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
   { account_key: 'cx-team-dir', provider: 'codex', plan_type: 'team', endpoint: 'direct', status: 'known', account: 'xt1@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
   { account_key: 'cx-pro-w2', provider: 'codex', plan_type: 'pro', endpoint: 'warp2', status: 'known', account: 'xpro@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
   { account_key: 'cx-free-dir', provider: 'codex', plan_type: 'free', endpoint: 'direct', status: 'known', account: 'xf@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
 
   { account_key: 'cl-pro-dir', provider: 'claude', plan_type: 'pro', endpoint: 'direct', status: 'known', account: 'cp@x', windows: [{ name: 'five-hour', remaining_percent: 70 }] },
-  { account_key: 'cl-m20-w2', provider: 'claude', plan_type: 'max_20x', endpoint: 'warp2', status: 'known', account: 'cm20b@x', windows: [{ name: 'five-hour', remaining_percent: 70 }] },
-  { account_key: 'cl-m20-dir', provider: 'claude', plan_type: 'max_20x', endpoint: 'direct', status: 'known', account: 'cm20a@x', windows: [{ name: 'five-hour', remaining_percent: 70 }] },
-  { account_key: 'cl-m5-w1', provider: 'claude', plan_type: 'max_5x', endpoint: 'warp1', status: 'known', account: 'cm5@x', windows: [{ name: 'five-hour', remaining_percent: 70 }] },
+  { account_key: 'cl-ultra-w2', provider: 'claude', plan_type: 'ultra', endpoint: 'warp2', status: 'known', account: 'cm20b@x', windows: [{ name: 'five-hour', remaining_percent: 70 }] },
+  { account_key: 'cl-ultra-dir', provider: 'claude', plan_type: 'ultra', endpoint: 'direct', status: 'known', account: 'cm20a@x', windows: [{ name: 'five-hour', remaining_percent: 70 }] },
+  { account_key: 'cl-max-w1', provider: 'claude', plan_type: 'max', endpoint: 'warp1', status: 'known', account: 'cm5@x', windows: [{ name: 'five-hour', remaining_percent: 70 }] },
 ];
 
 const sorted = ctx.sortAccountsByEndpoint(accounts).map(a => a.account_key);
 assert.strictEqual(JSON.stringify(sorted), JSON.stringify([
   'ag-ultra-1', 'ag-ultra-2', 'ag-pro-1', 'ag-free-1', 'ag-free-2',
-  'cx-pro-w2', 'cx-prolite-dir', 'cx-team-dir', 'cx-team-w2', 'cx-plus-w1', 'cx-free-dir',
-  'cl-m20-dir', 'cl-m20-w2', 'cl-m5-w1', 'cl-pro-dir',
+  'cx-pro-w2', 'cx-pro100-dir', 'cx-team-dir', 'cx-team-w2', 'cx-plus-w1', 'cx-free-dir',
+  'cl-ultra-dir', 'cl-ultra-w2', 'cl-max-w1', 'cl-pro-dir',
 ]), 'unexpected tier+EP sort order: ' + JSON.stringify(sorted));
 
 // 2. Card rendering shows plan badge for all 3 providers and sets data-plan-type.
@@ -204,7 +204,7 @@ function findProvClass(card) {
 
 const agUltraCard = byId.accountsList.children[0];
 assert.strictEqual(agUltraCard.getAttribute('data-plan-type'), 'ultra');
-assert(findProvHTML(agUltraCard).includes('antigravity') && findProvHTML(agUltraCard).includes('Ultra'), 'AG ultra badge: ' + findProvHTML(agUltraCard));
+assert(findProvHTML(agUltraCard).includes('antigravity') && findProvHTML(agUltraCard).includes('AI Ultra'), 'AG ultra badge: ' + findProvHTML(agUltraCard));
 assert(!findProvClass(agUltraCard).includes('badge-provider-antigravity-38'), 'AG ultra must not use secondary color');
 
 const agFreeCard = byId.accountsList.children[3];
@@ -212,25 +212,25 @@ assert.strictEqual(agFreeCard.getAttribute('data-plan-type'), 'free');
 assert(findProvHTML(agFreeCard).includes('antigravity') && findProvHTML(agFreeCard).includes('Free'), 'AG free badge: ' + findProvHTML(agFreeCard));
 assert(findProvClass(agFreeCard).includes('badge-provider-antigravity-38'), 'AG free should use secondary color');
 
-const codexProLiteCard = byId.accountsList.children[6];
-assert.strictEqual(codexProLiteCard.getAttribute('data-plan-type'), 'pro_lite');
-assert(findProvHTML(codexProLiteCard).includes('Pro 5x'), 'Codex Pro 5x badge: ' + findProvHTML(codexProLiteCard));
+const codexPro100Card = byId.accountsList.children[6];
+assert.strictEqual(codexPro100Card.getAttribute('data-plan-type'), 'pro_100');
+assert(findProvHTML(codexPro100Card).includes('Pro 100'), 'Codex Pro 100 badge: ' + findProvHTML(codexPro100Card));
 
-const claudeMax20Card = byId.accountsList.children[11];
-assert.strictEqual(claudeMax20Card.getAttribute('data-plan-type'), 'max_20x');
-assert(findProvHTML(claudeMax20Card).includes('Max 20x'), 'Claude Max 20x badge: ' + findProvHTML(claudeMax20Card));
+const claudeUltraCard = byId.accountsList.children[11];
+assert.strictEqual(claudeUltraCard.getAttribute('data-plan-type'), 'ultra');
+assert(findProvHTML(claudeUltraCard).includes('Ultra'), 'Claude Ultra badge: ' + findProvHTML(claudeUltraCard));
 
 // 3. Fleet availability renders AGY + AGY (Free) chips and includes tier breakdown in tooltips.
 ctx.renderFleetAvailability([
-  { key: 'claude', label: 'Claude', remaining_percent: 4.8, accounts: 2, tiers: [{ tier: 'max_20x', label: 'Max 20x', remaining_percent: 0, accounts: 1 }, { tier: 'pro', label: 'Pro', remaining_percent: 100, accounts: 1 }] },
-  { key: 'antigravity_gemini', label: 'AGY · Gemini', remaining_percent: 99, accounts: 2, tiers: [{ tier: 'ultra', label: 'Ultra', remaining_percent: 99, accounts: 2 }] },
-  { key: 'antigravity_claude', label: 'AGY · Claude/GPT', remaining_percent: 98, accounts: 2, tiers: [{ tier: 'ultra', label: 'Ultra', remaining_percent: 98, accounts: 2 }] },
+  { key: 'claude', label: 'Claude', remaining_percent: 9.1, accounts: 2, tiers: [{ tier: 'ultra', label: 'Ultra', remaining_percent: 0, accounts: 1 }, { tier: 'pro', label: 'Pro', remaining_percent: 100, accounts: 1 }] },
+  { key: 'antigravity_gemini', label: 'AGY · Gemini', remaining_percent: 99, accounts: 2, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 99, accounts: 2 }] },
+  { key: 'antigravity_claude', label: 'AGY · Claude/GPT', remaining_percent: 98, accounts: 2, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 98, accounts: 2 }] },
   { key: 'antigravity_free_gemini', label: 'AGY (Free) · Gemini', remaining_percent: 92, accounts: 2 },
   { key: 'antigravity_free_claude', label: 'AGY (Free) · Claude/GPT', remaining_percent: 85, accounts: 2 },
 ]);
 const fleetHTML = byId.fleetAvailability.innerHTML;
 assert(fleetHTML.includes('>AGY<') && fleetHTML.includes('>AGY (Free)<'), 'expected AGY and AGY (Free) chips: ' + fleetHTML);
-assert(fleetHTML.includes('Max 20x 0%') && fleetHTML.includes('Pro 100%'), 'expected tier breakdown in Claude tooltip: ' + fleetHTML);
+assert(fleetHTML.includes('Ultra 0%') && fleetHTML.includes('Pro 100%'), 'expected tier breakdown in Claude tooltip: ' + fleetHTML);
 
 console.log('OK_TIER_EP_GROUPING');
 `

@@ -1027,10 +1027,10 @@ function normalizePlanType(provider, raw) {
   var s = String(raw || '').toLowerCase().trim();
   if (!s) return '';
   if (key === 'codex') {
-    return (s === 'pro_20x' || s === 'pro' || s === 'pro_lite' || s === 'enterprise' || s === 'team' || s === 'edu' || s === 'plus' || s === 'k12' || s === 'go' || s === 'free') ? s : '';
+    return (s === 'pro_500' || s === 'pro_200' || s === 'pro' || s === 'pro_100' || s === 'enterprise' || s === 'team' || s === 'edu' || s === 'plus' || s === 'k12' || s === 'go' || s === 'free') ? s : '';
   }
   if (key === 'claude') {
-    return (s === 'max_20x' || s === 'max_5x' || s === 'max' || s === 'enterprise' || s === 'team' || s === 'pro' || s === 'free') ? s : '';
+    return (s === 'ultra' || s === 'max' || s === 'enterprise' || s === 'team' || s === 'pro' || s === 'free') ? s : '';
   }
   if (key === 'antigravity') {
     return (s === 'ultra' || s === 'pro' || s === 'standard' || s === 'free') ? s : '';
@@ -1039,21 +1039,24 @@ function normalizePlanType(provider, raw) {
 }
 
 function formatPlanLabel(provider, plan) {
-  var p = normalizePlanType(provider, plan);
+  var key = getProviderKey(provider);
+  var p = normalizePlanType(key, plan);
   if (!p) return '';
+  if (key === 'antigravity') {
+    var agLabels = { ultra: 'AI Ultra', pro: 'AI Pro', standard: 'Standard', free: 'Free' };
+    return agLabels[p] || '';
+  }
   var labels = {
-    max_20x: 'Max 20x',
-    max_5x: 'Max 5x',
-    max: 'Max',
     ultra: 'Ultra',
-    pro_20x: 'Pro 20x',
+    max: 'Max',
+    pro_500: 'Pro 500',
+    pro_200: 'Pro 200',
     pro: 'Pro',
-    pro_lite: 'Pro 5x',
+    pro_100: 'Pro 100',
     enterprise: 'Enterprise',
     team: 'Team',
     edu: 'Edu',
     plus: 'Plus',
-    standard: 'Standard',
     k12: 'K12',
     go: 'Go',
     free: 'Free'
@@ -1090,12 +1093,12 @@ function accountTierRank(acc) {
     return tier === '4' ? 1 : tier === '3.8' ? 3 : 4;
   }
   if (key === 'codex') {
-    var codexRanks = { pro_20x: 0, pro: 1, pro_lite: 2, enterprise: 3, team: 4, edu: 5, plus: 6, k12: 7, go: 8, free: 9 };
-    return (plan && codexRanks[plan] !== undefined) ? codexRanks[plan] : 10;
+    var codexRanks = { pro_500: 0, pro_200: 1, pro: 2, pro_100: 3, enterprise: 4, team: 5, edu: 6, plus: 7, k12: 8, go: 9, free: 10 };
+    return (plan && codexRanks[plan] !== undefined) ? codexRanks[plan] : 11;
   }
   if (key === 'claude') {
-    var claudeRanks = { max_20x: 0, max_5x: 1, max: 2, enterprise: 3, team: 4, pro: 5, free: 6 };
-    return (plan && claudeRanks[plan] !== undefined) ? claudeRanks[plan] : 7;
+    var claudeRanks = { ultra: 0, max: 1, enterprise: 2, team: 3, pro: 4, free: 5 };
+    return (plan && claudeRanks[plan] !== undefined) ? claudeRanks[plan] : 6;
   }
   return 0;
 }

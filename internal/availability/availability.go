@@ -216,54 +216,54 @@ func tierInfo(provider, plan string) tierMeta {
 	switch p {
 	case "claude":
 		switch t {
-		case "max_20x":
-			return tierMeta{"Max 20x", 20, 0}
-		case "max_5x":
-			return tierMeta{"Max 5x", 5, 1}
+		case "ultra":
+			return tierMeta{"Ultra", 10, 0}
 		case "max":
-			return tierMeta{"Max", 5, 2}
+			return tierMeta{"Max", 5, 1}
 		case "enterprise":
-			return tierMeta{"Enterprise", 2, 3}
+			return tierMeta{"Enterprise", 2, 2}
 		case "team":
-			return tierMeta{"Team", 1.5, 4}
+			return tierMeta{"Team", 1.5, 3}
 		case "pro":
-			return tierMeta{"Pro", 1, 5}
+			return tierMeta{"Pro", 1, 4}
 		case "free":
-			return tierMeta{"Free", 0.2, 6}
+			return tierMeta{"Free", 0.2, 5}
 		default:
 			return tierMeta{"", 1, 99}
 		}
 	case "codex":
 		switch t {
-		case "pro_20x":
-			return tierMeta{"Pro 20x", 20, 0}
+		case "pro_500":
+			return tierMeta{"Pro 500", 50, 0}
+		case "pro_200":
+			return tierMeta{"Pro 200", 20, 1}
 		case "pro":
-			return tierMeta{"Pro", 20, 1}
-		case "pro_lite":
-			return tierMeta{"Pro 5x", 5, 2}
+			return tierMeta{"Pro", 20, 2}
+		case "pro_100":
+			return tierMeta{"Pro 100", 5, 3}
 		case "enterprise":
-			return tierMeta{"Enterprise", 2, 3}
+			return tierMeta{"Enterprise", 2, 4}
 		case "team":
-			return tierMeta{"Team", 1, 4}
+			return tierMeta{"Team", 1, 5}
 		case "edu":
-			return tierMeta{"Edu", 1, 5}
+			return tierMeta{"Edu", 1, 6}
 		case "plus":
-			return tierMeta{"Plus", 1, 6}
+			return tierMeta{"Plus", 1, 7}
 		case "k12":
-			return tierMeta{"K12", 1, 7}
+			return tierMeta{"K12", 1, 8}
 		case "go":
-			return tierMeta{"Go", 0.5, 8}
+			return tierMeta{"Go", 0.5, 9}
 		case "free":
-			return tierMeta{"Free", 0.2, 9}
+			return tierMeta{"Free", 0.2, 10}
 		default:
 			return tierMeta{"", 1, 99}
 		}
 	case "antigravity":
 		switch t {
 		case "ultra":
-			return tierMeta{"Ultra", 5, 0}
+			return tierMeta{"AI Ultra", 5, 0}
 		case "pro":
-			return tierMeta{"Pro", 1, 1}
+			return tierMeta{"AI Pro", 1, 1}
 		case "standard":
 			return tierMeta{"Standard", 1, 2}
 		case "free":

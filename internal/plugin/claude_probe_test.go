@@ -68,7 +68,7 @@ func TestClaudeProbeEligibilityAndRecovery(t *testing.T) {
 	defer server.Close()
 	client := quotamonitor.NewClient(server.URL, "management-key")
 	got, attempts, truncated := probeAccounts(context.Background(), client, []quotamonitor.AccountQuota{account}, nil, nil, true)
-	if truncated || usageCalls != 1 || profileCalls != 1 || len(attempts) != 1 || len(got) != 1 || got[0].Status != quotamonitor.StatusKnown || got[0].Source != "active" || len(got[0].Windows) != 2 || got[0].PlanType != "max_20x" {
+	if truncated || usageCalls != 1 || profileCalls != 1 || len(attempts) != 1 || len(got) != 1 || got[0].Status != quotamonitor.StatusKnown || got[0].Source != "active" || len(got[0].Windows) != 2 || got[0].PlanType != "ultra" {
 		t.Fatalf("Claude collection/recovery failed: %#v attempts=%#v usageCalls=%d profileCalls=%d truncated=%v", got, attempts, usageCalls, profileCalls, truncated)
 	}
 	if got[0].ResetCredits == nil || got[0].ResetCredits.AvailableCount == nil || *got[0].ResetCredits.AvailableCount != 2 || got[0].ResetCredits.NearestExpiry == nil {

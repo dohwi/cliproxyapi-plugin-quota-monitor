@@ -481,10 +481,12 @@ func NormalizeCodexPlanType(raw string) string {
 		return "go"
 	case "plus", "chatgptplus", "plusplan":
 		return "plus"
-	case "prolite", "chatgptprolite", "proliteplan", "pro5x", "chatgptpro5x":
-		return "pro_lite"
-	case "pro20x", "chatgptpro20x":
-		return "pro_20x"
+	case "prolite", "chatgptprolite", "proliteplan", "pro100", "chatgptpro100", "pro5x", "chatgptpro5x":
+		return "pro_100"
+	case "pro200", "chatgptpro200", "pro20x", "chatgptpro20x":
+		return "pro_200"
+	case "pro500", "chatgptpro500":
+		return "pro_500"
 	case "pro", "chatgptpro", "proplan":
 		return "pro"
 	case "team", "chatgptteam", "teamplan", "business", "chatgptbusiness", "businessplan":
@@ -514,15 +516,14 @@ func compactPlanToken(raw string) string {
 
 // NormalizeClaudePlanType converts explicit, known Claude subscription/tier
 // labels (from /api/oauth/profile organization_type or rate_limit_tier) to
-// canonical public values.
+// canonical public values matching Anthropic's official tiers (Ultra, Max,
+// Enterprise, Team, Pro, Free). Legacy max_20x maps to ultra; max_5x maps to max.
 func NormalizeClaudePlanType(raw string) string {
 	c := compactPlanToken(raw)
 	switch c {
-	case "max20x", "claudemax20x", "defaultclaudemax20x":
-		return "max_20x"
-	case "max5x", "claudemax5x", "defaultclaudemax5x":
-		return "max_5x"
-	case "max", "claudemax", "defaultclaudemax":
+	case "ultra", "claudeultra", "defaultclaudeultra", "max20x", "claudemax20x", "defaultclaudemax20x":
+		return "ultra"
+	case "max", "claudemax", "defaultclaudemax", "max5x", "claudemax5x", "defaultclaudemax5x":
 		return "max"
 	case "pro", "claudepro", "defaultclaudepro":
 		return "pro"
@@ -533,11 +534,11 @@ func NormalizeClaudePlanType(raw string) string {
 	case "free", "claudefree", "defaultclaudefree":
 		return "free"
 	default:
-		if strings.Contains(c, "max20x") {
-			return "max_20x"
+		if strings.Contains(c, "max20x") || strings.Contains(c, "claudeultra") {
+			return "ultra"
 		}
 		if strings.Contains(c, "max5x") {
-			return "max_5x"
+			return "max"
 		}
 		return ""
 	}

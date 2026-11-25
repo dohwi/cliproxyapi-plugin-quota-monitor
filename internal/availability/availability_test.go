@@ -201,9 +201,9 @@ func TestComputeSplitsAntigravityByPlanAndFallbackTier(t *testing.T) {
 
 func TestComputeWeightsFleetAvailabilityByTierCapacity(t *testing.T) {
 	accounts := []quotamonitor.AccountQuota{
-		// Claude: Max 20x (weight 20) at 0% + Pro (weight 1) at 100% -> 100/21 = 4.8%
+		// Claude: Ultra (weight 10) at 0% + Pro (weight 1) at 100% -> 100/11 = 9.1%
 		{
-			Provider: "claude", PlanType: "max_20x", Status: quotamonitor.StatusKnown,
+			Provider: "claude", PlanType: "ultra", Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{
 				availWin("five-hour", 300, 0),
 				availWin("weekly", 10080, 0),
@@ -216,20 +216,20 @@ func TestComputeWeightsFleetAvailabilityByTierCapacity(t *testing.T) {
 				availWin("weekly", 10080, 100),
 			},
 		},
-		// Codex: Pro (weight 20) at 0% + Pro 5x (weight 5) at 100% + Plus (weight 1) at 100% -> 600/26 = 23.1%
+		// Codex: Pro (weight 20) at 0% + Pro 100 (weight 5) at 100% + Plus (weight 1) at 100% -> 600/26 = 23.1%
 		{
 			Provider: "codex", PlanType: "pro", Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 0)},
 		},
 		{
-			Provider: "codex", PlanType: "pro_lite", Status: quotamonitor.StatusKnown,
+			Provider: "codex", PlanType: "pro_100", Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 100)},
 		},
 		{
 			Provider: "codex", PlanType: "plus", Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 100)},
 		},
-		// Antigravity paid: Ultra (weight 5) at 0% + Pro (weight 1) at 100% -> 100/6 = 16.7%
+		// Antigravity paid: AI Ultra (weight 5) at 0% + AI Pro (weight 1) at 100% -> 100/6 = 16.7%
 		{
 			Provider: "antigravity", PlanType: "ultra", Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 0)},
@@ -243,10 +243,10 @@ func TestComputeWeightsFleetAvailabilityByTierCapacity(t *testing.T) {
 	entries := Compute(accounts)
 
 	cl := availEntry(t, entries, "claude")
-	if cl.RemainingPercent != 4.8 || cl.Accounts != 2 || len(cl.Tiers) != 2 {
-		t.Fatalf("claude weighted = %+v, want 4.8%% with 2 tiers", cl)
+	if cl.RemainingPercent != 9.1 || cl.Accounts != 2 || len(cl.Tiers) != 2 {
+		t.Fatalf("claude weighted = %+v, want 9.1%% with 2 tiers", cl)
 	}
-	if cl.Tiers[0].Tier != "max_20x" || cl.Tiers[0].RemainingPercent != 0 || cl.Tiers[1].Tier != "pro" || cl.Tiers[1].RemainingPercent != 100 {
+	if cl.Tiers[0].Tier != "ultra" || cl.Tiers[0].Label != "Ultra" || cl.Tiers[0].RemainingPercent != 0 || cl.Tiers[1].Tier != "pro" || cl.Tiers[1].RemainingPercent != 100 {
 		t.Fatalf("claude tiers = %+v", cl.Tiers)
 	}
 
@@ -254,12 +254,15 @@ func TestComputeWeightsFleetAvailabilityByTierCapacity(t *testing.T) {
 	if cx.RemainingPercent != 23.1 || cx.Accounts != 3 || len(cx.Tiers) != 3 {
 		t.Fatalf("codex weighted = %+v, want 23.1%% with 3 tiers", cx)
 	}
-	if cx.Tiers[0].Label != "Pro" || cx.Tiers[1].Label != "Pro 5x" || cx.Tiers[2].Label != "Plus" {
+	if cx.Tiers[0].Label != "Pro" || cx.Tiers[1].Label != "Pro 100" || cx.Tiers[2].Label != "Plus" {
 		t.Fatalf("codex tier labels = %+v", cx.Tiers)
 	}
 
 	ag := availEntry(t, entries, "antigravity_gemini")
 	if ag.RemainingPercent != 16.7 || ag.Accounts != 2 || len(ag.Tiers) != 2 {
 		t.Fatalf("antigravity weighted = %+v, want 16.7%% with 2 tiers", ag)
+	}
+	if ag.Tiers[0].Label != "AI Ultra" || ag.Tiers[1].Label != "AI Pro" {
+		t.Fatalf("antigravity tier labels = %+v", ag.Tiers)
 	}
 }
