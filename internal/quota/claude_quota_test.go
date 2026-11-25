@@ -89,7 +89,10 @@ func TestFetchClaudeQuotaManagementContract(t *testing.T) {
 	if !isAllowedEndpoint(claudeResetUsageURL) {
 		t.Fatal("fixed reset inventory query must be allowed")
 	}
-	for _, endpoint := range []string{claudeResetUsageURL + "&token=secret", claudeQuotaURL + "?cedar_ember=2", claudeQuotaURL + "?token=secret", "https://api.anthropic.com/api/oauth/profile", "https://evil.example/api/oauth/usage"} {
+	if !isAllowedEndpoint(claudeProfileURL) {
+		t.Fatal("claude profile endpoint must be allowed")
+	}
+	for _, endpoint := range []string{claudeResetUsageURL + "&token=secret", claudeQuotaURL + "?cedar_ember=2", claudeQuotaURL + "?token=secret", claudeProfileURL + "?token=secret", "https://api.anthropic.com/api/oauth/other", "https://evil.example/api/oauth/usage"} {
 		if isAllowedEndpoint(endpoint) {
 			t.Errorf("unapproved endpoint allowed: %s", endpoint)
 		}

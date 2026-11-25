@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,10 +38,25 @@ func TestClaudeProbeEligibilityAndRecovery(t *testing.T) {
 		t.Fatal("official Claude must be eligible for active collection")
 	}
 	calls := 0
+	usageCalls := 0
+	profileCalls := 0
 	fail := false
 	inventory := `"cedar_ember":{"eligible":true,"grants":[{"resets_left":2,"paused":false,"ends_at":"2099-01-01T00:00:00Z","id":"secret-handle"}]}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
+		var req struct {
+			URL string `json:"url"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if strings.Contains(req.URL, "/api/oauth/profile") {
+			profileCalls++
+			_ = json.NewEncoder(w).Encode(quotamonitor.APICallResponse{
+				StatusCode: 200,
+				Body:       `{"organization":{"organization_type":"claude_max","rate_limit_tier":"default_claude_max_20x"}}`,
+			})
+			return
+		}
+		usageCalls++
 		status, body := 200, `{"five_hour":{"utilization":10,"resets_at":"2026-10-09T01:00:00Z"},"seven_day":{"utilization":25,"resets_at":"2026-10-12T01:00:00Z"}}`
 		if fail {
 			status, body = 401, "sensitive-provider-body"
@@ -52,8 +68,8 @@ func TestClaudeProbeEligibilityAndRecovery(t *testing.T) {
 	defer server.Close()
 	client := quotamonitor.NewClient(server.URL, "management-key")
 	got, attempts, truncated := probeAccounts(context.Background(), client, []quotamonitor.AccountQuota{account}, nil, nil, true)
-	if truncated || calls != 1 || len(attempts) != 1 || len(got) != 1 || got[0].Status != quotamonitor.StatusKnown || got[0].Source != "active" || len(got[0].Windows) != 2 {
-		t.Fatalf("Claude collection/recovery failed: %#v attempts=%#v calls=%d truncated=%v", got, attempts, calls, truncated)
+	if truncated || usageCalls != 1 || profileCalls != 1 || len(attempts) != 1 || len(got) != 1 || got[0].Status != quotamonitor.StatusKnown || got[0].Source != "active" || len(got[0].Windows) != 2 || got[0].PlanType != "max_20x" {
+		t.Fatalf("Claude collection/recovery failed: %#v attempts=%#v usageCalls=%d profileCalls=%d truncated=%v", got, attempts, usageCalls, profileCalls, truncated)
 	}
 	if got[0].ResetCredits == nil || got[0].ResetCredits.AvailableCount == nil || *got[0].ResetCredits.AvailableCount != 2 || got[0].ResetCredits.NearestExpiry == nil {
 		t.Fatalf("Claude reset inventory not collected: %#v", got[0].ResetCredits)
@@ -65,7 +81,7 @@ func TestClaudeProbeEligibilityAndRecovery(t *testing.T) {
 	}
 	// Backoff and disabled accounts remain respected even for the new provider.
 	_, skipped, _ := probeAccounts(context.Background(), client, []quotamonitor.AccountQuota{account}, got, map[string]time.Time{"claude-key": time.Now().Add(time.Hour)}, false)
-	if len(skipped) != 0 || calls != 1 {
+	if len(skipped) != 0 || calls != 2 {
 		t.Fatal("Claude backoff ignored")
 	}
 	disabled := true

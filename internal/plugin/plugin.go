@@ -881,8 +881,8 @@ type safeAccount struct {
 	RecentRequestCount int `json:"recent_request_count,omitempty"`
 }
 
-func sanitizePlanType(p string) string {
-	return quotamonitor.NormalizeCodexPlanType(p)
+func sanitizePlanType(provider, p string) string {
+	return quotamonitor.NormalizePlanType(provider, p)
 }
 
 func sanitizeModelTier(provider, raw string) string {
@@ -1089,7 +1089,7 @@ func sanitizeAccountsWithSelection(in []quotamonitor.AccountQuota, currentByProv
 			LastSuccess:      a.LastSuccessAt,
 			ObservedAt:       a.ObservedAt,
 			Endpoint:         a.Endpoint,
-			PlanType:         sanitizePlanType(a.PlanType),
+			PlanType:         sanitizePlanType(a.Provider, a.PlanType),
 			ModelTier:        sanitizeModelTier(a.Provider, a.ModelTier),
 			APICredits:       a.APICredits,
 			ResetCredits:     a.ResetCredits,
@@ -1914,6 +1914,9 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 				// enrichment. Unknown inventory must not reconfirm old rights;
 				// failed/skipped probes still retain last-good data as stale.
 				a.ResetCredits = mergeResetCredits(nil, reset)
+				if plan, planErr := client.FetchClaudePlan(probeCtx, *a); planErr == nil && plan != "" {
+					a.PlanType = plan
+				}
 			}
 		} else {
 			if strings.EqualFold(a.Provider, "antigravity") {
@@ -1922,6 +1925,11 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 				}
 			}
 			wins, err = client.FetchActiveQuota(probeCtx, *a)
+			if err == nil && strings.EqualFold(a.Provider, "antigravity") {
+				if plan, planErr := client.FetchAntigravityPlan(probeCtx, *a); planErr == nil && plan != "" {
+					a.PlanType = plan
+				}
+			}
 		}
 		cancel()
 		if err == nil && (len(wins) > 0 || len(claudeAbsent) > 0) {

@@ -1022,6 +1022,41 @@ function normalizeModelTier(raw) {
   return '';
 }
 
+function normalizePlanType(provider, raw) {
+  var key = getProviderKey(provider);
+  var s = String(raw || '').toLowerCase().trim();
+  if (!s) return '';
+  if (key === 'codex') {
+    return (s === 'pro' || s === 'enterprise' || s === 'team' || s === 'plus' || s === 'k12' || s === 'free') ? s : '';
+  }
+  if (key === 'claude') {
+    return (s === 'max_20x' || s === 'max_5x' || s === 'max' || s === 'enterprise' || s === 'team' || s === 'pro' || s === 'free') ? s : '';
+  }
+  if (key === 'antigravity') {
+    return (s === 'ultra' || s === 'pro' || s === 'standard' || s === 'free') ? s : '';
+  }
+  return '';
+}
+
+function formatPlanLabel(provider, plan) {
+  var p = normalizePlanType(provider, plan);
+  if (!p) return '';
+  var labels = {
+    max_20x: 'Max 20x',
+    max_5x: 'Max 5x',
+    max: 'Max',
+    ultra: 'Ultra',
+    pro: 'Pro',
+    enterprise: 'Enterprise',
+    team: 'Team',
+    plus: 'Plus',
+    standard: 'Standard',
+    k12: 'K12',
+    free: 'Free'
+  };
+  return labels[p] || '';
+}
+
 function accountProviderUnit(acc) {
   var p = acc && acc.provider;
   if (getProviderKey(p) === 'antigravity') {
@@ -1035,6 +1070,28 @@ function accountProviderUnit(acc) {
 function modelTierRank(raw) {
   var tier = normalizeModelTier(raw);
   return tier === '4' ? 0 : tier === '3.8' ? 1 : 2;
+}
+
+function accountTierRank(acc) {
+  var key = getProviderKey(acc && acc.provider);
+  var plan = normalizePlanType(key, acc && acc.plan_type);
+  if (key === 'antigravity') {
+    if (plan) {
+      var agRanks = { ultra: 0, pro: 1, standard: 2, free: 3 };
+      return agRanks[plan] !== undefined ? agRanks[plan] : 4;
+    }
+    var tier = normalizeModelTier(acc && acc.model_tier);
+    return tier === '4' ? 1 : tier === '3.8' ? 3 : 4;
+  }
+  if (key === 'codex') {
+    var codexRanks = { pro: 0, enterprise: 1, team: 2, plus: 3, k12: 4, free: 5 };
+    return (plan && codexRanks[plan] !== undefined) ? codexRanks[plan] : 6;
+  }
+  if (key === 'claude') {
+    var claudeRanks = { max_20x: 0, max_5x: 1, max: 2, enterprise: 3, team: 4, pro: 5, free: 6 };
+    return (plan && claudeRanks[plan] !== undefined) ? claudeRanks[plan] : 7;
+  }
+  return 0;
 }
 
 function providerUnitRank(unit) {
@@ -1333,7 +1390,7 @@ function getAvailabilityState(acc) {
   return { key:'unknown', label:t('av.unknown') };
 }
 
-// Sort accounts — provider group primary, endpoint secondary, status tertiary.
+// Sort accounts — provider primary, plan/tier secondary, endpoint tertiary, status quaternary.
 function providerRank(provider) {
   var key = getProviderKey(provider);
   return key === 'antigravity' ? 0 : key === 'codex' ? 1 : key === 'claude' ? 2 : 3;
@@ -1343,10 +1400,8 @@ function sortAccountsByEndpoint(accounts) {
   arr.sort(function(a, b) {
     var pr = providerRank(a.provider) - providerRank(b.provider);
     if (pr !== 0) return pr;
-    if (getProviderKey(a.provider) === 'antigravity' && getProviderKey(b.provider) === 'antigravity') {
-      var tr = modelTierRank(a.model_tier) - modelTierRank(b.model_tier);
-      if (tr !== 0) return tr;
-    }
+    var tr = accountTierRank(a) - accountTierRank(b);
+    if (tr !== 0) return tr;
     var er = endpointCompare(normalizeEndpoint(a.endpoint), normalizeEndpoint(b.endpoint));
     if (er !== 0) return er;
     var sr = statusRank(a) - statusRank(b);
@@ -2619,6 +2674,8 @@ function renderAccounts(accounts) {
     card.setAttribute('data-provider', pKey);
     var modelTier = pKey === 'antigravity' ? normalizeModelTier(acc.model_tier) : '';
     if (modelTier) card.setAttribute('data-model-tier', modelTier);
+    var planType = normalizePlanType(pKey, acc.plan_type);
+    if (planType) card.setAttribute('data-plan-type', planType);
     var cardEndpoint = normalizeEndpoint(acc.endpoint);
     card.setAttribute('data-endpoint', cardEndpoint);
     if (isCurrent) card.setAttribute('data-current', 'true');
@@ -2633,14 +2690,13 @@ function renderAccounts(accounts) {
     var metaLeft = document.createElement('span');
     metaLeft.className = 'card-meta-left';
     var provEl = document.createElement('span');
-    var provBadgeClass = pKey === 'antigravity' ? ('badge-provider-antigravity' + (modelTier === '3.8' ? ' badge-provider-antigravity-38' : '')) : (pKey === 'codex' ? 'badge-provider-codex' : (pKey === 'claude' ? 'badge-provider-claude' : 'badge-provider-default'));
+    var isAgSecondary = pKey === 'antigravity' && (planType ? planType === 'free' : modelTier === '3.8');
+    var provBadgeClass = pKey === 'antigravity' ? ('badge-provider-antigravity' + (isAgSecondary ? ' badge-provider-antigravity-38' : '')) : (pKey === 'codex' ? 'badge-provider-codex' : (pKey === 'claude' ? 'badge-provider-claude' : 'badge-provider-default'));
     provEl.className = 'badge-provider ' + provBadgeClass;
-    var provBaseLabel = accountProviderUnit(acc);
+    var provBaseLabel = (pKey === 'antigravity' && planType) ? formatProviderLabel(acc.provider) : accountProviderUnit(acc);
+    var planDisplay = formatPlanLabel(pKey, planType);
     var provHTML = providerIcon(acc.provider, 14);
-    if (pKey === 'codex' && acc.plan_type) {
-      var planKey = String(acc.plan_type).toLowerCase();
-      var planLabels = { k12: 'K12', plus: 'Plus', pro: 'Pro', team: 'Team', free: 'Free', enterprise: 'Enterprise' };
-      var planDisplay = planLabels[planKey] || String(acc.plan_type);
+    if (planDisplay) {
       provHTML += '<span class="prov-name"><span>' + esc(provBaseLabel) + '</span><span class="prov-sep" aria-hidden="true">·</span><span class="prov-plan">' + esc(planDisplay) + '</span></span>';
       provEl.setAttribute('aria-label', provBaseLabel + ' ' + planDisplay);
     } else {

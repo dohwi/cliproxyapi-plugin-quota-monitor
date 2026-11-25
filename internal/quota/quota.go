@@ -494,6 +494,81 @@ func NormalizeCodexPlanType(raw string) string {
 	}
 }
 
+func compactPlanToken(raw string) string {
+	var compact strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(raw)) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			compact.WriteRune(r)
+		}
+	}
+	return compact.String()
+}
+
+// NormalizeClaudePlanType converts explicit, known Claude subscription/tier
+// labels (from /api/oauth/profile organization_type or rate_limit_tier) to
+// canonical public values.
+func NormalizeClaudePlanType(raw string) string {
+	c := compactPlanToken(raw)
+	switch c {
+	case "max20x", "claudemax20x", "defaultclaudemax20x":
+		return "max_20x"
+	case "max5x", "claudemax5x", "defaultclaudemax5x":
+		return "max_5x"
+	case "max", "claudemax", "defaultclaudemax":
+		return "max"
+	case "pro", "claudepro", "defaultclaudepro":
+		return "pro"
+	case "team", "claudeteam", "defaultclaudeteam":
+		return "team"
+	case "enterprise", "claudeenterprise", "defaultclaudeenterprise":
+		return "enterprise"
+	case "free", "claudefree", "defaultclaudefree":
+		return "free"
+	default:
+		if strings.Contains(c, "max20x") {
+			return "max_20x"
+		}
+		if strings.Contains(c, "max5x") {
+			return "max_5x"
+		}
+		return ""
+	}
+}
+
+// NormalizeAntigravityPlanType converts explicit Google Cloud Code Assist /
+// Antigravity tier IDs or names (from v1internal:loadCodeAssist paidTier or
+// currentTier) to canonical public values.
+func NormalizeAntigravityPlanType(raw string) string {
+	c := compactPlanToken(raw)
+	switch c {
+	case "ultra", "g1ultratier", "ultratier", "googleaiultra", "googleoneaiultra":
+		return "ultra"
+	case "pro", "g1protier", "protier", "googleaipro", "googleoneaipro":
+		return "pro"
+	case "standard", "standardtier":
+		return "standard"
+	case "free", "freetier", "legacytier", "g1freetier", "googleaifree":
+		return "free"
+	default:
+		return ""
+	}
+}
+
+// NormalizePlanType dispatches plan normalization by provider using each
+// provider's strict allowlist.
+func NormalizePlanType(provider, raw string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "codex":
+		return NormalizeCodexPlanType(raw)
+	case "claude":
+		return NormalizeClaudePlanType(raw)
+	case "antigravity":
+		return NormalizeAntigravityPlanType(raw)
+	default:
+		return ""
+	}
+}
+
 func planString(v any) string {
 	s, ok := v.(string)
 	if !ok {
@@ -2291,6 +2366,7 @@ const (
 	codexResetCreditsURL  = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
 	claudeQuotaURL        = "https://api.anthropic.com/api/oauth/usage"
 	claudeResetUsageURL   = claudeQuotaURL + "?cedar_ember=1"
+	claudeProfileURL      = "https://api.anthropic.com/api/oauth/profile"
 
 	// antigravityUserAgent must track the official agy client version: Google omits
 	// the "Gemini Models" group (and its weekly limit) for older versions.
@@ -2302,6 +2378,18 @@ var antigravityQuotaURLs = [...]string{
 	antigravityDailyURL,
 	antigravitySandboxURL,
 	antigravityProdURL,
+}
+
+const (
+	antigravityLoadCodeAssistDailyURL   = "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+	antigravityLoadCodeAssistSandboxURL = "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist"
+	antigravityLoadCodeAssistProdURL    = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+)
+
+var antigravityLoadCodeAssistURLs = [...]string{
+	antigravityLoadCodeAssistDailyURL,
+	antigravityLoadCodeAssistSandboxURL,
+	antigravityLoadCodeAssistProdURL,
 }
 
 // Per-model quota. Google stopped returning the "Gemini Models" group from
@@ -2386,7 +2474,7 @@ func ParseAntigravityModelQuota(data []byte) ([]QuotaWindow, error) {
 }
 
 func isAllowedEndpoint(endpoint string) bool {
-	if endpoint == codexQuotaURL || endpoint == codexResetCreditsURL || endpoint == claudeQuotaURL || endpoint == claudeResetUsageURL {
+	if endpoint == codexQuotaURL || endpoint == codexResetCreditsURL || endpoint == claudeQuotaURL || endpoint == claudeResetUsageURL || endpoint == claudeProfileURL {
 		return true
 	}
 	for _, u := range antigravityUserQuotaURLs {
@@ -2395,6 +2483,11 @@ func isAllowedEndpoint(endpoint string) bool {
 		}
 	}
 	for _, u := range antigravityQuotaURLs {
+		if endpoint == u {
+			return true
+		}
+	}
+	for _, u := range antigravityLoadCodeAssistURLs {
 		if endpoint == u {
 			return true
 		}
@@ -2694,6 +2787,172 @@ func (c *Client) FetchCodexResetCreditsExpiry(ctx context.Context, account Accou
 		return nil, err
 	}
 	return ParseCodexResetCreditsExpiry([]byte(r.Body), time.Now().UTC())
+}
+
+// ParseClaudePlanType extracts a canonical Claude plan/tier from the
+// /api/oauth/profile response (organization.rate_limit_tier,
+// organization.organization_type, or account.has_claude_max/pro).
+func ParseClaudePlanType(data []byte) (string, error) {
+	var root struct {
+		OrganizationType string `json:"organization_type"`
+		RateLimitTier    string `json:"rate_limit_tier"`
+		PlanType         string `json:"plan_type"`
+		Organization     *struct {
+			OrganizationType string `json:"organization_type"`
+			RateLimitTier    string `json:"rate_limit_tier"`
+			PlanType         string `json:"plan_type"`
+			Plan             string `json:"plan"`
+		} `json:"organization"`
+		Account *struct {
+			HasClaudeMax *bool  `json:"has_claude_max"`
+			HasClaudePro *bool  `json:"has_claude_pro"`
+			PlanType     string `json:"plan_type"`
+		} `json:"account"`
+	}
+	if err := json.Unmarshal(data, &root); err != nil {
+		return "", &APICallError{Kind: "parse"}
+	}
+	// Specific rate_limit_tier (e.g. default_claude_max_20x / default_claude_max_5x)
+	// wins over generic organization_type (e.g. claude_max).
+	candidates := make([]string, 0, 8)
+	if root.Organization != nil {
+		candidates = append(candidates,
+			root.Organization.RateLimitTier,
+			root.Organization.OrganizationType,
+			root.Organization.PlanType,
+			root.Organization.Plan,
+		)
+	}
+	candidates = append(candidates, root.RateLimitTier, root.OrganizationType, root.PlanType)
+	if root.Account != nil {
+		candidates = append(candidates, root.Account.PlanType)
+	}
+	for _, raw := range candidates {
+		if plan := NormalizeClaudePlanType(raw); plan != "" {
+			return plan, nil
+		}
+	}
+	if root.Account != nil {
+		if root.Account.HasClaudeMax != nil && *root.Account.HasClaudeMax {
+			return "max", nil
+		}
+		if root.Account.HasClaudePro != nil && *root.Account.HasClaudePro {
+			return "pro", nil
+		}
+		if root.Account.HasClaudeMax != nil && !*root.Account.HasClaudeMax &&
+			root.Account.HasClaudePro != nil && !*root.Account.HasClaudePro {
+			orgType := ""
+			if root.Organization != nil {
+				orgType = strings.ToLower(strings.TrimSpace(root.Organization.OrganizationType))
+			}
+			if orgType == "" || orgType == "individual" || orgType == "free" || orgType == "claude_free" {
+				return "free", nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// FetchClaudePlan makes an optional read-only call to /api/oauth/profile to
+// retrieve the account's subscription tier. Callers should treat failures as
+// non-fatal enrichment errors (e.g. tokens without user:profile scope).
+func (c *Client) FetchClaudePlan(ctx context.Context, account AccountQuota) (string, error) {
+	if strings.TrimSpace(account.AuthIndex) == "" {
+		return "", nil
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	headers := map[string]string{
+		"Authorization":  "Bearer $TOKEN$",
+		"Accept":         "application/json",
+		"Anthropic-Beta": "oauth-2025-04-20",
+		"User-Agent":     "claude-cli/2.1.0 (external, cli)",
+	}
+	r, err := c.APICall(callCtx, account.AuthIndex, http.MethodGet, claudeProfileURL, headers, "")
+	if err != nil {
+		return "", err
+	}
+	return ParseClaudePlanType([]byte(r.Body))
+}
+
+// ParseAntigravityPlanType extracts a canonical Antigravity subscription tier
+// from a v1internal:loadCodeAssist response (paidTier takes precedence over
+// currentTier).
+func ParseAntigravityPlanType(data []byte) (string, error) {
+	type tierObj struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	var root struct {
+		PaidTier      *tierObj `json:"paidTier"`
+		PaidTierSnake *tierObj `json:"paid_tier"`
+		CurrentTier   *tierObj `json:"currentTier"`
+		CurrentSnake  *tierObj `json:"current_tier"`
+	}
+	if err := json.Unmarshal(data, &root); err != nil {
+		return "", &APICallError{Kind: "parse"}
+	}
+	for _, t := range []*tierObj{root.PaidTier, root.PaidTierSnake, root.CurrentTier, root.CurrentSnake} {
+		if t == nil {
+			continue
+		}
+		if plan := NormalizeAntigravityPlanType(t.ID); plan != "" {
+			return plan, nil
+		}
+		if plan := NormalizeAntigravityPlanType(t.Name); plan != "" {
+			return plan, nil
+		}
+	}
+	return "", nil
+}
+
+// FetchAntigravityPlan makes an optional read-only call to
+// v1internal:loadCodeAssist to retrieve the account's Google One / Code Assist
+// subscription tier (ultra, pro, standard, free). Failures are non-fatal.
+func (c *Client) FetchAntigravityPlan(ctx context.Context, account AccountQuota) (string, error) {
+	if strings.TrimSpace(account.AuthIndex) == "" {
+		return "", nil
+	}
+	bodyObj := map[string]any{
+		"metadata": map[string]string{
+			"ideType":    "IDE_UNSPECIFIED",
+			"platform":   "PLATFORM_UNSPECIFIED",
+			"pluginType": "GEMINI",
+		},
+	}
+	if pid := strings.TrimSpace(account.projectID); pid != "" {
+		bodyObj["cloudaicompanionProject"] = pid
+	}
+	b, _ := json.Marshal(bodyObj)
+	body := string(b)
+	headers := map[string]string{
+		"Authorization": "Bearer $TOKEN$",
+		"Content-Type":  "application/json",
+		"User-Agent":    antigravityUserAgent,
+	}
+	var lastErr error
+	for _, endpoint := range antigravityLoadCodeAssistURLs {
+		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		r, err := c.APICall(callCtx, account.AuthIndex, http.MethodPost, endpoint, headers, body)
+		cancel()
+		if err != nil {
+			lastErr = err
+			var ae *APICallError
+			if errors.As(err, &ae) && ae.Kind == "auth" {
+				return "", err
+			}
+			continue
+		}
+		plan, parseErr := ParseAntigravityPlanType([]byte(r.Body))
+		if parseErr != nil {
+			lastErr = parseErr
+			continue
+		}
+		if plan != "" {
+			return plan, nil
+		}
+	}
+	return "", lastErr
 }
 
 // FetchRecentUsageAuths returns the most recent completed, successful generation
