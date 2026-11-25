@@ -2060,11 +2060,11 @@ func TestDashboardSUITFontAndBodyFamily(t *testing.T) {
 }
 
 // TestCurrentAccountCardBorderCSS verifies that current_account cards display a distinct
-// 2px brand-blue border while every card keeps a 2px border slot so selection never shifts layout.
+// 2px brand-blue border while adjusting padding by 1px to match 1px hairline cards without shifting layout.
 func TestCurrentAccountCardBorderCSS(t *testing.T) {
 	required := []string{
-		`.account-card[data-current="true"] { border: 2px solid var(--current-border); }`,
-		"border: 2px solid transparent;",
+		`.account-card[data-current="true"] { border: 2px solid var(--current-border); padding: 9px 10px; }`,
+		"border: 1px solid var(--group-border);",
 		` .account-card { min-height: 226px; height: 100%; padding: 9px 10px; }`,
 		`data-current="true"`,
 	}
