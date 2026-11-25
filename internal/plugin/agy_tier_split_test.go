@@ -109,11 +109,8 @@ func TestAntigravityCurrentAccountSplitByModelTier(t *testing.T) {
 	for _, s := range safe {
 		current[s.AccountKey] = s.CurrentAccount
 	}
-	if !current["ag4"] {
-		t.Fatal("AGY (4) account should be marked current independently of AGY (3.8)")
-	}
-	if !current["ag38-new"] || current["ag38-old"] {
-		t.Fatalf("AGY (3.8) current selection wrong: new=%v old=%v", current["ag38-new"], current["ag38-old"])
+	if !current["ag38-new"] || current["ag4"] || current["ag38-old"] {
+		t.Fatalf("unified antigravity current selection wrong: %+v", current)
 	}
 }
 
@@ -274,7 +271,7 @@ assert(fleetHTML.includes('>AGY (3.8)<'), 'missing AGY (3.8) fleet chip: ' + fle
 assert(fleetHTML.includes('99.3%') && fleetHTML.includes('100%'), 'missing AGY (4) percentages');
 assert(fleetHTML.includes('98.9%') && fleetHTML.includes('0%'), 'missing AGY (3.8) percentages');
 
-// 2. Provider filter lists AGY and AGY (Free) as distinct top-level units.
+// 2. Provider filter lists antigravity as a single unified provider unit.
 const accs = [
   { account_key: 'k-cl', provider: 'claude', account: 'c@x', status: 'known', endpoint: 'direct', windows: [{ name: 'five-hour', remaining_percent: 50 }] },
   { account_key: 'k-38a', provider: 'antigravity', model_tier: '3.8', account: 'p1@x', status: 'known', endpoint: 'direct', windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', remaining_percent: 98 }] },
@@ -284,25 +281,21 @@ const accs = [
 ];
 ctx.populateProviderSegmented(accs);
 const optVals = byId.providerFilter.options.map(o => o.value);
-assert.strictEqual(JSON.stringify(optVals), JSON.stringify(['all', 'AGY', 'AGY (Free)', 'codex', 'claude']), 'unexpected filter options: ' + JSON.stringify(optVals));
-assert.strictEqual(byId.providerFilter.options[1].textContent, 'AGY (1)');
-assert.strictEqual(byId.providerFilter.options[2].textContent, 'AGY (Free) (2)');
+assert.strictEqual(JSON.stringify(optVals), JSON.stringify(['all', 'antigravity', 'codex', 'claude']), 'unexpected filter options: ' + JSON.stringify(optVals));
+assert.strictEqual(byId.providerFilter.options[1].textContent, 'antigravity (3)');
 
 // 3. Sorting puts AGY (4) before AGY (3.8) before codex before claude.
 const sorted = ctx.sortAccountsByEndpoint(accs).map(a => a.account_key);
 assert.strictEqual(JSON.stringify(sorted), JSON.stringify(['k-4', 'k-38a', 'k-38b', 'k-cx', 'k-cl']), 'unexpected sort order: ' + JSON.stringify(sorted));
 
-// 4. Filtering by AGY and AGY (Free) isolates each group.
+// 4. Filtering by antigravity returns all antigravity accounts sorted by tier.
 let renderedKeys = [];
 const origRender = ctx.renderAccounts;
 ctx.cachedAccounts = accs;
 ctx.renderAccounts = list => { renderedKeys = Array.from(list, a => a.account_key); };
-ctx.selectedProvider = 'AGY';
+ctx.selectedProvider = 'antigravity';
 ctx.applyFilters();
-assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-4']), 'AGY filter failed: ' + JSON.stringify(renderedKeys));
-ctx.selectedProvider = 'AGY (Free)';
-ctx.applyFilters();
-assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-38a', 'k-38b']), 'AGY (Free) filter failed: ' + JSON.stringify(renderedKeys));
+assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-4', 'k-38a', 'k-38b']), 'antigravity filter failed: ' + JSON.stringify(renderedKeys));
 
 // 5. Card rendering uses AGY (4) / AGY (3.8) badges and ignores hostile model_tier.
 ctx.renderAccounts = origRender;

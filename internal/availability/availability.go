@@ -276,13 +276,6 @@ func tierInfo(provider, plan string) tierMeta {
 	}
 }
 
-func antigravityIsFree(a quotamonitor.AccountQuota) bool {
-	if plan := quotamonitor.NormalizeAntigravityPlanType(a.PlanType); plan != "" {
-		return plan == "free"
-	}
-	return quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTier38
-}
-
 // Compute returns one entry per provider family that has at least
 // one contributing account, in a stable display order.
 func Compute(accounts []quotamonitor.AccountQuota) []Entry {
@@ -298,21 +291,15 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 			return fn(a)
 		}
 	}
-	antigravityBucket := func(wantFree bool, familyRe *regexp.Regexp) func(quotamonitor.AccountQuota) (float64, bool) {
-		return provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
-			if antigravityIsFree(a) != wantFree {
-				return 0, false
-			}
-			return antigravityAvailability(a, familyRe)
-		})
-	}
 	families := []family{
 		{"claude", "Claude", "CC", provider("claude", claudeAvailability)},
 		{"codex", "GPT", "GPT", provider("codex", codexAvailability)},
-		{"antigravity_gemini", "AGY · Gemini", "AG", antigravityBucket(false, antigravityGeminiPattern)},
-		{"antigravity_claude", "AGY · Claude/GPT", "AG", antigravityBucket(false, antigravityClaudePattern)},
-		{"antigravity_free_gemini", "AGY (Free) · Gemini", "AGF", antigravityBucket(true, antigravityGeminiPattern)},
-		{"antigravity_free_claude", "AGY (Free) · Claude/GPT", "AGF", antigravityBucket(true, antigravityClaudePattern)},
+		{"antigravity_gemini", "AGY · Gemini", "AG", provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
+			return antigravityAvailability(a, antigravityGeminiPattern)
+		})},
+		{"antigravity_claude", "AGY · Claude/GPT", "AG", provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
+			return antigravityAvailability(a, antigravityClaudePattern)
+		})},
 	}
 	entries := make([]Entry, 0, len(families))
 	for _, f := range families {

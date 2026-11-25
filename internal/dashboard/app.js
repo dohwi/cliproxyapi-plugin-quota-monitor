@@ -1066,13 +1066,6 @@ function formatPlanLabel(provider, plan) {
 
 function accountProviderUnit(acc) {
   var p = acc && acc.provider;
-  if (getProviderKey(p) === 'antigravity') {
-    var plan = normalizePlanType('antigravity', acc && acc.plan_type);
-    if (plan) return plan === 'free' ? 'AGY (Free)' : 'AGY';
-    var tier = normalizeModelTier(acc && acc.model_tier);
-    if (tier === '3.8') return 'AGY (Free)';
-    if (tier === '4') return 'AGY';
-  }
   return formatProviderLabel(p || 'unknown');
 }
 
@@ -1104,12 +1097,8 @@ function accountTierRank(acc) {
 }
 
 function providerUnitRank(unit) {
-  if (unit === 'AGY') return 0;
-  if (unit === 'AGY (Free)') return 1;
-  if (unit === 'AGY (4)') return 2;
-  if (unit === 'AGY (3.8)') return 3;
   var key = getProviderKey(unit);
-  return key === 'antigravity' ? 4 : key === 'codex' ? 5 : key === 'claude' ? 6 : 7;
+  return key === 'antigravity' ? 0 : key === 'codex' ? 1 : key === 'claude' ? 2 : 3;
 }
 
 function providerIcon(provider, size) {
@@ -2217,8 +2206,6 @@ function renderFleetAvailability(entries) {
   var agyGroupByKey = {
     antigravity_gemini: 'AGY',
     antigravity_claude: 'AGY',
-    antigravity_free_gemini: 'AGY (Free)',
-    antigravity_free_claude: 'AGY (Free)',
     antigravity_4_gemini: 'AGY (4)',
     antigravity_4_claude: 'AGY (4)',
     antigravity_3_8_gemini: 'AGY (3.8)',

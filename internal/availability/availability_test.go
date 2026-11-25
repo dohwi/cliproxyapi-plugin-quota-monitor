@@ -149,53 +149,39 @@ func TestModelScopedWeeklyDoesNotReplaceAccountWindow(t *testing.T) {
 	}
 }
 
-func TestComputeSplitsAntigravityByPlanAndFallbackTier(t *testing.T) {
+func TestComputeUnifiesAntigravityWithTierWeights(t *testing.T) {
 	accounts := []quotamonitor.AccountQuota{
 		{
 			Provider: "antigravity", PlanType: "ultra", ModelTier: quotamonitor.AntigravityTier4, Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{
-				availWin("Gemini Models / Five Hour Limit Remaining", 300, 99),
+				availWin("Gemini Models / Five Hour Limit Remaining", 300, 100),
 				availWin("Gemini Models / Weekly Limit Remaining", 10080, 100),
 				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100),
 				availWin("Claude and GPT models / Weekly Limit Remaining", 10080, 100),
 			},
 		},
 		{
-			Provider: "antigravity", PlanType: "free", ModelTier: quotamonitor.AntigravityTier4, Status: quotamonitor.StatusKnown,
+			Provider: "antigravity", PlanType: "pro", ModelTier: quotamonitor.AntigravityTier4, Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{
-				availWin("Gemini Models / Five Hour Limit Remaining", 300, 96),
-				availWin("Gemini Models / Weekly Limit Remaining", 10080, 94),
-				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100),
-				availWin("Claude and GPT models / Weekly Limit Remaining", 10080, 0),
-			},
-		},
-		{
-			// Legacy account without PlanType falls back to ModelTier 3.8 -> Free bucket.
-			Provider: "antigravity", ModelTier: quotamonitor.AntigravityTier38, Status: quotamonitor.StatusKnown,
-			Windows: []quotamonitor.QuotaWindow{
-				availWin("Gemini Models / Five Hour Limit Remaining", 300, 100),
-				availWin("Gemini Models / Weekly Limit Remaining", 10080, 96),
-				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100),
+				availWin("Gemini Models / Five Hour Limit Remaining", 300, 40),
+				availWin("Gemini Models / Weekly Limit Remaining", 10080, 40),
+				availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 0),
 				availWin("Claude and GPT models / Weekly Limit Remaining", 10080, 0),
 			},
 		},
 	}
 
 	entries := Compute(accounts)
-	if len(entries) != 4 {
-		t.Fatalf("entries = %#v, want 4 split AGY entries (paid + free)", entries)
+	if len(entries) != 2 {
+		t.Fatalf("entries = %#v, want 2 unified AGY entries (gemini + claude)", entries)
 	}
-	if e := availEntry(t, entries, "antigravity_gemini"); e.RemainingPercent != 99 || e.Accounts != 1 || e.Label != "AGY · Gemini" || e.Short != "AG" {
+	// Ultra (weight 5) at 100% + Pro (weight 1) at 40% -> 540/6 = 90%
+	if e := availEntry(t, entries, "antigravity_gemini"); e.RemainingPercent != 90 || e.Accounts != 2 || e.Label != "AGY · Gemini" || e.Short != "AG" || len(e.Tiers) != 2 {
 		t.Fatalf("antigravity_gemini = %+v", e)
 	}
-	if e := availEntry(t, entries, "antigravity_claude"); e.RemainingPercent != 100 || e.Accounts != 1 || e.Label != "AGY · Claude/GPT" || e.Short != "AG" {
+	// Ultra (weight 5) at 100% + Pro (weight 1) at 0% -> 500/6 = 83.3%
+	if e := availEntry(t, entries, "antigravity_claude"); e.RemainingPercent != 83.3 || e.Accounts != 2 || e.Label != "AGY · Claude/GPT" || e.Short != "AG" || len(e.Tiers) != 2 {
 		t.Fatalf("antigravity_claude = %+v", e)
-	}
-	if e := availEntry(t, entries, "antigravity_free_gemini"); e.Accounts != 2 || e.Label != "AGY (Free) · Gemini" || e.Short != "AGF" {
-		t.Fatalf("antigravity_free_gemini = %+v", e)
-	}
-	if e := availEntry(t, entries, "antigravity_free_claude"); e.RemainingPercent != 0 || e.Accounts != 2 || e.Label != "AGY (Free) · Claude/GPT" || e.Short != "AGF" {
-		t.Fatalf("antigravity_free_claude = %+v", e)
 	}
 }
 
