@@ -226,6 +226,18 @@ func TestComputeAutoSplitsAntigravityWhenModelPoolsDiffer(t *testing.T) {
 	if e := availEntry(t, entries, "antigravity_lite_claude"); e.RemainingPercent != 30 || e.Accounts != 2 || e.Label != "AGY (AI Pro Trial) · Claude/GPT" || e.Short != "AGT" || len(e.Tiers) != 1 || e.Tiers[0].Label != "AI Pro Trial" {
 		t.Fatalf("antigravity_lite_claude = %+v", e)
 	}
+
+	// Unsplit lite-only pro accounts must also label their tier as AI Pro Trial (matching account cards).
+	liteOnly := Compute(accounts[1:])
+	if len(liteOnly) != 2 {
+		t.Fatalf("liteOnly entries = %#v, want 2 unified AGY entries", liteOnly)
+	}
+	if e := availEntry(t, liteOnly, "antigravity_gemini"); len(e.Tiers) != 1 || e.Tiers[0].Label != "AI Pro Trial" {
+		t.Fatalf("liteOnly antigravity_gemini = %+v, want AI Pro Trial tier", e)
+	}
+	if e := availEntry(t, liteOnly, "antigravity_claude"); len(e.Tiers) != 1 || e.Tiers[0].Label != "AI Pro Trial" {
+		t.Fatalf("liteOnly antigravity_claude = %+v, want AI Pro Trial tier", e)
+	}
 }
 
 func TestComputeWeightsFleetAvailabilityByTierCapacity(t *testing.T) {

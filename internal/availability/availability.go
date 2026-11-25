@@ -349,7 +349,8 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 			if v, ok := f.value(a); ok {
 				plan := quotamonitor.NormalizePlanType(a.Provider, a.PlanType)
 				meta := tierInfo(a.Provider, plan)
-				if isLitePool && plan == "pro" {
+				isLiteAccount := isLitePool || quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite
+				if isLiteAccount && plan == "pro" {
 					meta.label = "AI Pro Trial"
 				}
 				weightedSum += v * meta.weight
@@ -362,6 +363,8 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 				if agg == nil {
 					agg = &tierAgg{tier: plan, meta: meta}
 					byTier[plan] = agg
+				} else if meta.label == "AI Pro Trial" {
+					agg.meta.label = "AI Pro Trial"
 				}
 				agg.sum += v
 				agg.count++
