@@ -428,10 +428,10 @@
 
   /* ===================== Card body (appended design layer, grouped by area) ===================== */
 
-  /* ---- Colour legend ---- */
-  .pct-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; padding: 0 12px; list-style: none; color: var(--muted); font-size: 12px; line-height: 16px; }
-  @media (max-width: 559px) { .pct-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; } .pct-legend li { white-space: normal; } }
-  .pct-legend li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  /* ---- Colour legend (quiet footer reference below the account cards) ---- */
+  .pct-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 20px; margin: 16px 0 4px; padding: 12px 12px 0; border-top: 1px solid var(--divider); list-style: none; color: var(--muted); font-size: 12px; line-height: 16px; }
+  @media (max-width: 559px) { .pct-legend { display: grid; grid-template-columns: repeat(2, minmax(0, max-content)); justify-content: center; gap: 4px 20px; margin: 12px 0 0; padding: 12px 8px 0; } .pct-legend li { white-space: normal; } }
+  .pct-legend li { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .pct-legend-dot { width: 8px; height: 8px; border-radius: 4px; flex: 0 0 auto; }
   .pct-legend-dot.is-high { background: var(--pct-high); }
   .pct-legend-dot.is-med { background: var(--pct-med); }
