@@ -1064,9 +1064,11 @@ function formatPlanLabel(provider, plan) {
 function accountProviderUnit(acc) {
   var p = acc && acc.provider;
   if (getProviderKey(p) === 'antigravity') {
+    var plan = normalizePlanType('antigravity', acc && acc.plan_type);
+    if (plan) return plan === 'free' ? 'AGY (Free)' : 'AGY';
     var tier = normalizeModelTier(acc && acc.model_tier);
-    if (tier === '4') return 'AGY (4)';
-    if (tier === '3.8') return 'AGY (3.8)';
+    if (tier === '3.8') return 'AGY (Free)';
+    if (tier === '4') return 'AGY';
   }
   return formatProviderLabel(p || 'unknown');
 }
@@ -1099,10 +1101,12 @@ function accountTierRank(acc) {
 }
 
 function providerUnitRank(unit) {
-  if (unit === 'AGY (4)') return 0;
-  if (unit === 'AGY (3.8)') return 1;
+  if (unit === 'AGY') return 0;
+  if (unit === 'AGY (Free)') return 1;
+  if (unit === 'AGY (4)') return 2;
+  if (unit === 'AGY (3.8)') return 3;
   var key = getProviderKey(unit);
-  return key === 'antigravity' ? 2 : key === 'codex' ? 3 : key === 'claude' ? 4 : 5;
+  return key === 'antigravity' ? 4 : key === 'codex' ? 5 : key === 'claude' ? 6 : 7;
 }
 
 function providerIcon(provider, size) {
@@ -2188,19 +2192,34 @@ function fleetLabel(e) {
   var text = t(key);
   return text !== key ? text : ((e && (e.label || e.key)) || '');
 }
+function formatFleetTiers(tiers) {
+  if (!Array.isArray(tiers) || tiers.length === 0) return '';
+  var parts = [];
+  for (var i = 0; i < tiers.length; i++) {
+    var tr = tiers[i] || {};
+    var rem = Number(tr.remaining_percent);
+    if (!isFinite(rem)) continue;
+    var lbl = String(tr.label || tr.tier || '').trim();
+    if (!lbl) continue;
+    parts.push(lbl + ' ' + (Math.round(rem * 10) / 10) + '%');
+  }
+  return parts.join(' · ');
+}
 function renderFleetAvailability(entries) {
   var el = document.getElementById('fleetAvailability');
   if (!el) return;
   var list = Array.isArray(entries) ? entries : [];
-  // Each Antigravity unit (AGY (4), AGY (3.8), or legacy unclassified AGY)
+  // Each Antigravity unit (paid AGY, AGY (Free), or legacy 4/3.8)
   // collapses its Gemini and Claude/GPT families into one chip.
   var agyGroupByKey = {
+    antigravity_gemini: 'AGY',
+    antigravity_claude: 'AGY',
+    antigravity_free_gemini: 'AGY (Free)',
+    antigravity_free_claude: 'AGY (Free)',
     antigravity_4_gemini: 'AGY (4)',
     antigravity_4_claude: 'AGY (4)',
     antigravity_3_8_gemini: 'AGY (3.8)',
-    antigravity_3_8_claude: 'AGY (3.8)',
-    antigravity_gemini: 'AGY',
-    antigravity_claude: 'AGY'
+    antigravity_3_8_claude: 'AGY (3.8)'
   };
   var chips = [];
   var agyChips = {};
@@ -2209,6 +2228,7 @@ function renderFleetAvailability(entries) {
     var rem = Number(e.remaining_percent);
     if (!isFinite(rem)) continue;
     var count = Number(e.accounts) || 0;
+    var tierSummary = formatFleetTiers(e.tiers);
     var agyLabel = agyGroupByKey[e.key];
     if (agyLabel) {
       var agy = agyChips[agyLabel];
@@ -2219,10 +2239,13 @@ function renderFleetAvailability(entries) {
       }
       agy.values.push(rem);
       agy.accounts = Math.max(agy.accounts, count);
-      agy.title += (agy.title ? ' / ' : '') + fleetLabel(e) + ' ' + (Math.round(rem * 10) / 10) + '%';
+      var piece = fleetLabel(e) + ' ' + (Math.round(rem * 10) / 10) + '%' + (tierSummary ? ' (' + tierSummary + ')' : '');
+      agy.title += (agy.title ? ' / ' : '') + piece;
       continue;
     }
-    chips.push({ label: fleetLabel(e), provider: String(e.key || ''), title: fleetLabel(e) + ' · ' + tn('fleet.count', count), values: [rem], accounts: count });
+    var baseTitle = fleetLabel(e) + ' · ' + tn('fleet.count', count);
+    if (tierSummary) baseTitle += ' (' + tierSummary + ')';
+    chips.push({ label: fleetLabel(e), provider: String(e.key || ''), title: baseTitle, values: [rem], accounts: count });
   }
   var html = '';
   for (var k = 0; k < chips.length; k++) {

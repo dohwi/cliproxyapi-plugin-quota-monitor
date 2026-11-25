@@ -3,21 +3,34 @@ package availability
 import (
 	"math"
 	"regexp"
+	"sort"
 	"strings"
 
 	quotamonitor "quota-monitor/internal/quota"
 )
 
-// Entry is the fleet-wide availability of one provider family:
-// the mean remaining percentage over every account that reports it.
-// It is computed once here so the dashboard header and external status
-// surfaces (e.g. the Herdr tab bar) always show the same number.
-type Entry struct {
-	Key              string  `json:"key"`
+// TierEntry summarizes one subscription tier inside a provider family so
+// tooltips and popovers can show the per-tier breakdown alongside the
+// capacity-weighted fleet average.
+type TierEntry struct {
+	Tier             string  `json:"tier"`
 	Label            string  `json:"label"`
-	Short            string  `json:"short"`
 	RemainingPercent float64 `json:"remaining_percent"`
 	Accounts         int     `json:"accounts"`
+	Weight           float64 `json:"weight"`
+}
+
+// Entry is the fleet-wide availability of one provider family:
+// the tier-capacity-weighted remaining percentage over every account that
+// reports it. It is computed once here so the dashboard header and external
+// status surfaces (e.g. pipaya gauges) always show the same number.
+type Entry struct {
+	Key              string      `json:"key"`
+	Label            string      `json:"label"`
+	Short            string      `json:"short"`
+	RemainingPercent float64     `json:"remaining_percent"`
+	Accounts         int         `json:"accounts"`
+	Tiers            []TierEntry `json:"tiers,omitempty"`
 }
 
 const (
@@ -191,6 +204,85 @@ func antigravityAvailability(a quotamonitor.AccountQuota, family *regexp.Regexp)
 
 func roundTenth(v float64) float64 { return math.Round(v*10) / 10 }
 
+type tierMeta struct {
+	label  string
+	weight float64
+	rank   int
+}
+
+func tierInfo(provider, plan string) tierMeta {
+	p := strings.ToLower(strings.TrimSpace(provider))
+	t := quotamonitor.NormalizePlanType(p, plan)
+	switch p {
+	case "claude":
+		switch t {
+		case "max_20x":
+			return tierMeta{"Max 20x", 20, 0}
+		case "max_5x":
+			return tierMeta{"Max 5x", 5, 1}
+		case "max":
+			return tierMeta{"Max", 5, 2}
+		case "enterprise":
+			return tierMeta{"Enterprise", 2, 3}
+		case "team":
+			return tierMeta{"Team", 1.5, 4}
+		case "pro":
+			return tierMeta{"Pro", 1, 5}
+		case "free":
+			return tierMeta{"Free", 0.2, 6}
+		default:
+			return tierMeta{"", 1, 99}
+		}
+	case "codex":
+		switch t {
+		case "pro_20x":
+			return tierMeta{"Pro 20x", 20, 0}
+		case "pro":
+			return tierMeta{"Pro", 20, 1}
+		case "pro_lite":
+			return tierMeta{"Pro 5x", 5, 2}
+		case "enterprise":
+			return tierMeta{"Enterprise", 2, 3}
+		case "team":
+			return tierMeta{"Team", 1, 4}
+		case "edu":
+			return tierMeta{"Edu", 1, 5}
+		case "plus":
+			return tierMeta{"Plus", 1, 6}
+		case "k12":
+			return tierMeta{"K12", 1, 7}
+		case "go":
+			return tierMeta{"Go", 0.5, 8}
+		case "free":
+			return tierMeta{"Free", 0.2, 9}
+		default:
+			return tierMeta{"", 1, 99}
+		}
+	case "antigravity":
+		switch t {
+		case "ultra":
+			return tierMeta{"Ultra", 5, 0}
+		case "pro":
+			return tierMeta{"Pro", 1, 1}
+		case "standard":
+			return tierMeta{"Standard", 1, 2}
+		case "free":
+			return tierMeta{"Free", 0.2, 3}
+		default:
+			return tierMeta{"", 1, 99}
+		}
+	default:
+		return tierMeta{"", 1, 99}
+	}
+}
+
+func antigravityIsFree(a quotamonitor.AccountQuota) bool {
+	if plan := quotamonitor.NormalizeAntigravityPlanType(a.PlanType); plan != "" {
+		return plan == "free"
+	}
+	return quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTier38
+}
+
 // Compute returns one entry per provider family that has at least
 // one contributing account, in a stable display order.
 func Compute(accounts []quotamonitor.AccountQuota) []Entry {
@@ -206,35 +298,86 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 			return fn(a)
 		}
 	}
-	antigravityTier := func(tier string, family *regexp.Regexp) func(quotamonitor.AccountQuota) (float64, bool) {
+	antigravityBucket := func(wantFree bool, familyRe *regexp.Regexp) func(quotamonitor.AccountQuota) (float64, bool) {
 		return provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
-			if quotamonitor.NormalizeAntigravityTier(a.ModelTier) != tier {
+			if antigravityIsFree(a) != wantFree {
 				return 0, false
 			}
-			return antigravityAvailability(a, family)
+			return antigravityAvailability(a, familyRe)
 		})
 	}
 	families := []family{
 		{"claude", "Claude", "CC", provider("claude", claudeAvailability)},
 		{"codex", "GPT", "GPT", provider("codex", codexAvailability)},
-		{"antigravity_4_gemini", "AGY (4) · Gemini", "AG4", antigravityTier(quotamonitor.AntigravityTier4, antigravityGeminiPattern)},
-		{"antigravity_4_claude", "AGY (4) · Claude/GPT", "AG4", antigravityTier(quotamonitor.AntigravityTier4, antigravityClaudePattern)},
-		{"antigravity_3_8_gemini", "AGY (3.8) · Gemini", "AG3.8", antigravityTier(quotamonitor.AntigravityTier38, antigravityGeminiPattern)},
-		{"antigravity_3_8_claude", "AGY (3.8) · Claude/GPT", "AG3.8", antigravityTier(quotamonitor.AntigravityTier38, antigravityClaudePattern)},
-		{"antigravity_gemini", "안티그래비티 · Gemini", "AG", antigravityTier("", antigravityGeminiPattern)},
-		{"antigravity_claude", "안티그래비티 · Claude/GPT", "AG", antigravityTier("", antigravityClaudePattern)},
+		{"antigravity_gemini", "AGY · Gemini", "AG", antigravityBucket(false, antigravityGeminiPattern)},
+		{"antigravity_claude", "AGY · Claude/GPT", "AG", antigravityBucket(false, antigravityClaudePattern)},
+		{"antigravity_free_gemini", "AGY (Free) · Gemini", "AGF", antigravityBucket(true, antigravityGeminiPattern)},
+		{"antigravity_free_claude", "AGY (Free) · Claude/GPT", "AGF", antigravityBucket(true, antigravityClaudePattern)},
 	}
 	entries := make([]Entry, 0, len(families))
 	for _, f := range families {
-		sum, n := 0.0, 0
+		weightedSum, weightTotal, n := 0.0, 0.0, 0
+		type tierAgg struct {
+			tier   string
+			meta   tierMeta
+			sum    float64
+			count  int
+		}
+		byTier := map[string]*tierAgg{}
+		hasKnownTier := false
 		for _, a := range accounts {
 			if v, ok := f.value(a); ok {
-				sum += v
+				plan := quotamonitor.NormalizePlanType(a.Provider, a.PlanType)
+				meta := tierInfo(a.Provider, plan)
+				weightedSum += v * meta.weight
+				weightTotal += meta.weight
 				n++
+				if plan != "" {
+					hasKnownTier = true
+				}
+				agg := byTier[plan]
+				if agg == nil {
+					agg = &tierAgg{tier: plan, meta: meta}
+					byTier[plan] = agg
+				}
+				agg.sum += v
+				agg.count++
 			}
 		}
-		if n > 0 {
-			entries = append(entries, Entry{Key: f.key, Label: f.label, Short: f.short, RemainingPercent: roundTenth(sum / float64(n)), Accounts: n})
+		if n > 0 && weightTotal > 0 {
+			entry := Entry{
+				Key:              f.key,
+				Label:            f.label,
+				Short:            f.short,
+				RemainingPercent: roundTenth(weightedSum / weightTotal),
+				Accounts:         n,
+			}
+			if hasKnownTier {
+				tiers := make([]TierEntry, 0, len(byTier))
+				for _, agg := range byTier {
+					label := agg.meta.label
+					if label == "" {
+						label = "Other"
+					}
+					tiers = append(tiers, TierEntry{
+						Tier:             agg.tier,
+						Label:            label,
+						RemainingPercent: roundTenth(agg.sum / float64(agg.count)),
+						Accounts:         agg.count,
+						Weight:           agg.meta.weight,
+					})
+				}
+				sort.Slice(tiers, func(i, j int) bool {
+					ri := tierInfo(strings.Split(f.key, "_")[0], tiers[i].Tier).rank
+					rj := tierInfo(strings.Split(f.key, "_")[0], tiers[j].Tier).rank
+					if ri != rj {
+						return ri < rj
+					}
+					return tiers[i].Tier < tiers[j].Tier
+				})
+				entry.Tiers = tiers
+			}
+			entries = append(entries, entry)
 		}
 	}
 	return entries

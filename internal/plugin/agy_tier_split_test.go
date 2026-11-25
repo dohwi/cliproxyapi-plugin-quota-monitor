@@ -274,7 +274,7 @@ assert(fleetHTML.includes('>AGY (3.8)<'), 'missing AGY (3.8) fleet chip: ' + fle
 assert(fleetHTML.includes('99.3%') && fleetHTML.includes('100%'), 'missing AGY (4) percentages');
 assert(fleetHTML.includes('98.9%') && fleetHTML.includes('0%'), 'missing AGY (3.8) percentages');
 
-// 2. Provider filter lists AGY (4) and AGY (3.8) as distinct top-level units.
+// 2. Provider filter lists AGY and AGY (Free) as distinct top-level units.
 const accs = [
   { account_key: 'k-cl', provider: 'claude', account: 'c@x', status: 'known', endpoint: 'direct', windows: [{ name: 'five-hour', remaining_percent: 50 }] },
   { account_key: 'k-38a', provider: 'antigravity', model_tier: '3.8', account: 'p1@x', status: 'known', endpoint: 'direct', windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', remaining_percent: 98 }] },
@@ -284,25 +284,25 @@ const accs = [
 ];
 ctx.populateProviderSegmented(accs);
 const optVals = byId.providerFilter.options.map(o => o.value);
-assert.strictEqual(JSON.stringify(optVals), JSON.stringify(['all', 'AGY (4)', 'AGY (3.8)', 'codex', 'claude']), 'unexpected filter options: ' + JSON.stringify(optVals));
-assert.strictEqual(byId.providerFilter.options[1].textContent, 'AGY (4) (1)');
-assert.strictEqual(byId.providerFilter.options[2].textContent, 'AGY (3.8) (2)');
+assert.strictEqual(JSON.stringify(optVals), JSON.stringify(['all', 'AGY', 'AGY (Free)', 'codex', 'claude']), 'unexpected filter options: ' + JSON.stringify(optVals));
+assert.strictEqual(byId.providerFilter.options[1].textContent, 'AGY (1)');
+assert.strictEqual(byId.providerFilter.options[2].textContent, 'AGY (Free) (2)');
 
 // 3. Sorting puts AGY (4) before AGY (3.8) before codex before claude.
 const sorted = ctx.sortAccountsByEndpoint(accs).map(a => a.account_key);
 assert.strictEqual(JSON.stringify(sorted), JSON.stringify(['k-4', 'k-38a', 'k-38b', 'k-cx', 'k-cl']), 'unexpected sort order: ' + JSON.stringify(sorted));
 
-// 4. Filtering by AGY (4) and AGY (3.8) isolates each group.
+// 4. Filtering by AGY and AGY (Free) isolates each group.
 let renderedKeys = [];
 const origRender = ctx.renderAccounts;
 ctx.cachedAccounts = accs;
 ctx.renderAccounts = list => { renderedKeys = Array.from(list, a => a.account_key); };
-ctx.selectedProvider = 'AGY (4)';
+ctx.selectedProvider = 'AGY';
 ctx.applyFilters();
-assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-4']), 'AGY (4) filter failed: ' + JSON.stringify(renderedKeys));
-ctx.selectedProvider = 'AGY (3.8)';
+assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-4']), 'AGY filter failed: ' + JSON.stringify(renderedKeys));
+ctx.selectedProvider = 'AGY (Free)';
 ctx.applyFilters();
-assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-38a', 'k-38b']), 'AGY (3.8) filter failed: ' + JSON.stringify(renderedKeys));
+assert.strictEqual(JSON.stringify(renderedKeys), JSON.stringify(['k-38a', 'k-38b']), 'AGY (Free) filter failed: ' + JSON.stringify(renderedKeys));
 
 // 5. Card rendering uses AGY (4) / AGY (3.8) badges and ignores hostile model_tier.
 ctx.renderAccounts = origRender;

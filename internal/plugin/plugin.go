@@ -923,8 +923,17 @@ func mergeAntigravityModelTier(a *quotamonitor.AccountQuota, fetched string) {
 func accountUnitKey(a quotamonitor.AccountQuota) string {
 	p := strings.ToLower(strings.TrimSpace(a.Provider))
 	if p == "antigravity" {
+		if plan := quotamonitor.NormalizeAntigravityPlanType(a.PlanType); plan != "" {
+			if plan == "free" {
+				return p + ":free"
+			}
+			return p + ":paid"
+		}
 		if tier := quotamonitor.NormalizeAntigravityTier(a.ModelTier); tier != "" {
-			return p + ":" + tier
+			if tier == quotamonitor.AntigravityTier38 {
+				return p + ":free"
+			}
+			return p + ":paid"
 		}
 	}
 	return p

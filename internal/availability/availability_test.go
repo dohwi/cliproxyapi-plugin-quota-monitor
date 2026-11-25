@@ -149,10 +149,10 @@ func TestModelScopedWeeklyDoesNotReplaceAccountWindow(t *testing.T) {
 	}
 }
 
-func TestComputeSplitsAntigravityByModelTier(t *testing.T) {
+func TestComputeSplitsAntigravityByPlanAndFallbackTier(t *testing.T) {
 	accounts := []quotamonitor.AccountQuota{
 		{
-			Provider: "antigravity", ModelTier: quotamonitor.AntigravityTier4, Status: quotamonitor.StatusKnown,
+			Provider: "antigravity", PlanType: "ultra", ModelTier: quotamonitor.AntigravityTier4, Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{
 				availWin("Gemini Models / Five Hour Limit Remaining", 300, 99),
 				availWin("Gemini Models / Weekly Limit Remaining", 10080, 100),
@@ -161,7 +161,7 @@ func TestComputeSplitsAntigravityByModelTier(t *testing.T) {
 			},
 		},
 		{
-			Provider: "antigravity", ModelTier: quotamonitor.AntigravityTier38, Status: quotamonitor.StatusKnown,
+			Provider: "antigravity", PlanType: "free", ModelTier: quotamonitor.AntigravityTier4, Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{
 				availWin("Gemini Models / Five Hour Limit Remaining", 300, 96),
 				availWin("Gemini Models / Weekly Limit Remaining", 10080, 94),
@@ -170,6 +170,7 @@ func TestComputeSplitsAntigravityByModelTier(t *testing.T) {
 			},
 		},
 		{
+			// Legacy account without PlanType falls back to ModelTier 3.8 -> Free bucket.
 			Provider: "antigravity", ModelTier: quotamonitor.AntigravityTier38, Status: quotamonitor.StatusKnown,
 			Windows: []quotamonitor.QuotaWindow{
 				availWin("Gemini Models / Five Hour Limit Remaining", 300, 100),
@@ -182,33 +183,83 @@ func TestComputeSplitsAntigravityByModelTier(t *testing.T) {
 
 	entries := Compute(accounts)
 	if len(entries) != 4 {
-		t.Fatalf("entries = %#v, want 4 split AGY entries (no unclassified entry)", entries)
+		t.Fatalf("entries = %#v, want 4 split AGY entries (paid + free)", entries)
 	}
-	if e := availEntry(t, entries, "antigravity_4_gemini"); e.RemainingPercent != 99 || e.Accounts != 1 || e.Label != "AGY (4) · Gemini" || e.Short != "AG4" {
-		t.Fatalf("antigravity_4_gemini = %+v", e)
+	if e := availEntry(t, entries, "antigravity_gemini"); e.RemainingPercent != 99 || e.Accounts != 1 || e.Label != "AGY · Gemini" || e.Short != "AG" {
+		t.Fatalf("antigravity_gemini = %+v", e)
 	}
-	if e := availEntry(t, entries, "antigravity_4_claude"); e.RemainingPercent != 100 || e.Accounts != 1 || e.Label != "AGY (4) · Claude/GPT" || e.Short != "AG4" {
-		t.Fatalf("antigravity_4_claude = %+v", e)
+	if e := availEntry(t, entries, "antigravity_claude"); e.RemainingPercent != 100 || e.Accounts != 1 || e.Label != "AGY · Claude/GPT" || e.Short != "AG" {
+		t.Fatalf("antigravity_claude = %+v", e)
 	}
-	if e := availEntry(t, entries, "antigravity_3_8_gemini"); e.RemainingPercent != 98 || e.Accounts != 2 || e.Label != "AGY (3.8) · Gemini" || e.Short != "AG3.8" {
-		t.Fatalf("antigravity_3_8_gemini = %+v", e)
+	if e := availEntry(t, entries, "antigravity_free_gemini"); e.Accounts != 2 || e.Label != "AGY (Free) · Gemini" || e.Short != "AGF" {
+		t.Fatalf("antigravity_free_gemini = %+v", e)
 	}
-	if e := availEntry(t, entries, "antigravity_3_8_claude"); e.RemainingPercent != 0 || e.Accounts != 2 || e.Label != "AGY (3.8) · Claude/GPT" || e.Short != "AG3.8" {
-		t.Fatalf("antigravity_3_8_claude = %+v", e)
+	if e := availEntry(t, entries, "antigravity_free_claude"); e.RemainingPercent != 0 || e.Accounts != 2 || e.Label != "AGY (Free) · Claude/GPT" || e.Short != "AGF" {
+		t.Fatalf("antigravity_free_claude = %+v", e)
+	}
+}
+
+func TestComputeWeightsFleetAvailabilityByTierCapacity(t *testing.T) {
+	accounts := []quotamonitor.AccountQuota{
+		// Claude: Max 20x (weight 20) at 0% + Pro (weight 1) at 100% -> 100/21 = 4.8%
+		{
+			Provider: "claude", PlanType: "max_20x", Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{
+				availWin("five-hour", 300, 0),
+				availWin("weekly", 10080, 0),
+			},
+		},
+		{
+			Provider: "claude", PlanType: "pro", Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{
+				availWin("five-hour", 300, 100),
+				availWin("weekly", 10080, 100),
+			},
+		},
+		// Codex: Pro (weight 20) at 0% + Pro 5x (weight 5) at 100% + Plus (weight 1) at 100% -> 600/26 = 23.1%
+		{
+			Provider: "codex", PlanType: "pro", Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 0)},
+		},
+		{
+			Provider: "codex", PlanType: "pro_lite", Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 100)},
+		},
+		{
+			Provider: "codex", PlanType: "plus", Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 100)},
+		},
+		// Antigravity paid: Ultra (weight 5) at 0% + Pro (weight 1) at 100% -> 100/6 = 16.7%
+		{
+			Provider: "antigravity", PlanType: "ultra", Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 0)},
+		},
+		{
+			Provider: "antigravity", PlanType: "pro", Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 100)},
+		},
 	}
 
-	// Unclassified or non-allowlisted tier falls into legacy antigravity_* without polluting 4/3.8.
-	accounts = append(accounts, quotamonitor.AccountQuota{
-		Provider: "antigravity", ModelTier: "unexpected", Status: quotamonitor.StatusKnown,
-		Windows: []quotamonitor.QuotaWindow{
-			availWin("Gemini Models / Five Hour Limit Remaining", 300, 50),
-		},
-	})
-	entries = Compute(accounts)
-	if e := availEntry(t, entries, "antigravity_gemini"); e.RemainingPercent != 50 || e.Accounts != 1 {
-		t.Fatalf("unclassified fallback = %+v", e)
+	entries := Compute(accounts)
+
+	cl := availEntry(t, entries, "claude")
+	if cl.RemainingPercent != 4.8 || cl.Accounts != 2 || len(cl.Tiers) != 2 {
+		t.Fatalf("claude weighted = %+v, want 4.8%% with 2 tiers", cl)
 	}
-	if e := availEntry(t, entries, "antigravity_4_gemini"); e.RemainingPercent != 99 || e.Accounts != 1 {
-		t.Fatalf("AGY (4) polluted by unclassified account: %+v", e)
+	if cl.Tiers[0].Tier != "max_20x" || cl.Tiers[0].RemainingPercent != 0 || cl.Tiers[1].Tier != "pro" || cl.Tiers[1].RemainingPercent != 100 {
+		t.Fatalf("claude tiers = %+v", cl.Tiers)
+	}
+
+	cx := availEntry(t, entries, "codex")
+	if cx.RemainingPercent != 23.1 || cx.Accounts != 3 || len(cx.Tiers) != 3 {
+		t.Fatalf("codex weighted = %+v, want 23.1%% with 3 tiers", cx)
+	}
+	if cx.Tiers[0].Label != "Pro" || cx.Tiers[1].Label != "Pro 5x" || cx.Tiers[2].Label != "Plus" {
+		t.Fatalf("codex tier labels = %+v", cx.Tiers)
+	}
+
+	ag := availEntry(t, entries, "antigravity_gemini")
+	if ag.RemainingPercent != 16.7 || ag.Accounts != 2 || len(ag.Tiers) != 2 {
+		t.Fatalf("antigravity weighted = %+v, want 16.7%% with 2 tiers", ag)
 	}
 }

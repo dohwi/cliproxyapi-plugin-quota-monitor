@@ -219,6 +219,19 @@ assert(findProvHTML(codexProLiteCard).includes('Pro 5x'), 'Codex Pro 5x badge: '
 const claudeMax20Card = byId.accountsList.children[11];
 assert.strictEqual(claudeMax20Card.getAttribute('data-plan-type'), 'max_20x');
 assert(findProvHTML(claudeMax20Card).includes('Max 20x'), 'Claude Max 20x badge: ' + findProvHTML(claudeMax20Card));
+
+// 3. Fleet availability renders AGY + AGY (Free) chips and includes tier breakdown in tooltips.
+ctx.renderFleetAvailability([
+  { key: 'claude', label: 'Claude', remaining_percent: 4.8, accounts: 2, tiers: [{ tier: 'max_20x', label: 'Max 20x', remaining_percent: 0, accounts: 1 }, { tier: 'pro', label: 'Pro', remaining_percent: 100, accounts: 1 }] },
+  { key: 'antigravity_gemini', label: 'AGY · Gemini', remaining_percent: 99, accounts: 2, tiers: [{ tier: 'ultra', label: 'Ultra', remaining_percent: 99, accounts: 2 }] },
+  { key: 'antigravity_claude', label: 'AGY · Claude/GPT', remaining_percent: 98, accounts: 2, tiers: [{ tier: 'ultra', label: 'Ultra', remaining_percent: 98, accounts: 2 }] },
+  { key: 'antigravity_free_gemini', label: 'AGY (Free) · Gemini', remaining_percent: 92, accounts: 2 },
+  { key: 'antigravity_free_claude', label: 'AGY (Free) · Claude/GPT', remaining_percent: 85, accounts: 2 },
+]);
+const fleetHTML = byId.fleetAvailability.innerHTML;
+assert(fleetHTML.includes('>AGY<') && fleetHTML.includes('>AGY (Free)<'), 'expected AGY and AGY (Free) chips: ' + fleetHTML);
+assert(fleetHTML.includes('Max 20x 0%') && fleetHTML.includes('Pro 100%'), 'expected tier breakdown in Claude tooltip: ' + fleetHTML);
+
 console.log('OK_TIER_EP_GROUPING');
 `
 	cmd := nodeDashboardCmd(t, "node", script)
