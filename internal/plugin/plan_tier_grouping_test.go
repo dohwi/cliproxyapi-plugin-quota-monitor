@@ -171,6 +171,7 @@ const accounts = [
   { account_key: 'ag-pro-1', provider: 'antigravity', plan_type: 'pro', model_tier: '4', endpoint: 'warp1', status: 'known', account: 'ap1@x', windows: [{ name: 'Gemini Models / Five Hour Limit Remaining', remaining_percent: 90 }] },
 
   { account_key: 'cx-plus-w1', provider: 'codex', plan_type: 'plus', endpoint: 'warp1', status: 'known', account: 'xp1@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
+  { account_key: 'cx-prolite-dir', provider: 'codex', plan_type: 'pro_lite', endpoint: 'direct', status: 'known', account: 'xpl@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
   { account_key: 'cx-team-w2', provider: 'codex', plan_type: 'team', endpoint: 'warp2', status: 'known', account: 'xt2@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
   { account_key: 'cx-team-dir', provider: 'codex', plan_type: 'team', endpoint: 'direct', status: 'known', account: 'xt1@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
   { account_key: 'cx-pro-w2', provider: 'codex', plan_type: 'pro', endpoint: 'warp2', status: 'known', account: 'xpro@x', windows: [{ name: 'primary', remaining_percent: 80 }] },
@@ -185,7 +186,7 @@ const accounts = [
 const sorted = ctx.sortAccountsByEndpoint(accounts).map(a => a.account_key);
 assert.strictEqual(JSON.stringify(sorted), JSON.stringify([
   'ag-ultra-1', 'ag-ultra-2', 'ag-pro-1', 'ag-free-1', 'ag-free-2',
-  'cx-pro-w2', 'cx-team-dir', 'cx-team-w2', 'cx-plus-w1', 'cx-free-dir',
+  'cx-pro-w2', 'cx-prolite-dir', 'cx-team-dir', 'cx-team-w2', 'cx-plus-w1', 'cx-free-dir',
   'cl-m20-dir', 'cl-m20-w2', 'cl-m5-w1', 'cl-pro-dir',
 ]), 'unexpected tier+EP sort order: ' + JSON.stringify(sorted));
 
@@ -211,7 +212,11 @@ assert.strictEqual(agFreeCard.getAttribute('data-plan-type'), 'free');
 assert(findProvHTML(agFreeCard).includes('antigravity') && findProvHTML(agFreeCard).includes('Free'), 'AG free badge: ' + findProvHTML(agFreeCard));
 assert(findProvClass(agFreeCard).includes('badge-provider-antigravity-38'), 'AG free should use secondary color');
 
-const claudeMax20Card = byId.accountsList.children[10];
+const codexProLiteCard = byId.accountsList.children[6];
+assert.strictEqual(codexProLiteCard.getAttribute('data-plan-type'), 'pro_lite');
+assert(findProvHTML(codexProLiteCard).includes('Pro 5x'), 'Codex Pro 5x badge: ' + findProvHTML(codexProLiteCard));
+
+const claudeMax20Card = byId.accountsList.children[11];
 assert.strictEqual(claudeMax20Card.getAttribute('data-plan-type'), 'max_20x');
 assert(findProvHTML(claudeMax20Card).includes('Max 20x'), 'Claude Max 20x badge: ' + findProvHTML(claudeMax20Card));
 console.log('OK_TIER_EP_GROUPING');

@@ -1027,7 +1027,7 @@ function normalizePlanType(provider, raw) {
   var s = String(raw || '').toLowerCase().trim();
   if (!s) return '';
   if (key === 'codex') {
-    return (s === 'pro' || s === 'enterprise' || s === 'team' || s === 'plus' || s === 'k12' || s === 'free') ? s : '';
+    return (s === 'pro_20x' || s === 'pro' || s === 'pro_lite' || s === 'enterprise' || s === 'team' || s === 'edu' || s === 'plus' || s === 'k12' || s === 'go' || s === 'free') ? s : '';
   }
   if (key === 'claude') {
     return (s === 'max_20x' || s === 'max_5x' || s === 'max' || s === 'enterprise' || s === 'team' || s === 'pro' || s === 'free') ? s : '';
@@ -1046,12 +1046,16 @@ function formatPlanLabel(provider, plan) {
     max_5x: 'Max 5x',
     max: 'Max',
     ultra: 'Ultra',
+    pro_20x: 'Pro 20x',
     pro: 'Pro',
+    pro_lite: 'Pro 5x',
     enterprise: 'Enterprise',
     team: 'Team',
+    edu: 'Edu',
     plus: 'Plus',
     standard: 'Standard',
     k12: 'K12',
+    go: 'Go',
     free: 'Free'
   };
   return labels[p] || '';
@@ -1084,8 +1088,8 @@ function accountTierRank(acc) {
     return tier === '4' ? 1 : tier === '3.8' ? 3 : 4;
   }
   if (key === 'codex') {
-    var codexRanks = { pro: 0, enterprise: 1, team: 2, plus: 3, k12: 4, free: 5 };
-    return (plan && codexRanks[plan] !== undefined) ? codexRanks[plan] : 6;
+    var codexRanks = { pro_20x: 0, pro: 1, pro_lite: 2, enterprise: 3, team: 4, edu: 5, plus: 6, k12: 7, go: 8, free: 9 };
+    return (plan && codexRanks[plan] !== undefined) ? codexRanks[plan] : 10;
   }
   if (key === 'claude') {
     var claudeRanks = { max_20x: 0, max_5x: 1, max: 2, enterprise: 3, team: 4, pro: 5, free: 6 };

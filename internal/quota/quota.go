@@ -477,14 +477,22 @@ func NormalizeCodexPlanType(raw string) string {
 	switch compact.String() {
 	case "free", "chatgptfree", "freeplan":
 		return "free"
+	case "go", "chatgptgo", "goplan":
+		return "go"
 	case "plus", "chatgptplus", "plusplan":
 		return "plus"
+	case "prolite", "chatgptprolite", "proliteplan", "pro5x", "chatgptpro5x":
+		return "pro_lite"
+	case "pro20x", "chatgptpro20x":
+		return "pro_20x"
 	case "pro", "chatgptpro", "proplan":
 		return "pro"
 	case "team", "chatgptteam", "teamplan", "business", "chatgptbusiness", "businessplan":
 		// ChatGPT Team was renamed ChatGPT Business; Codex upstream variants
 		// have used both labels for the same workspace subscription class.
 		return "team"
+	case "edu", "chatgptedu", "eduplan":
+		return "edu"
 	case "enterprise", "chatgptenterprise", "enterpriseplan":
 		return "enterprise"
 	case "k12", "chatgptk12", "k12plan":

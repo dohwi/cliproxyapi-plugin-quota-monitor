@@ -52,8 +52,23 @@ func TestNormalizePlanTypesAcrossProviders(t *testing.T) {
 		}
 	}
 
-	if got := NormalizePlanType("codex", "ChatGPT_Business"); got != "team" {
-		t.Errorf("NormalizePlanType(codex, ChatGPT_Business) = %q, want team", got)
+	codexCases := []struct {
+		raw  string
+		want string
+	}{
+		{"prolite", "pro_lite"},
+		{"pro_lite", "pro_lite"},
+		{"pro_5x", "pro_lite"},
+		{"pro_20x", "pro_20x"},
+		{"pro", "pro"},
+		{"ChatGPT_Business", "team"},
+		{"edu", "edu"},
+		{"go", "go"},
+	}
+	for _, tc := range codexCases {
+		if got := NormalizePlanType("codex", tc.raw); got != tc.want {
+			t.Errorf("NormalizePlanType(codex, %q) = %q, want %q", tc.raw, got, tc.want)
+		}
 	}
 	if got := NormalizePlanType("other", "pro"); got != "" {
 		t.Errorf("NormalizePlanType(other, pro) = %q, want empty", got)
