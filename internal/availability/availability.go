@@ -13,24 +13,42 @@ import (
 // tooltips and popovers can show the per-tier breakdown alongside the
 // capacity-weighted fleet average.
 type TierEntry struct {
-	Tier             string  `json:"tier"`
-	Label            string  `json:"label"`
-	RemainingPercent float64 `json:"remaining_percent"`
-	Accounts         int     `json:"accounts"`
-	Weight           float64 `json:"weight"`
+	Tier                   string   `json:"tier"`
+	Label                  string   `json:"label"`
+	RemainingPercent       float64  `json:"remaining_percent"`
+	ShortRemainingPercent  *float64 `json:"short_remaining_percent,omitempty"`
+	WeeklyRemainingPercent *float64 `json:"weekly_remaining_percent,omitempty"`
+	Accounts               int      `json:"accounts"`
+	Weight                 float64  `json:"weight"`
 }
 
 // Entry is the fleet-wide availability of one provider family:
 // the tier-capacity-weighted remaining percentage over every account that
-// reports it. It is computed once here so the dashboard header and external
-// status surfaces (e.g. pipaya gauges) always show the same number.
+// reports it. ShortRemainingPercent and WeeklyRemainingPercent expose the 5h
+// and 7d windows separately; RemainingPercent is min(5h, 7d) when both windows
+// are measured so summary gauges always match the tighter displayed window.
 type Entry struct {
-	Key              string      `json:"key"`
-	Label            string      `json:"label"`
-	Short            string      `json:"short"`
-	RemainingPercent float64     `json:"remaining_percent"`
-	Accounts         int         `json:"accounts"`
-	Tiers            []TierEntry `json:"tiers,omitempty"`
+	Key                    string      `json:"key"`
+	Label                  string      `json:"label"`
+	Short                  string      `json:"short"`
+	RemainingPercent       float64     `json:"remaining_percent"`
+	ShortRemainingPercent  *float64    `json:"short_remaining_percent,omitempty"`
+	WeeklyRemainingPercent *float64    `json:"weekly_remaining_percent,omitempty"`
+	Accounts               int         `json:"accounts"`
+	Tiers                  []TierEntry `json:"tiers,omitempty"`
+}
+
+type availabilitySample struct {
+	effective float64
+	short     float64
+	hasShort  bool
+	weekly    float64
+	hasWeekly bool
+}
+
+func floatPtr(v float64) *float64 {
+	r := roundTenth(v)
+	return &r
 }
 
 const (
@@ -125,12 +143,12 @@ func modelScopedWindow(w quotamonitor.QuotaWindow) bool {
 	return false
 }
 
-func claudeAvailability(a quotamonitor.AccountQuota) (float64, bool) {
+func claudeAvailability(a quotamonitor.AccountQuota) (availabilitySample, bool) {
 	primary := findWindow(a.Windows, windowFiveHourMinutes, "five-hour", "5h")
 	return primarySecondaryAvailability(a, primary, findWindow(a.Windows, windowWeeklyMinutes, "weekly", "7d"))
 }
 
-func codexAvailability(a quotamonitor.AccountQuota) (float64, bool) {
+func codexAvailability(a quotamonitor.AccountQuota) (availabilitySample, bool) {
 	windows := quotamonitor.DistinctCodexWindows(a.Windows)
 	var primary, secondary *quotamonitor.QuotaWindow
 	for i := range windows {
@@ -148,9 +166,11 @@ func codexAvailability(a quotamonitor.AccountQuota) (float64, bool) {
 	return primarySecondaryAvailability(a, primary, secondary)
 }
 
-// The measured 5h window decides when available; a depleted weekly window
-// always blocks the account. Without measured 5h, use the known weekly value.
-func primarySecondaryAvailability(a quotamonitor.AccountQuota, primary, secondary *quotamonitor.QuotaWindow) (float64, bool) {
+// primarySecondaryAvailability combines an account's 5h (primary) and 7d
+// (secondary) windows into a conservative bottleneck effective remaining
+// percent (min(5h, 7d)) while also preserving each measured window separately.
+// A depleted weekly window (0%) always blocks immediate 5h usage as well.
+func primarySecondaryAvailability(a quotamonitor.AccountQuota, primary, secondary *quotamonitor.QuotaWindow) (availabilitySample, bool) {
 	var considered []quotamonitor.QuotaWindow
 	for _, w := range []*quotamonitor.QuotaWindow{primary, secondary} {
 		if w != nil {
@@ -158,25 +178,61 @@ func primarySecondaryAvailability(a quotamonitor.AccountQuota, primary, secondar
 		}
 	}
 	if !accountCountsTowardAvailability(a, considered) {
-		return 0, false
+		return availabilitySample{}, false
 	}
-	var weekly float64
-	var weeklyKnown bool
-	if secondary != nil {
-		weekly, weeklyKnown = windowRemaining(*secondary)
-		if weeklyKnown && weekly == 0 {
-			return 0, true
-		}
-	}
+	var shortVal, weeklyVal float64
+	var shortKnown, weeklyKnown bool
 	if primary != nil {
-		if short, known := windowRemaining(*primary); known {
-			return short, true
+		shortVal, shortKnown = windowRemaining(*primary)
+	}
+	if secondary != nil {
+		weeklyVal, weeklyKnown = windowRemaining(*secondary)
+	}
+	if !shortKnown && !weeklyKnown {
+		return availabilitySample{}, false
+	}
+	sample := availabilitySample{
+		hasShort:  shortKnown,
+		hasWeekly: weeklyKnown,
+	}
+	if weeklyKnown {
+		sample.weekly = weeklyVal
+	}
+	if shortKnown {
+		// Weekly exhaustion blocks immediate usage even if the 5h bucket is full.
+		if weeklyKnown && weeklyVal == 0 {
+			sample.short = 0
+		} else {
+			sample.short = shortVal
 		}
 	}
-	return weekly, weeklyKnown
+	switch {
+	case shortKnown && weeklyKnown:
+		sample.effective = math.Min(sample.short, sample.weekly)
+	case shortKnown:
+		sample.effective = sample.short
+	default:
+		sample.effective = sample.weekly
+	}
+	return sample, true
 }
 
-func antigravityAvailability(a quotamonitor.AccountQuota, family *regexp.Regexp) (float64, bool) {
+func antigravityWindowKind(w quotamonitor.QuotaWindow) int {
+	if mins := windowMinutes(w); mins == windowFiveHourMinutes || mins == windowWeeklyMinutes {
+		return mins
+	}
+	name := strings.ToLower(strings.TrimSpace(w.Name))
+	switch {
+	case strings.Contains(name, "weekly") || strings.Contains(name, "7d") || strings.Contains(name, "7-day"):
+		return windowWeeklyMinutes
+	case strings.Contains(name, "five hour") || strings.Contains(name, "five-hour") || strings.Contains(name, "5h"):
+		return windowFiveHourMinutes
+	default:
+		return 0
+	}
+}
+
+func antigravityAvailability(a quotamonitor.AccountQuota, family *regexp.Regexp) (availabilitySample, bool) {
 	var short, weekly *quotamonitor.QuotaWindow
 	minShort, minWeekly := 101.0, 101.0
 	for i := range a.Windows {
@@ -188,7 +244,7 @@ func antigravityAvailability(a quotamonitor.AccountQuota, family *regexp.Regexp)
 		if !known {
 			continue
 		}
-		switch windowMinutes(*w) {
+		switch antigravityWindowKind(*w) {
 		case windowFiveHourMinutes:
 			if remaining < minShort {
 				short, minShort = w, remaining
@@ -281,12 +337,12 @@ func tierInfo(provider, plan string) tierMeta {
 func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 	type family struct {
 		key, label, short string
-		value             func(quotamonitor.AccountQuota) (float64, bool)
+		value             func(quotamonitor.AccountQuota) (availabilitySample, bool)
 	}
-	provider := func(name string, fn func(quotamonitor.AccountQuota) (float64, bool)) func(quotamonitor.AccountQuota) (float64, bool) {
-		return func(a quotamonitor.AccountQuota) (float64, bool) {
+	provider := func(name string, fn func(quotamonitor.AccountQuota) (availabilitySample, bool)) func(quotamonitor.AccountQuota) (availabilitySample, bool) {
+		return func(a quotamonitor.AccountQuota) (availabilitySample, bool) {
 			if strings.ToLower(strings.TrimSpace(a.Provider)) != name {
-				return 0, false
+				return availabilitySample{}, false
 			}
 			return fn(a)
 		}
@@ -311,15 +367,15 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 	}
 	splitAGByPool := hasAGFull && hasAGLite
 
-	agPool := func(wantLite bool, familyRe *regexp.Regexp) func(quotamonitor.AccountQuota) (float64, bool) {
-		return provider("antigravity", func(a quotamonitor.AccountQuota) (float64, bool) {
+	agPool := func(wantLite bool, familyRe *regexp.Regexp) func(quotamonitor.AccountQuota) (availabilitySample, bool) {
+		return provider("antigravity", func(a quotamonitor.AccountQuota) (availabilitySample, bool) {
 			if splitAGByPool {
 				isLite := quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite
 				if isLite != wantLite {
-					return 0, false
+					return availabilitySample{}, false
 				}
 			} else if wantLite {
-				return 0, false
+				return availabilitySample{}, false
 			}
 			return antigravityAvailability(a, familyRe)
 		})
@@ -336,25 +392,39 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 	entries := make([]Entry, 0, len(families))
 	for _, f := range families {
 		weightedSum, weightTotal, n := 0.0, 0.0, 0
+		shortWeightedSum, shortWeightTotal := 0.0, 0.0
+		weeklyWeightedSum, weeklyWeightTotal := 0.0, 0.0
 		isLitePool := strings.HasPrefix(f.key, "antigravity_lite_")
 		type tierAgg struct {
-			tier   string
-			meta   tierMeta
-			sum    float64
-			count  int
+			tier        string
+			meta        tierMeta
+			sum         float64
+			count       int
+			shortSum    float64
+			shortCount  int
+			weeklySum   float64
+			weeklyCount int
 		}
 		byTier := map[string]*tierAgg{}
 		hasKnownTier := false
 		for _, a := range accounts {
-			if v, ok := f.value(a); ok {
+			if s, ok := f.value(a); ok {
 				plan := quotamonitor.NormalizePlanType(a.Provider, a.PlanType)
 				meta := tierInfo(a.Provider, plan)
 				isLiteAccount := isLitePool || quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite
 				if isLiteAccount && plan == "pro" {
 					meta.label = "AI Pro Trial"
 				}
-				weightedSum += v * meta.weight
+				weightedSum += s.effective * meta.weight
 				weightTotal += meta.weight
+				if s.hasShort {
+					shortWeightedSum += s.short * meta.weight
+					shortWeightTotal += meta.weight
+				}
+				if s.hasWeekly {
+					weeklyWeightedSum += s.weekly * meta.weight
+					weeklyWeightTotal += meta.weight
+				}
 				n++
 				if plan != "" {
 					hasKnownTier = true
@@ -366,8 +436,16 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 				} else if meta.label == "AI Pro Trial" {
 					agg.meta.label = "AI Pro Trial"
 				}
-				agg.sum += v
+				agg.sum += s.effective
 				agg.count++
+				if s.hasShort {
+					agg.shortSum += s.short
+					agg.shortCount++
+				}
+				if s.hasWeekly {
+					agg.weeklySum += s.weekly
+					agg.weeklyCount++
+				}
 			}
 		}
 		if n > 0 && weightTotal > 0 {
@@ -378,6 +456,15 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 				RemainingPercent: roundTenth(weightedSum / weightTotal),
 				Accounts:         n,
 			}
+			if shortWeightTotal > 0 {
+				entry.ShortRemainingPercent = floatPtr(shortWeightedSum / shortWeightTotal)
+			}
+			if weeklyWeightTotal > 0 {
+				entry.WeeklyRemainingPercent = floatPtr(weeklyWeightedSum / weeklyWeightTotal)
+			}
+			if entry.ShortRemainingPercent != nil && entry.WeeklyRemainingPercent != nil {
+				entry.RemainingPercent = math.Min(*entry.ShortRemainingPercent, *entry.WeeklyRemainingPercent)
+			}
 			if hasKnownTier {
 				tiers := make([]TierEntry, 0, len(byTier))
 				for _, agg := range byTier {
@@ -385,13 +472,23 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 					if label == "" {
 						label = "Other"
 					}
-					tiers = append(tiers, TierEntry{
+					te := TierEntry{
 						Tier:             agg.tier,
 						Label:            label,
 						RemainingPercent: roundTenth(agg.sum / float64(agg.count)),
 						Accounts:         agg.count,
 						Weight:           agg.meta.weight,
-					})
+					}
+					if agg.shortCount > 0 {
+						te.ShortRemainingPercent = floatPtr(agg.shortSum / float64(agg.shortCount))
+					}
+					if agg.weeklyCount > 0 {
+						te.WeeklyRemainingPercent = floatPtr(agg.weeklySum / float64(agg.weeklyCount))
+					}
+					if te.ShortRemainingPercent != nil && te.WeeklyRemainingPercent != nil {
+						te.RemainingPercent = math.Min(*te.ShortRemainingPercent, *te.WeeklyRemainingPercent)
+					}
+					tiers = append(tiers, te)
 				}
 				sort.Slice(tiers, func(i, j int) bool {
 					ri := tierInfo(strings.Split(f.key, "_")[0], tiers[i].Tier).rank

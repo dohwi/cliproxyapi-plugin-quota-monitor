@@ -1,6 +1,8 @@
 package availability
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	quotamonitor "quota-monitor/internal/quota"
@@ -9,6 +11,21 @@ import (
 func availWin(name string, minutes int, remaining float64) quotamonitor.QuotaWindow {
 	return quotamonitor.QuotaWindow{Name: name, WindowMinutes: &minutes, RemainingPercent: &remaining}
 }
+
+func assertOptFloat(t *testing.T, label string, got *float64, want *float64) {
+	t.Helper()
+	if want == nil {
+		if got != nil {
+			t.Fatalf("%s = %v, want nil", label, *got)
+		}
+		return
+	}
+	if got == nil || *got != *want {
+		t.Fatalf("%s = %v, want %v", label, got, *want)
+	}
+}
+
+func fptr(v float64) *float64 { return &v }
 
 func availEntry(t *testing.T, entries []Entry, key string) Entry {
 	t.Helper()
@@ -25,7 +42,7 @@ func TestComputeAveragesAccountsAndHonorsWeekly(t *testing.T) {
 	yes := true
 	accounts := []quotamonitor.AccountQuota{
 		{Provider: "claude", Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 80), availWin("weekly", 10080, 50)}},
-		// Weekly depleted: counts as 0% even though 5h is full.
+		// Weekly depleted: counts as 0% across effective, short, and weekly even though 5h is full.
 		{Provider: "claude", Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 100), availWin("weekly", 10080, 0)}},
 		// Disabled accounts are excluded from the denominator.
 		{Provider: "claude", Status: quotamonitor.StatusKnown, Operational: &quotamonitor.OperationalStatus{Disabled: &yes}, Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 10)}},
@@ -35,12 +52,19 @@ func TestComputeAveragesAccountsAndHonorsWeekly(t *testing.T) {
 	}
 	entries := Compute(accounts)
 	claude := availEntry(t, entries, "claude")
-	if claude.RemainingPercent != 40 || claude.Accounts != 2 {
-		t.Fatalf("claude = %+v, want 40%% over 2 accounts", claude)
+	// Account 1: effective=min(80,50)=50, short=80, weekly=50; Account 2: effective=0, short=0, weekly=0
+	if claude.RemainingPercent != 25 || claude.Accounts != 2 {
+		t.Fatalf("claude = %+v, want effective 25%% over 2 accounts", claude)
 	}
-	if gpt := availEntry(t, entries, "codex"); gpt.RemainingPercent != 60 || gpt.Accounts != 1 {
+	assertOptFloat(t, "claude.short", claude.ShortRemainingPercent, fptr(40))
+	assertOptFloat(t, "claude.weekly", claude.WeeklyRemainingPercent, fptr(25))
+
+	gpt := availEntry(t, entries, "codex")
+	if gpt.RemainingPercent != 60 || gpt.Accounts != 1 {
 		t.Fatalf("codex = %+v, want 60%% over 1 account", gpt)
 	}
+	assertOptFloat(t, "codex.short", gpt.ShortRemainingPercent, fptr(60))
+	assertOptFloat(t, "codex.weekly", gpt.WeeklyRemainingPercent, fptr(90))
 }
 
 func TestComputeCodexWeeklyOnlyAvailability(t *testing.T) {
@@ -87,13 +111,21 @@ func TestComputeSplitsAntigravityFamilies(t *testing.T) {
 		}},
 	}
 	entries := Compute(accounts)
-	if g := availEntry(t, entries, "antigravity_gemini"); g.RemainingPercent != 70 || g.Accounts != 2 {
-		t.Fatalf("gemini family = %+v, want 70%% over 2 accounts", g)
+	g := availEntry(t, entries, "antigravity_gemini")
+	// Account 1: (90, 40); Account 2: (50, 60) -> short 70%, weekly 50%, effective min(70, 50) = 50%.
+	if g.RemainingPercent != 50 || g.Accounts != 2 {
+		t.Fatalf("gemini family = %+v, want effective 50%% over 2 accounts", g)
 	}
+	assertOptFloat(t, "gemini.short", g.ShortRemainingPercent, fptr(70))
+	assertOptFloat(t, "gemini.weekly", g.WeeklyRemainingPercent, fptr(50))
+
 	// Weekly depleted blocks the Claude/GPT family even though 5h has 20% left.
-	if c := availEntry(t, entries, "antigravity_claude"); c.RemainingPercent != 0 || c.Accounts != 1 {
+	c := availEntry(t, entries, "antigravity_claude")
+	if c.RemainingPercent != 0 || c.Accounts != 1 {
 		t.Fatalf("claude/gpt family = %+v, want 0%% over 1 account", c)
 	}
+	assertOptFloat(t, "claude.short", c.ShortRemainingPercent, fptr(0))
+	assertOptFloat(t, "claude.weekly", c.WeeklyRemainingPercent, fptr(0))
 }
 
 func TestWeeklyOnlyAvailabilityOutsideCodex(t *testing.T) {
@@ -306,4 +338,97 @@ func TestComputeWeightsFleetAvailabilityByTierCapacity(t *testing.T) {
 	if ag.Tiers[0].Label != "AI Ultra" || ag.Tiers[1].Label != "AI Pro" {
 		t.Fatalf("antigravity tier labels = %+v", ag.Tiers)
 	}
+}
+
+func TestComputeDualWindowEdgeCasesAndJSONSerialization(t *testing.T) {
+	// 1. Nearly depleted weekly caps effective remaining (no 100% cliff) while keeping short/weekly separate.
+	cliff := Compute([]quotamonitor.AccountQuota{{
+		Provider: "claude", PlanType: "pro", Status: quotamonitor.StatusKnown,
+		Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 100), availWin("weekly", 10080, 5)},
+	}})
+	cl := availEntry(t, cliff, "claude")
+	if cl.RemainingPercent != 5 {
+		t.Fatalf("cliff effective = %v, want 5", cl.RemainingPercent)
+	}
+	assertOptFloat(t, "cliff.short", cl.ShortRemainingPercent, fptr(100))
+	assertOptFloat(t, "cliff.weekly", cl.WeeklyRemainingPercent, fptr(5))
+	assertOptFloat(t, "cliff.tier.short", cl.Tiers[0].ShortRemainingPercent, fptr(100))
+	assertOptFloat(t, "cliff.tier.weekly", cl.Tiers[0].WeeklyRemainingPercent, fptr(5))
+
+	// 2. Short-limited (5h=0%) with healthy weekly (7d=90%): effective=0, short=0 (serialized!), weekly=90.
+	shortLimited := Compute([]quotamonitor.AccountQuota{{
+		Provider: "claude", PlanType: "pro", Status: quotamonitor.StatusKnown,
+		Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 0), availWin("weekly", 10080, 90)},
+	}})
+	sl := availEntry(t, shortLimited, "claude")
+	if sl.RemainingPercent != 0 {
+		t.Fatalf("shortLimited effective = %v, want 0", sl.RemainingPercent)
+	}
+	assertOptFloat(t, "shortLimited.short", sl.ShortRemainingPercent, fptr(0))
+	assertOptFloat(t, "shortLimited.weekly", sl.WeeklyRemainingPercent, fptr(90))
+	raw, err := json.Marshal(sl)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	if !strings.Contains(string(raw), `"short_remaining_percent":0`) || !strings.Contains(string(raw), `"weekly_remaining_percent":90`) {
+		t.Fatalf("JSON must keep explicit 0 for short_remaining_percent: %s", raw)
+	}
+
+	// 3. Mixed fleet: one account has 5h+7d, one has 5h-only -> weekly averages only accounts that reported 7d,
+	// and effective remaining matches min(short, weekly) so summary gauges match the tighter displayed window.
+	mixed := Compute([]quotamonitor.AccountQuota{
+		{Provider: "codex", PlanType: "plus", Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 80), availWin("secondary", 10080, 40)}},
+		{Provider: "codex", PlanType: "plus", Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 60)}},
+	})
+	mx := availEntry(t, mixed, "codex")
+	// short=(80+60)/2=70; weekly=40/1=40 -> effective min(70,40)=40.
+	if mx.RemainingPercent != 40 {
+		t.Fatalf("mixed effective = %v, want 40", mx.RemainingPercent)
+	}
+	assertOptFloat(t, "mixed.short", mx.ShortRemainingPercent, fptr(70))
+	assertOptFloat(t, "mixed.weekly", mx.WeeklyRemainingPercent, fptr(40))
+	assertOptFloat(t, "mixed.tier.short", mx.Tiers[0].ShortRemainingPercent, fptr(70))
+	assertOptFloat(t, "mixed.tier.weekly", mx.Tiers[0].WeeklyRemainingPercent, fptr(40))
+
+	// 3b. Complementary accounts across tiers (Max 0/90 + Pro 100/5): effective matches min(fleetShort, fleetWeekly).
+	comp := Compute([]quotamonitor.AccountQuota{
+		{Provider: "claude", PlanType: "max", Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 0), availWin("weekly", 10080, 90)}},
+		{Provider: "claude", PlanType: "pro", Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 100), availWin("weekly", 10080, 5)}},
+	})
+	cp := availEntry(t, comp, "claude")
+	// short = (0*5 + 100*1)/6 = 16.7, weekly = (90*5 + 5*1)/6 = 75.8 -> effective = 16.7.
+	if cp.RemainingPercent != 16.7 {
+		t.Fatalf("comp effective = %v, want 16.7", cp.RemainingPercent)
+	}
+	assertOptFloat(t, "comp.short", cp.ShortRemainingPercent, fptr(16.7))
+	assertOptFloat(t, "comp.weekly", cp.WeeklyRemainingPercent, fptr(75.8))
+
+	// 4. Single-window account omits the unmeasured field in JSON.
+	single := Compute([]quotamonitor.AccountQuota{{
+		Provider: "codex", Status: quotamonitor.StatusKnown,
+		Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 75)},
+	}})
+	sn := availEntry(t, single, "codex")
+	assertOptFloat(t, "single.short", sn.ShortRemainingPercent, fptr(75))
+	assertOptFloat(t, "single.weekly", sn.WeeklyRemainingPercent, nil)
+	rawSingle, _ := json.Marshal(sn)
+	if strings.Contains(string(rawSingle), "weekly_remaining_percent") {
+		t.Fatalf("single-window JSON must omit weekly_remaining_percent: %s", rawSingle)
+	}
+
+	// 5. Antigravity name fallback when WindowMinutes is omitted.
+	rem80, rem30 := 80.0, 30.0
+	agFallback := Compute([]quotamonitor.AccountQuota{{
+		Provider: "antigravity", Status: quotamonitor.StatusKnown,
+		Windows: []quotamonitor.QuotaWindow{
+			{Name: "Gemini Models / Five Hour Limit Remaining", RemainingPercent: &rem80},
+			{Name: "Gemini Models / Weekly Limit Remaining", RemainingPercent: &rem30},
+		},
+	}})
+	agf := availEntry(t, agFallback, "antigravity_gemini")
+	if agf.RemainingPercent != 30 {
+		t.Fatalf("agFallback effective = %v, want 30", agf.RemainingPercent)
+	}
+	assertOptFloat(t, "agFallback.short", agf.ShortRemainingPercent, fptr(80))
+	assertOptFloat(t, "agFallback.weekly", agf.WeeklyRemainingPercent, fptr(30))
 }

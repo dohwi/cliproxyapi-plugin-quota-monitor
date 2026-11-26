@@ -218,6 +218,8 @@ var I18N = {
     'fleet.antigravity_3_8_claude': 'AGY (3.8) · Claude/GPT',
     'fleet.count': '{n}개 계정',
     'fleet.chipCount': '{n}개',
+    'fleet.short': '5시간',
+    'fleet.weekly': '주간',
     'accounts.aria': '계정 목록',
     'st.active': '활성',
     'st.pending': '측정 대기',
@@ -381,6 +383,8 @@ var I18N = {
     'fleet.count': '{n} accounts',
     'fleet.count.one': '{n} account',
     'fleet.chipCount': '{n}',
+    'fleet.short': '5h',
+    'fleet.weekly': '7d',
     'accounts.aria': 'Account list',
     'st.active': 'Active',
     'st.pending': 'Pending',
@@ -545,6 +549,8 @@ var I18N = {
     'fleet.count': '{n}个账号',
     'fleet.count.one': '{n}个账号',
     'fleet.chipCount': '{n}个',
+    'fleet.short': '5小时',
+    'fleet.weekly': '周',
     'accounts.aria': '账号列表',
     'st.active': '正常',
     'st.pending': '待检测',
@@ -2190,16 +2196,35 @@ function fleetLabel(e) {
   var text = t(key);
   return text !== key ? text : ((e && (e.label || e.key)) || '');
 }
+function validFleetPercent(v) {
+  if (v === null || v === undefined || v === '') return null;
+  var n = Number(v);
+  return isFinite(n) && n >= 0 && n <= 100 ? n : null;
+}
+function fmtFleetPercent(v) {
+  return String(Math.round(v * 10) / 10) + '%';
+}
+function formatFleetWindows(e) {
+  var s = validFleetPercent(e && e.short_remaining_percent);
+  var w = validFleetPercent(e && e.weekly_remaining_percent);
+  if (s !== null && w !== null) {
+    return t('fleet.short') + ' ' + fmtFleetPercent(s) + ' · ' + t('fleet.weekly') + ' ' + fmtFleetPercent(w);
+  }
+  if (s !== null) return t('fleet.short') + ' ' + fmtFleetPercent(s);
+  if (w !== null) return t('fleet.weekly') + ' ' + fmtFleetPercent(w);
+  return '';
+}
 function formatFleetTiers(tiers) {
   if (!Array.isArray(tiers) || tiers.length === 0) return '';
   var parts = [];
   for (var i = 0; i < tiers.length; i++) {
     var tr = tiers[i] || {};
-    var rem = Number(tr.remaining_percent);
-    if (!isFinite(rem)) continue;
+    var rem = validFleetPercent(tr.remaining_percent);
+    if (rem === null) continue;
     var lbl = String(tr.label || tr.tier || '').trim();
     if (!lbl) continue;
-    parts.push(lbl + ' ' + (Math.round(rem * 10) / 10) + '%');
+    var winText = formatFleetWindows(tr);
+    parts.push(lbl + ' ' + fmtFleetPercent(rem) + (winText ? ' (' + winText + ')' : ''));
   }
   return parts.join(' · ');
 }
@@ -2218,13 +2243,19 @@ function renderFleetAvailability(entries) {
     antigravity_3_8_gemini: 'AGY (3.8)',
     antigravity_3_8_claude: 'AGY (3.8)'
   };
+  var agyFamilyName = function(key) {
+    return String(key || '').indexOf('_claude') !== -1 ? 'Claude/GPT' : 'Gemini';
+  };
   var chips = [];
   var agyChips = {};
   for (var i = 0; i < list.length; i++) {
     var e = list[i] || {};
-    var rem = Number(e.remaining_percent);
-    if (!isFinite(rem)) continue;
+    var rem = validFleetPercent(e.remaining_percent);
+    if (rem === null) continue;
+    var shortVal = validFleetPercent(e.short_remaining_percent);
+    var weeklyVal = validFleetPercent(e.weekly_remaining_percent);
     var count = Number(e.accounts) || 0;
+    var winSummary = formatFleetWindows(e);
     var tierSummary = formatFleetTiers(e.tiers);
     var agyGroup = agyGroupByKey[e.key];
     if (agyGroup) {
@@ -2240,31 +2271,80 @@ function renderFleetAvailability(entries) {
             ? ('AGY · ' + String(e.tiers[0].label))
             : 'AGY · Trial/Free';
         }
-        agy = { label: chipLabel, provider: 'antigravity', title: '', values: [], accounts: 0 };
+        agy = { label: chipLabel, provider: 'antigravity', title: '', families: [], accounts: 0, multiFamily: true };
         agyChips[agyGroup] = agy;
         chips.push(agy);
       }
-      agy.values.push(rem);
+      agy.families.push({ name: agyFamilyName(e.key), rem: rem, shortVal: shortVal, weeklyVal: weeklyVal });
       agy.accounts = Math.max(agy.accounts, count);
-      var piece = fleetLabel(e) + ' ' + (Math.round(rem * 10) / 10) + '%' + (tierSummary ? ' (' + tierSummary + ')' : '');
+      var detailParts = [];
+      if (winSummary) detailParts.push(winSummary);
+      if (tierSummary) detailParts.push(tierSummary);
+      var piece = fleetLabel(e) + ' ' + fmtFleetPercent(rem) + (detailParts.length ? ' (' + detailParts.join(' · ') + ')' : '');
       agy.title += (agy.title ? ' / ' : '') + piece;
       continue;
     }
-    var baseTitle = fleetLabel(e) + ' · ' + tn('fleet.count', count);
+    var baseTitle = fleetLabel(e) + ' ' + fmtFleetPercent(rem);
+    if (winSummary) baseTitle += ' (' + winSummary + ')';
+    baseTitle += ' · ' + tn('fleet.count', count);
     if (tierSummary) baseTitle += ' (' + tierSummary + ')';
-    chips.push({ label: fleetLabel(e), provider: String(e.key || ''), title: baseTitle, values: [rem], accounts: count });
+    chips.push({
+      label: fleetLabel(e),
+      provider: String(e.key || ''),
+      title: baseTitle,
+      rem: rem,
+      shortVal: shortVal,
+      weeklyVal: weeklyVal,
+      accounts: count,
+      multiFamily: false
+    });
   }
+  if (el.classList && typeof el.classList.toggle === 'function') el.classList.toggle('is-grid', chips.length > 4);
+  var renderMetricRow = function(label, val) {
+    var tone = remainingTone(val);
+    var fill = val > 0 ? '<span class="fleet-bar-fill" style="width:' + Math.min(100, Math.max(0, val)) + '%;background:' + tone + '"></span>' : '';
+    return '<div class="fleet-metric' + (label ? '' : ' is-single') + '">' +
+      (label ? '<span class="fleet-metric-key">' + esc(label) + '</span>' : '') +
+      '<span class="fleet-bar" aria-hidden="true">' + fill + '</span>' +
+      '<span class="fleet-chip-value" style="color:' + tone + '">' + esc(fmtFleetPercent(val)) + '</span></div>';
+  };
   var html = '';
   for (var k = 0; k < chips.length; k++) {
     var c = chips[k];
-    var vals = '';
-    for (var v = 0; v < c.values.length; v++) {
-      if (v > 0) vals += '<span class="fleet-chip-sep" aria-hidden="true">·</span>';
-      vals += '<span style="color:' + remainingTone(c.values[v]) + '">' + esc(String(Math.round(c.values[v] * 10) / 10)) + '%</span>';
+    var body = '';
+    if (c.multiFamily) {
+      var rows = '';
+      for (var f = 0; f < c.families.length; f++) {
+        var fam = c.families[f];
+        var hasWin = fam.shortVal !== null || fam.weeklyVal !== null;
+        if (hasWin) {
+          var sCell = fam.shortVal !== null
+            ? '<span class="fleet-win-cell"><span class="fleet-win-tag">' + esc(t('fleet.short')) + '</span><span class="fleet-chip-value" style="color:' + remainingTone(fam.shortVal) + '">' + esc(fmtFleetPercent(fam.shortVal)) + '</span></span>'
+            : '<span class="fleet-win-cell"></span>';
+          var wCell = fam.weeklyVal !== null
+            ? '<span class="fleet-win-cell"><span class="fleet-win-tag">' + esc(t('fleet.weekly')) + '</span><span class="fleet-chip-value" style="color:' + remainingTone(fam.weeklyVal) + '">' + esc(fmtFleetPercent(fam.weeklyVal)) + '</span></span>'
+            : '<span class="fleet-win-cell"></span>';
+          rows += '<div class="fleet-family-row"><span class="fleet-family-name">' + esc(fam.name) + '</span>' + sCell + wCell + '</div>';
+        } else {
+          rows += '<div class="fleet-family-row is-single"><span class="fleet-family-name">' + esc(fam.name) + '</span>' +
+            '<span class="fleet-chip-value" style="color:' + remainingTone(fam.rem) + '">' + esc(fmtFleetPercent(fam.rem)) + '</span></div>';
+        }
+      }
+      body = '<div class="fleet-chip-rows fleet-chip-matrix">' + rows + '</div>';
+    } else {
+      var mRows = '';
+      if (c.shortVal !== null || c.weeklyVal !== null) {
+        if (c.shortVal !== null) mRows += renderMetricRow(t('fleet.short'), c.shortVal);
+        if (c.weeklyVal !== null) mRows += renderMetricRow(t('fleet.weekly'), c.weeklyVal);
+      } else {
+        mRows += renderMetricRow('', c.rem);
+      }
+      body = '<div class="fleet-chip-rows">' + mRows + '</div>';
     }
-    html += '<li class="fleet-chip" title="' + esc(c.title + (c.values.length > 1 ? ' · ' + tn('fleet.count', c.accounts) : '')) + '"><span class="fleet-chip-label"><span class="fleet-chip-icon" aria-hidden="true">' + providerIcon(c.provider, 16) + '</span><span class="fleet-chip-name">' + esc(c.label) + '</span></span>' +
-      '<span class="fleet-chip-value">' + vals + '</span>' +
-      '<span class="fleet-chip-count">' + esc(t('fleet.chipCount', { n: c.accounts })) + '</span></li>';
+    html += '<li class="fleet-chip" title="' + esc(c.title + (c.multiFamily ? ' · ' + tn('fleet.count', c.accounts) : '')) + '">' +
+      '<div class="fleet-chip-head"><span class="fleet-chip-label"><span class="fleet-chip-icon" aria-hidden="true">' + providerIcon(c.provider, 16) + '</span><span class="fleet-chip-name">' + esc(c.label) + '</span></span>' +
+      '<span class="fleet-chip-count">' + esc(t('fleet.chipCount', { n: c.accounts })) + '</span></div>' +
+      body + '</li>';
   }
   el.innerHTML = html;
 }

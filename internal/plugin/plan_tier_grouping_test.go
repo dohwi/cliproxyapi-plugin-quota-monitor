@@ -249,6 +249,17 @@ assert(!fleetHTML.includes('Lite'), 'must not display arbitrary Lite label: ' + 
 assert(fleetHTML.includes('Ultra 0%') && fleetHTML.includes('Pro 100%'), 'expected tier breakdown in Claude tooltip: ' + fleetHTML);
 assert(fleetHTML.includes('AI Ultra 99%') && fleetHTML.includes('AI Pro Trial 90%'), 'expected tier breakdown in AGY tooltips: ' + fleetHTML);
 
+// 4. Dual-window and 5h-only entries render 5시간/주간 directly on every chip without inventing missing windows.
+ctx.renderFleetAvailability([
+  { key: 'claude', label: 'Claude', remaining_percent: 5, short_remaining_percent: 100, weekly_remaining_percent: 5, accounts: 2, tiers: [{ tier: 'pro', label: 'Pro', remaining_percent: 5, short_remaining_percent: 100, weekly_remaining_percent: 5, accounts: 2 }] },
+  { key: 'antigravity_gemini', label: 'AGY · Gemini', remaining_percent: 90, short_remaining_percent: 90, accounts: 2, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 90, short_remaining_percent: 90, accounts: 2 }] },
+  { key: 'antigravity_claude', label: 'AGY · Claude/GPT', remaining_percent: 17, short_remaining_percent: 17, accounts: 2, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 17, short_remaining_percent: 17, accounts: 2 }] }
+]);
+const dualFleetHTML = byId.fleetAvailability.innerHTML;
+assert(dualFleetHTML.includes('>5시간<') && dualFleetHTML.includes('>100%<') && dualFleetHTML.includes('>주간<') && dualFleetHTML.includes('>5%<'), 'expected Claude 5시간 100% and 주간 5% bars: ' + dualFleetHTML);
+assert(dualFleetHTML.includes('>AGY · AI Ultra<') && dualFleetHTML.includes('>Gemini<') && dualFleetHTML.includes('>90%<') && dualFleetHTML.includes('>Claude/GPT<') && dualFleetHTML.includes('>17%<'), 'expected AGY · AI Ultra matrix rows: ' + dualFleetHTML);
+assert(!dualFleetHTML.includes('주간 90%'), 'expected 5h-only AGY Ultra without fake weekly: ' + dualFleetHTML);
+
 console.log('OK_TIER_EP_GROUPING');
 `
 	cmd := nodeDashboardCmd(t, "node", script)

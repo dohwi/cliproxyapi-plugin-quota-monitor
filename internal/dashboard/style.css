@@ -129,28 +129,43 @@
   /* Fleet availability is one panel; providers are split by thin separators. */
   .fleet-availability { display: flex; align-items: stretch; margin: 0 0 12px; padding: 0; list-style: none; background: var(--bg-group); border: 1px solid var(--group-border); border-radius: 8px; overflow: hidden; }
   .fleet-availability:empty { display: none; }
-  .fleet-chip { flex: 1 1 0; display: flex; align-items: center; gap: 8px; min-width: 0; height: 32px; padding: 0 12px; }
+  .fleet-chip { flex: 1 1 0; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; min-width: 0; padding: 10px 12px; }
   .fleet-chip + .fleet-chip { border-left: 1px solid var(--divider); }
-  @media (max-width: 1040px) and (min-width: 761px) {
-    .fleet-availability { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .fleet-chip { flex: none; }
-    .fleet-chip + .fleet-chip { border-left: 0; }
-    .fleet-chip:nth-child(even) { border-left: 1px solid var(--divider); }
-    .fleet-chip:nth-child(n+3) { border-top: 1px solid var(--divider); }
-    .fleet-chip:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .fleet-availability.is-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fleet-availability.is-grid .fleet-chip { flex: none; border-left: 0; }
+  .fleet-availability.is-grid .fleet-chip:not(:nth-child(3n+1)) { border-left: 1px solid var(--divider); }
+  .fleet-availability.is-grid .fleet-chip:nth-child(n+4) { border-top: 1px solid var(--divider); }
+  @media (max-width: 1180px) and (min-width: 761px) {
+    .fleet-availability, .fleet-availability.is-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fleet-chip, .fleet-availability.is-grid .fleet-chip { flex: none; border-left: 0; border-top: 0; }
+    .fleet-chip + .fleet-chip, .fleet-availability.is-grid .fleet-chip:not(:nth-child(3n+1)) { border-left: 0; }
+    .fleet-chip:nth-child(even), .fleet-availability.is-grid .fleet-chip:nth-child(even) { border-left: 1px solid var(--divider); }
+    .fleet-chip:nth-child(n+3), .fleet-availability.is-grid .fleet-chip:nth-child(n+3) { border-top: 1px solid var(--divider); }
+    .fleet-chip:last-child:nth-child(odd), .fleet-availability.is-grid .fleet-chip:last-child:nth-child(odd) { grid-column: 1 / -1; }
   }
   @media (max-width: 760px) {
-    .fleet-availability { flex-direction: column; }
-    .fleet-chip { flex: 0 0 auto; }
-    .fleet-chip + .fleet-chip { border-left: 0; border-top: 1px solid var(--divider); }
+    .fleet-availability, .fleet-availability.is-grid { display: flex; flex-direction: column; }
+    .fleet-chip, .fleet-availability.is-grid .fleet-chip { flex: 0 0 auto; border-left: 0; border-top: 0; }
+    .fleet-chip + .fleet-chip, .fleet-availability.is-grid .fleet-chip + .fleet-chip { border-left: 0; border-top: 1px solid var(--divider); }
   }
-  .fleet-chip-label { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--filter-label-color); }
-  .fleet-chip-icon { flex: 0 0 auto; display: inline-flex; color: var(--text); }
-  .fleet-chip-icon svg { display: block; }
+  .fleet-chip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+  .fleet-chip-label { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--filter-label-color); }
+  .fleet-chip-icon { flex: 0 0 auto; display: inline-flex; align-items: center; color: var(--text); }
+  .fleet-chip-icon svg { display: block; flex: none; }
   .fleet-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fleet-chip-value { flex: 0 0 auto; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .fleet-chip-sep { color: var(--muted); font-weight: 500; margin: 0 8px; }
-  .fleet-chip-count { flex: 0 0 auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .fleet-chip-count { flex: 0 0 auto; font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  .fleet-chip-rows { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 36px; }
+  .fleet-metric { display: grid; grid-template-columns: 36px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
+  .fleet-metric.is-single { grid-template-columns: minmax(0, 1fr) 44px; }
+  .fleet-metric-key { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  .fleet-bar { height: 5px; border-radius: 999px; background: var(--divider); overflow: hidden; }
+  .fleet-bar-fill { display: block; height: 100%; min-width: 3px; border-radius: 999px; }
+  .fleet-family-row { display: grid; grid-template-columns: minmax(0, 1fr) 74px 70px; align-items: baseline; gap: 8px; }
+  .fleet-family-row.is-single { grid-template-columns: minmax(0, 1fr) auto; }
+  .fleet-family-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 16px; font-weight: 600; color: var(--muted); }
+  .fleet-win-cell { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 4px; white-space: nowrap; }
+  .fleet-win-tag { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); }
+  .fleet-chip-value { flex: 0 0 auto; font-size: 13px; line-height: 16px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
   .btn { background-color: var(--ctl); color: var(--ctl-fg); border: 1px solid transparent; min-height: var(--btn-h); padding: 4px 12px; font-size: 13px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: background-color 120ms ease-out; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; font-family: inherit; line-height: 20px; }
   .btn:hover:not(:disabled) { background-color: var(--ctl-hover); }
