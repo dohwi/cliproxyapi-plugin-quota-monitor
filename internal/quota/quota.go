@@ -216,6 +216,11 @@ type AccountQuota struct {
 	// Used by availability pooling to split accounts whose offered model sets
 	// differ (e.g. Pro 200 vs Pro 100) and re-merge them when catalogs align.
 	Models []string `json:"-"`
+	// PendingModelsSig and PendingModelsStreak debounce non-superset model-set
+	// changes (shrinking or swapped catalogs) across consecutive probes so a
+	// single transient omission cannot flap pool membership.
+	PendingModelsSig    string `json:"-"`
+	PendingModelsStreak int    `json:"-"`
 	// ModelTierDemoteMisses counts consecutive "lite" probes observed for an
 	// account previously classified as "full" so a single partial model catalog
 	// cannot flap Full to Lite.
@@ -3191,6 +3196,29 @@ func ModelSetSignature(modelIDs []string) string {
 	return hex.EncodeToString(sum[:6])
 }
 
+// ModelSetContainsAll reports whether every model in subset is present in
+// superset. Both slices must be normalized (sorted, deduplicated, lowercase).
+func ModelSetContainsAll(superset, subset []string) bool {
+	if len(subset) == 0 {
+		return true
+	}
+	if len(superset) < len(subset) {
+		return false
+	}
+	i, j := 0, 0
+	for i < len(superset) && j < len(subset) {
+		if superset[i] == subset[j] {
+			i++
+			j++
+		} else if superset[i] < subset[j] {
+			i++
+		} else {
+			return false
+		}
+	}
+	return j == len(subset)
+}
+
 // ClassifyAntigravityModels classifies an Antigravity account's registered
 // model list into AntigravityTierFull when any frontier model (beyond
 // gemini-4-hydrogen) is registered, AntigravityTierLite when at least one
@@ -3274,7 +3302,7 @@ func ParseAuthFileModelsJSON(data []byte) ([]string, error) {
 // account's registered models. Returns nil, nil when the account has no raw
 // auth file name.
 func (c *Client) FetchAuthFileModels(ctx context.Context, account AccountQuota) ([]string, error) {
-	if c.BaseURL == "" {
+	if c == nil || c.BaseURL == "" {
 		return nil, &APICallError{Kind: "upstream"}
 	}
 	name := strings.TrimSpace(account.authFileName)

@@ -554,4 +554,49 @@ func TestComputeDynamicModelSetSplitAndMerge(t *testing.T) {
 	if agAllLite[1].Label != "AGY (Free) · Gemini" || agAllLite[1].Short != "AGT" || agAllLite[1].ModelCount != 2 {
 		t.Fatalf("agAllLite[1] = %+v", agAllLite[1])
 	}
+
+	// 9. Transient error in Pool 0 (AI Ultra) must NOT collapse Pool 1 (AI Pro Trial) into unified antigravity_gemini.
+	fullModels := []string{"gemini-4-argon-high", "gemini-4-carbon-high", "claude-opus-5-5-high"}
+	liteModels := []string{"gemini-3.8-flash-high", "gemini-4-hydrogen-xhigh"}
+	transientErr := Compute([]quotamonitor.AccountQuota{
+		{Provider: "antigravity", PlanType: "ultra", Models: fullModels, Status: quotamonitor.StatusError,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 95)}},
+		{Provider: "antigravity", PlanType: "pro", Models: liteModels, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 50)}},
+	})
+	if len(transientErr) != 1 || transientErr[0].Key != "antigravity_lite_gemini" || transientErr[0].Label != "AGY (AI Pro Trial) · Gemini" {
+		t.Fatalf("transient Pool 0 error collapsed split identity: %+v", transientErr)
+	}
+
+	// Explicitly disabling Pool 0 DOES collapse back to unified antigravity_gemini.
+	disabledTrue := true
+	disabledPool0 := Compute([]quotamonitor.AccountQuota{
+		{Provider: "antigravity", PlanType: "ultra", Models: fullModels, Status: quotamonitor.StatusKnown,
+			Operational: &quotamonitor.OperationalStatus{Disabled: &disabledTrue},
+			Windows:     []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 95)}},
+		{Provider: "antigravity", PlanType: "pro", Models: liteModels, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 50)}},
+	})
+	if len(disabledPool0) != 1 || disabledPool0[0].Key != "antigravity_gemini" {
+		t.Fatalf("disabled Pool 0 should collapse to unified antigravity_gemini: %+v", disabledPool0)
+	}
+
+	// 10. Tier-only account (Models=nil, ModelTier="full") must attach to the exact Full pool, never create a phantom "ag:full" pool.
+	mixedExactAndTier := Compute([]quotamonitor.AccountQuota{
+		{Provider: "antigravity", PlanType: "ultra", Models: fullModels, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 90)}},
+		{Provider: "antigravity", PlanType: "ultra", ModelTier: "full", Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 70)}},
+		{Provider: "antigravity", PlanType: "pro", Models: liteModels, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 50)}},
+	})
+	if len(mixedExactAndTier) != 2 {
+		t.Fatalf("expected 2 pools (not phantom ag:full), got %d: %+v", len(mixedExactAndTier), mixedExactAndTier)
+	}
+	if mixedExactAndTier[0].Key != "antigravity_gemini" || mixedExactAndTier[0].Accounts != 2 || mixedExactAndTier[0].ModelCount != 3 {
+		t.Fatalf("full pool = %+v, want antigravity_gemini accounts=2 model_count=3", mixedExactAndTier[0])
+	}
+	if mixedExactAndTier[1].Key != "antigravity_lite_gemini" || mixedExactAndTier[1].Accounts != 1 || mixedExactAndTier[1].ModelCount != 2 {
+		t.Fatalf("lite pool = %+v, want antigravity_lite_gemini accounts=1 model_count=2", mixedExactAndTier[1])
+	}
 }

@@ -110,8 +110,8 @@ func TestAntigravityCurrentAccountSplitByModelTier(t *testing.T) {
 	for _, s := range safe {
 		current[s.AccountKey] = s.CurrentAccount
 	}
-	if !current["ag38-new"] || current["ag4"] || current["ag38-old"] {
-		t.Fatalf("unified antigravity current selection wrong: %+v", current)
+	if !current["ag4"] || !current["ag38-new"] || current["ag38-old"] {
+		t.Fatalf("per-pool antigravity current selection wrong: %+v", current)
 	}
 }
 
@@ -407,5 +407,194 @@ func TestAntigravityStartupEmptyModelsRecoversBeforeQuotaDue(t *testing.T) {
 	}
 	if countsByAcc["u***a@example.com"] != 3 || countsByAcc["p***o@example.com"] != 2 {
 		t.Fatalf("sanitized model_count = %+v, want ultra=3 pro=2", countsByAcc)
+	}
+}
+
+func TestAntigravityPerPoolCurrentAccountBorders(t *testing.T) {
+	reset(t)
+	fullModels := []string{"gemini-4-argon-high", "gemini-4-carbon-high", "claude-opus-5-5-high"}
+	liteModels := []string{"gemini-3.8-flash-high", "gemini-4-hydrogen-xhigh"}
+	t1 := now().Add(-1 * time.Minute)
+	t2 := now().Add(-2 * time.Minute)
+	t3 := now().Add(-4 * time.Minute)
+	rem90, rem50 := 90.0, 50.0
+
+	accounts := []quotamonitor.AccountQuota{
+		{
+			AccountKey: "ag-ultra-active", Provider: "antigravity", PlanType: "ultra",
+			ModelTier: "full", Models: fullModels, Status: quotamonitor.StatusKnown,
+			LastUsedAt: &t2,
+			Windows:    []quotamonitor.QuotaWindow{{Name: "Gemini Models / Five Hour Limit Remaining", RemainingPercent: &rem90}},
+		},
+		{
+			AccountKey: "ag-ultra-older", Provider: "antigravity", PlanType: "ultra",
+			ModelTier: "full", Models: fullModels, Status: quotamonitor.StatusKnown,
+			LastUsedAt: &t3,
+			Windows:    []quotamonitor.QuotaWindow{{Name: "Gemini Models / Five Hour Limit Remaining", RemainingPercent: &rem90}},
+		},
+		{
+			AccountKey: "ag-trial-active", Provider: "antigravity", PlanType: "pro",
+			ModelTier: "lite", Models: liteModels, Status: quotamonitor.StatusKnown,
+			LastUsedAt: &t1,
+			Windows:    []quotamonitor.QuotaWindow{{Name: "Gemini Models / Five Hour Limit Remaining", RemainingPercent: &rem50}},
+		},
+	}
+
+	safe := sanitizeAccounts(accounts)
+	byKey := map[string]safeAccount{}
+	for _, s := range safe {
+		byKey[s.AccountKey] = s
+	}
+	if !byKey["ag-ultra-active"].CurrentAccount {
+		t.Fatalf("Ultra (Full pool) active account must get its own CurrentAccount border even when Lite pool was used more recently: %+v", byKey)
+	}
+	if byKey["ag-ultra-older"].CurrentAccount {
+		t.Fatalf("older account in the same Full pool must NOT get CurrentAccount border: %+v", byKey["ag-ultra-older"])
+	}
+	if !byKey["ag-trial-active"].CurrentAccount {
+		t.Fatalf("AI Pro Trial (Lite pool) active account must also get its own CurrentAccount border: %+v", byKey["ag-trial-active"])
+	}
+
+	// An account attached to the Full pool via ModelTier fallback (Models=nil)
+	// must share the Full pool's unit key, so only 1 border appears per displayed pool.
+	tierAttached := []quotamonitor.AccountQuota{
+		{
+			AccountKey: "ag-full-exact", Provider: "antigravity", PlanType: "ultra",
+			ModelTier: "full", Models: fullModels, Status: quotamonitor.StatusKnown,
+			LastUsedAt: &t1,
+			Windows:    []quotamonitor.QuotaWindow{{Name: "Gemini Models / Five Hour Limit Remaining", RemainingPercent: &rem90}},
+		},
+		{
+			AccountKey: "ag-full-tier-only", Provider: "antigravity", PlanType: "ultra",
+			ModelTier: "full", Status: quotamonitor.StatusKnown,
+			LastUsedAt: &t2,
+			Windows:    []quotamonitor.QuotaWindow{{Name: "Gemini Models / Five Hour Limit Remaining", RemainingPercent: &rem90}},
+		},
+		{
+			AccountKey: "ag-lite-exact", Provider: "antigravity", PlanType: "pro",
+			ModelTier: "lite", Models: liteModels, Status: quotamonitor.StatusKnown,
+			LastUsedAt: &t3,
+			Windows:    []quotamonitor.QuotaWindow{{Name: "Gemini Models / Five Hour Limit Remaining", RemainingPercent: &rem50}},
+		},
+	}
+	safeAttached := sanitizeAccounts(tierAttached)
+	attachedByKey := map[string]bool{}
+	for _, s := range safeAttached {
+		attachedByKey[s.AccountKey] = s.CurrentAccount
+	}
+	if !attachedByKey["ag-full-exact"] || attachedByKey["ag-full-tier-only"] || !attachedByKey["ag-lite-exact"] {
+		t.Fatalf("tier-attached account must share Full pool unit key: %+v", attachedByKey)
+	}
+}
+
+func TestModelPoolShrinkSwapHysteresisPreventsFlapping(t *testing.T) {
+	reset(t)
+	full15 := []string{"claude-opus-5-5-high", "gemini-4-argon-high", "gemini-4-carbon-high", "gemini-3.1-flash-image"}
+	partial14 := []string{"claude-opus-5-5-high", "gemini-4-argon-high", "gemini-4-carbon-high"}
+	partialAlt := []string{"claude-opus-5-5-high", "gemini-4-argon-high", "gemini-3.1-flash-image"}
+	superset16 := []string{"claude-opus-5-5-high", "gemini-4-argon-high", "gemini-4-carbon-high", "gemini-3.1-flash-image", "gemini-4-neon-xhigh"}
+
+	a := quotamonitor.AccountQuota{Provider: "antigravity"}
+
+	// Initial discovery adopts immediately.
+	mergeAccountModelPool(&a, full15)
+	if len(a.Models) != 4 || a.ModelTier != quotamonitor.AntigravityTierFull {
+		t.Fatalf("initial discovery failed: models=%v tier=%q", a.Models, a.ModelTier)
+	}
+
+	// 1st and 2nd transient shrink observations (still "full" tier!) must NOT overwrite confirmed catalog.
+	mergeAccountModelPool(&a, partial14)
+	mergeAccountModelPool(&a, partial14)
+	if len(a.Models) != 4 {
+		t.Fatalf("transient shrink flapped models early: %v", a.Models)
+	}
+
+	// Full catalog returning resets streak.
+	mergeAccountModelPool(&a, full15)
+	if a.PendingModelsStreak != 0 || a.PendingModelsSig != "" {
+		t.Fatalf("streak did not reset on full match: sig=%q streak=%d", a.PendingModelsSig, a.PendingModelsStreak)
+	}
+
+	// Alternating different partial signatures never reach threshold.
+	mergeAccountModelPool(&a, partial14)
+	mergeAccountModelPool(&a, partialAlt)
+	mergeAccountModelPool(&a, partial14)
+	mergeAccountModelPool(&a, partialAlt)
+	if len(a.Models) != 4 {
+		t.Fatalf("alternating partial signatures flapped models: %v", a.Models)
+	}
+
+	// Strict superset growth adopts immediately.
+	mergeAccountModelPool(&a, superset16)
+	if len(a.Models) != 5 {
+		t.Fatalf("superset growth should adopt immediately: %v", a.Models)
+	}
+
+	// 3 consecutive identical shrink observations commit cleanly.
+	mergeAccountModelPool(&a, partial14)
+	mergeAccountModelPool(&a, partial14)
+	if len(a.Models) != 5 {
+		t.Fatalf("should hold on 2nd consecutive shrink: %v", a.Models)
+	}
+	mergeAccountModelPool(&a, partial14)
+	if len(a.Models) != 3 || a.PendingModelsStreak != 0 {
+		t.Fatalf("3rd consecutive shrink should commit: models=%v streak=%d", a.Models, a.PendingModelsStreak)
+	}
+
+	// End-to-end across real collectAccounts cycles: PendingModelsSig/Streak must
+	// persist through applyLastGoodWindows so 1-2 transient shrinks do not flap
+	// pools, while 3 consecutive identical shrinks commit cleanly.
+	var shrinkMode atomic.Bool
+	configureTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/management/auth-files":
+			_, _ = w.Write([]byte(`{"files":[
+				{"name":"ag-ultra.json","provider":"antigravity","auth_index":"1","account":"ultra@example.com"},
+				{"name":"ag-pro.json","provider":"antigravity","auth_index":"2","account":"pro@example.com"}
+			]}`))
+		case "/management/auth-files/models":
+			if r.URL.Query().Get("name") == "ag-ultra.json" && shrinkMode.Load() {
+				_, _ = w.Write([]byte(`{"models":[{"id":"gemini-4-argon-high"},{"id":"gemini-4-carbon-high"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"models":[{"id":"gemini-4-argon-high"},{"id":"gemini-4-carbon-high"},{"id":"claude-opus-5-5-high"}]}`))
+		case "/management/api-call":
+			_, _ = w.Write([]byte(`{"status_code":200,"body":"{\"groups\":[{\"displayName\":\"Gemini Models\",\"buckets\":[{\"displayName\":\"Five Hour Limit Remaining\",\"bucketId\":\"g-5h\",\"window\":\"5h\",\"remainingFraction\":0.9}]}]}"}`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+
+	runNext := func() []quotamonitor.AccountQuota {
+		state.mu.Lock()
+		state.cachedAt = time.Time{}
+		state.lastForceAt = time.Time{}
+		state.mu.Unlock()
+		res := collectAccounts(context.Background(), true)
+		if res.err != nil {
+			t.Fatalf("collectAccounts err: %v", res.err)
+		}
+		return res.accounts
+	}
+
+	// Initial: both accounts have 3 models -> 1 merged pool.
+	accs0 := runNext()
+	if avail := availability.Compute(accs0); len(avail) != 1 {
+		t.Fatalf("initial should be 1 merged pool, got %d: %+v", len(avail), avail)
+	}
+
+	// Shrink #1 and #2 on ultra: must stay 1 merged pool (3 models retained).
+	shrinkMode.Store(true)
+	for cycle := 1; cycle <= 2; cycle++ {
+		accs := runNext()
+		if avail := availability.Compute(accs); len(avail) != 1 || avail[0].ModelCount != 3 {
+			t.Fatalf("shrink cycle %d flapped prematurely: %+v", cycle, avail)
+		}
+	}
+
+	// Shrink #3: confirmed permanent change -> splits cleanly into 2 pools (3 vs 2).
+	accs3 := runNext()
+	if avail := availability.Compute(accs3); len(avail) != 2 {
+		t.Fatalf("shrink cycle 3 should commit split into 2 pools, got %d: %+v", len(avail), avail)
 	}
 }

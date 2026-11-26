@@ -280,8 +280,9 @@ func nextAccountProbeDue(a quotamonitor.AccountQuota, isCurrent bool, attemptedA
 // whole account set, based on the minimum tier across all current provider keys.
 func nextPollHintMS(accounts []quotamonitor.AccountQuota, currentKeys map[string]string) int64 {
 	var minInterval time.Duration
+	poolKeys := availability.AccountPoolKeys(accounts)
 	for _, a := range accounts {
-		prov := accountUnitKey(a)
+		prov := resolvedUnitKey(a, poolKeys)
 		isCurrent := a.AccountKey != "" && currentKeys[prov] == a.AccountKey
 		tier := classifyAccountTier(a, isCurrent)
 		interval := probeIntervalForTier(tier)
@@ -895,10 +896,16 @@ func sanitizeModelTier(provider, raw string) string {
 
 const (
 	antigravityTier4DemoteThreshold = 3
+	// modelSetChangeThreshold requires consecutive identical non-superset
+	// model-set observations before shrinking or swapping a confirmed catalog,
+	// preventing transient omissions from flapping pool membership.
+	modelSetChangeThreshold = 3
 	// /management/auth-files/models is a local loopback registry lookup with no
 	// upstream provider call; refresh every collection window so asynchronous
 	// host capability probes (e.g. Antigravity startup discovery) split pools promptly.
 	antigravityModelPoolCacheTTL = 2 * time.Minute
+	modelCatalogPrePassTimeout   = 3 * time.Second
+	modelCatalogCallTimeout      = 2 * time.Second
 )
 
 // mergeAntigravityModelTier updates an Antigravity account's model pool while
@@ -928,8 +935,12 @@ func mergeAntigravityModelTier(a *quotamonitor.AccountQuota, fetched string) {
 }
 
 // mergeAccountModelPool updates an account's normalized model list (and, for
-// Antigravity, its derived ModelTier with demote-guard protection). Empty or
-// invalid lists are ignored so transient upstream omissions retain last-good data.
+// Antigravity, its derived ModelTier) with stability hysteresis:
+//   - Empty/invalid lists are ignored so transient upstream omissions retain last-good data.
+//   - Initial discovery (empty -> non-empty) and strict superset growth adopt immediately.
+//   - Any shrink or model swap (including Full -> Lite demotion) requires
+//     modelSetChangeThreshold consecutive identical signatures before replacing
+//     the confirmed model set, preventing pools from flapping on transient blips.
 func mergeAccountModelPool(a *quotamonitor.AccountQuota, rawModels []string) {
 	if a == nil {
 		return
@@ -938,20 +949,92 @@ func mergeAccountModelPool(a *quotamonitor.AccountQuota, rawModels []string) {
 	if len(norm) == 0 {
 		return
 	}
-	if strings.EqualFold(strings.TrimSpace(a.Provider), "antigravity") {
-		tier := quotamonitor.ClassifyAntigravityModels(norm)
-		mergeAntigravityModelTier(a, tier)
-		// If the demote guard held a confirmed "full" account against a transient
-		// partial catalog, keep its previously confirmed full model set too.
-		if quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierFull && tier != quotamonitor.AntigravityTierFull {
-			return
+	isAG := strings.EqualFold(strings.TrimSpace(a.Provider), "antigravity")
+	newSig := quotamonitor.ModelSetSignature(norm)
+	curNorm := quotamonitor.NormalizeModelList(a.Models)
+	curSig := quotamonitor.ModelSetSignature(curNorm)
+
+	if len(curNorm) == 0 {
+		if isAG {
+			tier := quotamonitor.ClassifyAntigravityModels(norm)
+			mergeAntigravityModelTier(a, tier)
+			if quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierFull && tier != quotamonitor.AntigravityTierFull {
+				return
+			}
 		}
+		a.Models = norm
+		a.PendingModelsSig = ""
+		a.PendingModelsStreak = 0
+		return
 	}
+
+	if newSig == curSig {
+		a.Models = curNorm
+		a.PendingModelsSig = ""
+		a.PendingModelsStreak = 0
+		if isAG {
+			mergeAntigravityModelTier(a, quotamonitor.ClassifyAntigravityModels(curNorm))
+		}
+		return
+	}
+
+	if quotamonitor.ModelSetContainsAll(norm, curNorm) ||
+		(isAG && quotamonitor.NormalizeAntigravityTier(a.ModelTier) != quotamonitor.AntigravityTierFull && quotamonitor.ClassifyAntigravityModels(norm) == quotamonitor.AntigravityTierFull) {
+		a.Models = norm
+		a.PendingModelsSig = ""
+		a.PendingModelsStreak = 0
+		if isAG {
+			mergeAntigravityModelTier(a, quotamonitor.ClassifyAntigravityModels(norm))
+		}
+		return
+	}
+
+	// Non-superset change (model removed or swapped): require consecutive
+	// confirmation of the exact same candidate signature.
+	if a.PendingModelsSig == newSig {
+		a.PendingModelsStreak++
+	} else {
+		a.PendingModelsSig = newSig
+		a.PendingModelsStreak = 1
+	}
+	if a.PendingModelsStreak < modelSetChangeThreshold {
+		if isAG {
+			// Keep legacy demote counter aligned when shrinking full -> lite.
+			tier := quotamonitor.ClassifyAntigravityModels(norm)
+			if quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierFull && tier == quotamonitor.AntigravityTierLite {
+				a.ModelTierDemoteMisses = a.PendingModelsStreak
+			} else {
+				a.ModelTierDemoteMisses = 0
+			}
+		}
+		return
+	}
+
 	a.Models = norm
+	a.PendingModelsSig = ""
+	a.PendingModelsStreak = 0
+	if isAG {
+		if t := quotamonitor.NormalizeAntigravityTier(quotamonitor.ClassifyAntigravityModels(norm)); t != "" {
+			a.ModelTier = t
+		}
+		a.ModelTierDemoteMisses = 0
+	}
 }
 
 func accountUnitKey(a quotamonitor.AccountQuota) string {
-	return strings.ToLower(strings.TrimSpace(a.Provider))
+	p := strings.ToLower(strings.TrimSpace(a.Provider))
+	if p == "" {
+		return ""
+	}
+	if sig := quotamonitor.ModelSetSignature(a.Models); sig != "" {
+		return p + ":" + sig
+	}
+	if p == "antigravity" {
+		if tier := quotamonitor.NormalizeAntigravityTier(a.ModelTier); tier != "" {
+			return p + ":" + tier
+		}
+	}
+	return p
 }
 
 func maskAccount(s string) string {
@@ -1039,14 +1122,25 @@ type currentChoice struct {
 	reason     string // "recent_usage" only
 }
 
+func resolvedUnitKey(a quotamonitor.AccountQuota, poolKeys map[string]string) string {
+	if a.AccountKey != "" {
+		if k := poolKeys[a.AccountKey]; k != "" {
+			return k
+		}
+	}
+	return accountUnitKey(a)
+}
+
 func currentAccountSelection(in []quotamonitor.AccountQuota) map[string]currentChoice {
 	result := make(map[string]currentChoice)
 	cutoff := now().Add(-currentAccountWindow)
+	poolKeys := availability.AccountPoolKeys(in)
 
-	// Group accounts by provider unit (Antigravity splits by model_tier).
+	// Group accounts by displayed provider/model-pool unit so each distinct
+	// model pool can highlight its own most-recently-used account.
 	byProv := make(map[string][]quotamonitor.AccountQuota)
 	for _, a := range in {
-		p := accountUnitKey(a)
+		p := resolvedUnitKey(a, poolKeys)
 		if p != "" {
 			byProv[p] = append(byProv[p], a)
 		}
@@ -1099,6 +1193,7 @@ func sanitizeAccounts(in []quotamonitor.AccountQuota) []safeAccount {
 
 func sanitizeAccountsWithSelection(in []quotamonitor.AccountQuota, currentByProv map[string]currentChoice) []safeAccount {
 	out := make([]safeAccount, 0, len(in))
+	poolKeys := availability.AccountPoolKeys(in)
 	for _, a := range in {
 		x := safeAccount{
 			RefreshSupported: probeEligible(a),
@@ -1134,9 +1229,24 @@ func sanitizeAccountsWithSelection(in []quotamonitor.AccountQuota, currentByProv
 		// Preserve the committed selection during progressive updates, but never
 		// publish a border after its audited use expires or the account blocks.
 		// This only clears an invalid selection; it does not move it mid-batch.
-		provKey := accountUnitKey(a)
+		provKey := resolvedUnitKey(a, poolKeys)
+		choice, ok := currentByProv[provKey]
+		if !ok {
+			// Mid-batch fallback: if models were populated after st.current was
+			// committed under the bare provider or tier key, match the same account.
+			baseProv := strings.ToLower(strings.TrimSpace(a.Provider))
+			if c, found := currentByProv[baseProv]; found && c.accountKey == a.AccountKey {
+				choice, ok = c, true
+			} else if baseProv == "antigravity" {
+				if tier := quotamonitor.NormalizeAntigravityTier(a.ModelTier); tier != "" {
+					if c, found := currentByProv[baseProv+":"+tier]; found && c.accountKey == a.AccountKey {
+						choice, ok = c, true
+					}
+				}
+			}
+		}
 		recent := a.LastUsedAt != nil && !a.LastUsedAt.Before(now().Add(-currentAccountWindow))
-		if choice, ok := currentByProv[provKey]; ok && choice.kind == "recent" && choice.reason == "recent_usage" && choice.accountKey == a.AccountKey && recent && isAccountRoutableHealthy(a) {
+		if ok && choice.kind == "recent" && choice.reason == "recent_usage" && choice.accountKey == a.AccountKey && recent && isAccountRoutableHealthy(a) {
 			x.CurrentAccount = true
 			x.CurrentKind = choice.kind
 			x.CurrentReason = choice.reason
@@ -1791,6 +1901,7 @@ func recordProbeAttempts(st *stateData, accounts []quotamonitor.AccountQuota, at
 		st.schedules = make(map[string]probeSchedule)
 	}
 	current := currentAccountKeys(accounts)
+	poolKeys := availability.AccountPoolKeys(accounts)
 	recorded := make(map[string]bool)
 	for _, a := range accounts {
 		if recorded[a.AccountKey] {
@@ -1801,7 +1912,7 @@ func recordProbeAttempts(st *stateData, accounts []quotamonitor.AccountQuota, at
 		if !ok {
 			continue
 		}
-		attempt.NextDue = nextAccountProbeDue(a, current[accountUnitKey(a)] == a.AccountKey, attempt.LastAttempt)
+		attempt.NextDue = nextAccountProbeDue(a, current[resolvedUnitKey(a, poolKeys)] == a.AccountKey, attempt.LastAttempt)
 		if attempt.LastSuccess.IsZero() {
 			st.health.ProbeFailures++
 			attempt.LastSuccess = st.schedules[a.AccountKey].LastSuccess
@@ -1896,17 +2007,17 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 	accounts = applyLastGoodWindows(cloneAccounts(accounts), previous)
 	attempts := make(map[string]probeSchedule)
 	indices := make([]int, 0, maxProbeJobs)
-	modelOnlyIndices := make([]int, 0, len(accounts))
+	modelRefreshIndices := make([]int, 0, len(accounts))
 	seen := make(map[string]bool)
 	for i, a := range accounts {
 		if !probeEligible(a) || seen[a.AccountKey] {
 			continue
 		}
 		seen[a.AccountKey] = true
+		if modelCatalogNeedsRefresh(a, force) {
+			modelRefreshIndices = append(modelRefreshIndices, i)
+		}
 		if !force && now().Before(due[a.AccountKey]) {
-			if modelCatalogNeedsRefresh(a, false) {
-				modelOnlyIndices = append(modelOnlyIndices, i)
-			}
 			continue
 		}
 		if len(indices) == maxProbeJobs {
@@ -1914,6 +2025,56 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 			continue
 		}
 		indices = append(indices, i)
+	}
+	// Pre-refresh local loopback /management/auth-files/models catalogs BEFORE
+	// onBaseline and upstream quota probes so every account in the snapshot has
+	// its synchronized, hysteresis-stabilized model set with zero mid-batch
+	// pool merging/splitting.
+	if client != nil && len(modelRefreshIndices) > 0 && ctx.Err() == nil {
+		prePassCtx, prePassCancel := context.WithTimeout(ctx, modelCatalogPrePassTimeout)
+		modelJobs := make(chan int)
+		var mwg sync.WaitGroup
+		workers := collectionWorkers
+		if len(modelRefreshIndices) < workers {
+			workers = len(modelRefreshIndices)
+		}
+		for worker := 0; worker < workers; worker++ {
+			mwg.Add(1)
+			go func() {
+				defer mwg.Done()
+				for {
+					select {
+					case <-prePassCtx.Done():
+						return
+					case i, ok := <-modelJobs:
+						if !ok || prePassCtx.Err() != nil {
+							return
+						}
+						func() {
+							defer recoverLog("model catalog worker")
+							a := &accounts[i]
+							mCtx, mCancel := context.WithTimeout(prePassCtx, modelCatalogCallTimeout)
+							defer mCancel()
+							if models, mErr := client.FetchAuthFileModels(mCtx, *a); mErr == nil && len(models) > 0 {
+								mergeAccountModelPool(a, models)
+								a.ModelTierCheckedAt = now()
+							}
+						}()
+					}
+				}
+			}()
+		}
+	enqueueModels:
+		for _, i := range modelRefreshIndices {
+			select {
+			case <-prePassCtx.Done():
+				break enqueueModels
+			case modelJobs <- i:
+			}
+		}
+		close(modelJobs)
+		mwg.Wait()
+		prePassCancel()
 	}
 	if onBaseline != nil {
 		onBaseline(cloneAccounts(accounts), len(indices))
@@ -1935,12 +2096,6 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 		var claudeAbsent []string
 		var err error
 		pLower := strings.ToLower(strings.TrimSpace(a.Provider))
-		if modelCatalogNeedsRefresh(*a, force) {
-			if models, mErr := client.FetchAuthFileModels(probeCtx, *a); mErr == nil && len(models) > 0 {
-				mergeAccountModelPool(a, models)
-				a.ModelTierCheckedAt = now()
-			}
-		}
 		if pLower == "codex" {
 			var plan string
 			var api *quotamonitor.APICredits
@@ -2085,53 +2240,6 @@ enqueue:
 	}
 	close(jobs)
 	wg.Wait()
-	// Refresh local loopback model catalogs for non-due accounts whose model
-	// set is missing (e.g. host async discovery was still pending on startup)
-	// or past the short local cache TTL, without touching upstream quota due times.
-	if len(modelOnlyIndices) > 0 && ctx.Err() == nil {
-		modelJobs := make(chan int)
-		var mwg sync.WaitGroup
-		workers := collectionWorkers
-		if len(modelOnlyIndices) < workers {
-			workers = len(modelOnlyIndices)
-		}
-		for worker := 0; worker < workers; worker++ {
-			mwg.Add(1)
-			go func() {
-				defer mwg.Done()
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case i, ok := <-modelJobs:
-						if !ok || ctx.Err() != nil {
-							return
-						}
-						func() {
-							defer recoverLog("model catalog worker")
-							a := &accounts[i]
-							mCtx, mCancel := context.WithTimeout(ctx, fetchTimeout)
-							defer mCancel()
-							if models, mErr := client.FetchAuthFileModels(mCtx, *a); mErr == nil && len(models) > 0 {
-								mergeAccountModelPool(a, models)
-								a.ModelTierCheckedAt = now()
-							}
-						}()
-					}
-				}
-			}()
-		}
-	enqueueModels:
-		for _, i := range modelOnlyIndices {
-			select {
-			case <-ctx.Done():
-				break enqueueModels
-			case modelJobs <- i:
-			}
-		}
-		close(modelJobs)
-		mwg.Wait()
-	}
 	if ctx.Err() != nil {
 		truncated = true
 	}
@@ -2193,6 +2301,8 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 				}
 				if len(p.Models) > 0 && len(a.Models) == 0 {
 					a.Models = append([]string(nil), p.Models...)
+					a.PendingModelsSig = p.PendingModelsSig
+					a.PendingModelsStreak = p.PendingModelsStreak
 					if a.ModelTierCheckedAt.IsZero() {
 						a.ModelTierCheckedAt = p.ModelTierCheckedAt
 					}
@@ -2246,6 +2356,8 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 			}
 			if len(a.Models) == 0 && len(p.Models) > 0 {
 				a.Models = append([]string(nil), p.Models...)
+				a.PendingModelsSig = p.PendingModelsSig
+				a.PendingModelsStreak = p.PendingModelsStreak
 				if a.ModelTierCheckedAt.IsZero() {
 					a.ModelTierCheckedAt = p.ModelTierCheckedAt
 				}

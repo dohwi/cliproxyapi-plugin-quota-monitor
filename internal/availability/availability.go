@@ -92,13 +92,18 @@ func windowRemaining(w quotamonitor.QuotaWindow) (float64, bool) {
 	return 0, false
 }
 
+func accountIsDisabled(a quotamonitor.AccountQuota) bool {
+	op := a.Operational
+	return op != nil && ((op.Disabled != nil && *op.Disabled) || strings.EqualFold(strings.TrimSpace(op.Status), "disabled"))
+}
+
 // accountCountsTowardAvailability keeps exhausted-but-unavailable accounts in the
 // denominator as 0% instead of silently dropping them; disabled accounts never count.
 func accountCountsTowardAvailability(a quotamonitor.AccountQuota, windows []quotamonitor.QuotaWindow) bool {
-	op := a.Operational
-	if op != nil && ((op.Disabled != nil && *op.Disabled) || strings.EqualFold(strings.TrimSpace(op.Status), "disabled")) {
+	if accountIsDisabled(a) {
 		return false
 	}
+	op := a.Operational
 	if (op != nil && op.Unavailable != nil && *op.Unavailable) || a.Status == quotamonitor.StatusError {
 		for _, w := range windows {
 			if remaining, known := windowRemaining(w); known && remaining == 0 {
@@ -340,10 +345,11 @@ type modelPool struct {
 	exactModelCount int
 	isLite          bool
 	bestRank        int
-	accounts        []quotamonitor.AccountQuota
+	accounts        []quotamonitor.AccountQuota // contributing accounts for availability math
+	allAccounts     []quotamonitor.AccountQuota // all non-disabled accounts in this pool (for stable topology/labels)
 }
 
-func accountModelPoolMeta(provName string, a quotamonitor.AccountQuota) (sig string, sortCount, exactCount int, isLite bool) {
+func accountModelPoolMeta(provName string, a quotamonitor.AccountQuota) (sig string, sortCount, exactCount int, isLite bool, exact bool) {
 	norm := quotamonitor.NormalizeModelList(a.Models)
 	if provName == "antigravity" {
 		if len(norm) > 0 {
@@ -353,62 +359,112 @@ func accountModelPoolMeta(provName string, a quotamonitor.AccountQuota) (sig str
 		}
 	}
 	if len(norm) > 0 {
-		return quotamonitor.ModelSetSignature(norm), len(norm), len(norm), isLite
+		return quotamonitor.ModelSetSignature(norm), len(norm), len(norm), isLite, true
 	}
 	if provName == "antigravity" {
 		switch quotamonitor.NormalizeAntigravityTier(a.ModelTier) {
 		case quotamonitor.AntigravityTierFull:
-			return "ag:full", 1000, 0, false
+			return "ag:full", 1000, 0, false, false
 		case quotamonitor.AntigravityTierLite:
-			return "ag:lite", 1, 0, true
+			return "ag:lite", 1, 0, true, false
 		}
 	}
-	return "", 0, 0, isLite
+	return "", 0, 0, isLite, false
 }
 
-// partitionProviderPools groups contributing accounts of one provider by their
-// normalized offered model list. When every account offers the same model set
-// (or model catalogs are unknown), a single unified pool is returned. When
-// accounts span 2+ distinct model sets, each distinct set becomes its own pool,
-// ordered richest/highest-tier first.
+// partitionProviderPools derives stable model-set pool topology across all
+// non-disabled accounts of a provider, then populates each pool's contributing
+// subset via contributes(a). Using the non-disabled fleet for topology prevents
+// a single pool's transient probe failure from collapsing split keys/labels back
+// into a merged pool, and avoids creating synthetic "ag:full"/"ag:lite" pools
+// alongside exact model-set pools.
 func partitionProviderPools(accounts []quotamonitor.AccountQuota, provName string, contributes func(quotamonitor.AccountQuota) bool) ([]modelPool, bool) {
-	bySig := make(map[string]*modelPool)
-	var unknown []quotamonitor.AccountQuota
-	var all []quotamonitor.AccountQuota
+	type taggedAccount struct {
+		acc      quotamonitor.AccountQuota
+		contrib  bool
+		sig      string
+		sortCnt  int
+		exactCnt int
+		isLite   bool
+		exact    bool
+	}
+	var fleet []taggedAccount
+	hasExactFull := false
+	hasExactLite := false
+	hasAnyContrib := false
 	for _, a := range accounts {
 		if !strings.EqualFold(strings.TrimSpace(a.Provider), provName) {
 			continue
 		}
-		if !contributes(a) {
+		if accountIsDisabled(a) {
 			continue
 		}
-		all = append(all, a)
-		sig, sortCnt, exactCnt, isLite := accountModelPoolMeta(provName, a)
-		if sig == "" {
-			unknown = append(unknown, a)
-			continue
+		c := contributes(a)
+		if c {
+			hasAnyContrib = true
 		}
-		p := bySig[sig]
-		rank := tierInfo(provName, quotamonitor.NormalizePlanType(a.Provider, a.PlanType)).rank
-		if p == nil {
-			p = &modelPool{sig: sig, sortModelCount: sortCnt, exactModelCount: exactCnt, isLite: isLite, bestRank: rank}
-			bySig[sig] = p
-		} else {
-			if sortCnt > p.sortModelCount {
-				p.sortModelCount = sortCnt
+		sig, sortCnt, exactCnt, isLite, exact := accountModelPoolMeta(provName, a)
+		if exact {
+			if isLite {
+				hasExactLite = true
+			} else {
+				hasExactFull = true
 			}
-			if exactCnt > p.exactModelCount {
-				p.exactModelCount = exactCnt
+		}
+		fleet = append(fleet, taggedAccount{
+			acc: a, contrib: c, sig: sig, sortCnt: sortCnt, exactCnt: exactCnt, isLite: isLite, exact: exact,
+		})
+	}
+	if !hasAnyContrib {
+		return nil, false
+	}
+
+	bySig := make(map[string]*modelPool)
+	var tierAttach []taggedAccount
+	var unknown []taggedAccount
+	var allContrib []quotamonitor.AccountQuota
+	var allFleet []quotamonitor.AccountQuota
+
+	for _, item := range fleet {
+		allFleet = append(allFleet, item.acc)
+		if item.contrib {
+			allContrib = append(allContrib, item.acc)
+		}
+		if item.sig == "" {
+			unknown = append(unknown, item)
+			continue
+		}
+		// Never create a phantom synthetic "ag:full"/"ag:lite" pool when an exact
+		// model-set pool of the same lite/full class already exists in the fleet.
+		if !item.exact && provName == "antigravity" && ((item.isLite && hasExactLite) || (!item.isLite && hasExactFull)) {
+			tierAttach = append(tierAttach, item)
+			continue
+		}
+		p := bySig[item.sig]
+		rank := tierInfo(provName, quotamonitor.NormalizePlanType(item.acc.Provider, item.acc.PlanType)).rank
+		if p == nil {
+			p = &modelPool{
+				sig: item.sig, sortModelCount: item.sortCnt, exactModelCount: item.exactCnt,
+				isLite: item.isLite, bestRank: rank,
+			}
+			bySig[item.sig] = p
+		} else {
+			if item.sortCnt > p.sortModelCount {
+				p.sortModelCount = item.sortCnt
+			}
+			if item.exactCnt > p.exactModelCount {
+				p.exactModelCount = item.exactCnt
 			}
 			if rank < p.bestRank {
 				p.bestRank = rank
 			}
 		}
-		p.accounts = append(p.accounts, a)
+		p.allAccounts = append(p.allAccounts, item.acc)
+		if item.contrib {
+			p.accounts = append(p.accounts, item.acc)
+		}
 	}
-	if len(all) == 0 {
-		return nil, false
-	}
+
 	if len(bySig) <= 1 {
 		isLite := false
 		sortModelCount := 0
@@ -420,8 +476,12 @@ func partitionProviderPools(accounts []quotamonitor.AccountQuota, provName strin
 			exactModelCount = p.exactModelCount
 			sig = p.sig
 		}
-		return []modelPool{{sig: sig, sortModelCount: sortModelCount, exactModelCount: exactModelCount, isLite: isLite, accounts: all}}, false
+		return []modelPool{{
+			sig: sig, sortModelCount: sortModelCount, exactModelCount: exactModelCount,
+			isLite: isLite, accounts: allContrib, allAccounts: allFleet,
+		}}, false
 	}
+
 	pools := make([]modelPool, 0, len(bySig))
 	for _, p := range bySig {
 		pools = append(pools, *p)
@@ -436,15 +496,72 @@ func partitionProviderPools(accounts []quotamonitor.AccountQuota, provName strin
 		if pools[i].bestRank != pools[j].bestRank {
 			return pools[i].bestRank < pools[j].bestRank
 		}
-		if len(pools[i].accounts) != len(pools[j].accounts) {
-			return len(pools[i].accounts) > len(pools[j].accounts)
+		if len(pools[i].allAccounts) != len(pools[j].allAccounts) {
+			return len(pools[i].allAccounts) > len(pools[j].allAccounts)
 		}
 		return pools[i].sig < pools[j].sig
 	})
-	if len(unknown) > 0 {
-		pools[0].accounts = append(pools[0].accounts, unknown...)
+	for _, item := range tierAttach {
+		target := 0
+		for idx := range pools {
+			if pools[idx].isLite == item.isLite {
+				target = idx
+				break
+			}
+		}
+		pools[target].allAccounts = append(pools[target].allAccounts, item.acc)
+		if item.contrib {
+			pools[target].accounts = append(pools[target].accounts, item.acc)
+		}
+	}
+	for _, item := range unknown {
+		pools[0].allAccounts = append(pools[0].allAccounts, item.acc)
+		if item.contrib {
+			pools[0].accounts = append(pools[0].accounts, item.acc)
+		}
 	}
 	return pools, true
+}
+
+// AccountPoolKeys maps each account's AccountKey to its canonical provider+pool
+// unit key using the exact same non-disabled pool topology as Compute. Two
+// accounts placed in the same displayed availability pool always share the same
+// unit key (even when one falls back via tierAttach or unknown), while distinct
+// model pools get distinct unit keys so each pool can highlight its own active
+// account.
+func AccountPoolKeys(accounts []quotamonitor.AccountQuota) map[string]string {
+	keys := make(map[string]string, len(accounts))
+	seenProv := make(map[string]bool)
+	for _, a := range accounts {
+		prov := strings.ToLower(strings.TrimSpace(a.Provider))
+		if prov == "" || seenProv[prov] {
+			continue
+		}
+		seenProv[prov] = true
+		pools, split := partitionProviderPools(accounts, prov, func(quotamonitor.AccountQuota) bool { return true })
+		if !split {
+			for _, p := range pools {
+				for _, acc := range p.allAccounts {
+					if acc.AccountKey != "" {
+						keys[acc.AccountKey] = prov
+					}
+				}
+			}
+			continue
+		}
+		for _, p := range pools {
+			unitKey := prov
+			if p.sig != "" {
+				unitKey = prov + ":" + p.sig
+			}
+			for _, acc := range p.allAccounts {
+				if acc.AccountKey != "" {
+					keys[acc.AccountKey] = unitKey
+				}
+			}
+		}
+	}
+	return keys
 }
 
 func poolTierTag(provName string, accounts []quotamonitor.AccountQuota, isLitePool bool) string {
@@ -503,7 +620,11 @@ func disambiguatePoolTags(provName string, pools []modelPool) ([]string, []bool)
 	disambiguated := make([]bool, len(pools))
 	tagCounts := make(map[string]int, len(pools))
 	for i, p := range pools {
-		baseTags[i] = poolTierTag(provName, p.accounts, p.isLite)
+		tagAccs := p.allAccounts
+		if len(tagAccs) == 0 {
+			tagAccs = p.accounts
+		}
+		baseTags[i] = poolTierTag(provName, tagAccs, p.isLite)
 		tags[i] = baseTags[i]
 		tagCounts[baseTags[i]]++
 	}
