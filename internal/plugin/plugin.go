@@ -866,9 +866,10 @@ type safeAccount struct {
 	// Endpoint is "direct", "unknown", or a sanitized single-label proxy
 	// hostname (e.g. a Docker service name such as "warp1"). URLs, ports,
 	// credentials, IPs and dotted/FQDN hosts are never included.
-	Endpoint  quotamonitor.EndpointKind `json:"endpoint"`
-	PlanType  string                    `json:"plan_type,omitempty"`
-	ModelTier string                    `json:"model_tier,omitempty"`
+	Endpoint   quotamonitor.EndpointKind `json:"endpoint"`
+	PlanType   string                    `json:"plan_type,omitempty"`
+	ModelTier  string                    `json:"model_tier,omitempty"`
+	ModelCount int                       `json:"model_count,omitempty"`
 	// CurrentAccount marks the single most-recently-used account per provider
 	// unit (with Antigravity split by model_tier) based on the latest audited
 	// token usage within currentAccountWindow.
@@ -894,7 +895,10 @@ func sanitizeModelTier(provider, raw string) string {
 
 const (
 	antigravityTier4DemoteThreshold = 3
-	antigravityModelPoolCacheTTL    = 30 * time.Minute
+	// /management/auth-files/models is a local loopback registry lookup with no
+	// upstream provider call; refresh every collection window so asynchronous
+	// host capability probes (e.g. Antigravity startup discovery) split pools promptly.
+	antigravityModelPoolCacheTTL = 2 * time.Minute
 )
 
 // mergeAntigravityModelTier updates an Antigravity account's model pool while
@@ -1111,6 +1115,7 @@ func sanitizeAccountsWithSelection(in []quotamonitor.AccountQuota, currentByProv
 			Endpoint:         a.Endpoint,
 			PlanType:         sanitizePlanType(a.Provider, a.PlanType),
 			ModelTier:        sanitizeModelTier(a.Provider, a.ModelTier),
+			ModelCount:       len(quotamonitor.NormalizeModelList(a.Models)),
 			APICredits:       a.APICredits,
 			ResetCredits:     a.ResetCredits,
 		}
@@ -1873,6 +1878,16 @@ func probeAccounts(ctx context.Context, client *quotamonitor.Client, accounts, p
 	return probeAccountsProgressive(ctx, client, accounts, previous, due, force, nil, nil)
 }
 
+func modelCatalogNeedsRefresh(a quotamonitor.AccountQuota, force bool) bool {
+	if !probeEligible(a) {
+		return false
+	}
+	if force || len(a.Models) == 0 || a.ModelTierCheckedAt.IsZero() {
+		return true
+	}
+	return now().Sub(a.ModelTierCheckedAt) >= antigravityModelPoolCacheTTL
+}
+
 func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, accounts, previous []quotamonitor.AccountQuota, due map[string]time.Time, force bool, onBaseline func([]quotamonitor.AccountQuota, int), onAccount func(quotamonitor.AccountQuota)) ([]quotamonitor.AccountQuota, map[string]probeSchedule, bool) {
 	truncated := len(accounts) > maxCollectionAccounts
 	if truncated {
@@ -1881,12 +1896,19 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 	accounts = applyLastGoodWindows(cloneAccounts(accounts), previous)
 	attempts := make(map[string]probeSchedule)
 	indices := make([]int, 0, maxProbeJobs)
+	modelOnlyIndices := make([]int, 0, len(accounts))
 	seen := make(map[string]bool)
 	for i, a := range accounts {
-		if !probeEligible(a) || seen[a.AccountKey] || (!force && now().Before(due[a.AccountKey])) {
+		if !probeEligible(a) || seen[a.AccountKey] {
 			continue
 		}
 		seen[a.AccountKey] = true
+		if !force && now().Before(due[a.AccountKey]) {
+			if modelCatalogNeedsRefresh(a, false) {
+				modelOnlyIndices = append(modelOnlyIndices, i)
+			}
+			continue
+		}
 		if len(indices) == maxProbeJobs {
 			truncated = true
 			continue
@@ -1913,15 +1935,10 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 		var claudeAbsent []string
 		var err error
 		pLower := strings.ToLower(strings.TrimSpace(a.Provider))
-		if pLower == "antigravity" || pLower == "codex" || pLower == "claude" {
-			modelPoolStale := (len(a.Models) == 0 && (pLower != "antigravity" || a.ModelTier == "")) ||
-				a.ModelTierCheckedAt.IsZero() ||
-				now().Sub(a.ModelTierCheckedAt) >= antigravityModelPoolCacheTTL
-			if force || modelPoolStale {
-				if models, mErr := client.FetchAuthFileModels(probeCtx, *a); mErr == nil && len(models) > 0 {
-					mergeAccountModelPool(a, models)
-					a.ModelTierCheckedAt = now()
-				}
+		if modelCatalogNeedsRefresh(*a, force) {
+			if models, mErr := client.FetchAuthFileModels(probeCtx, *a); mErr == nil && len(models) > 0 {
+				mergeAccountModelPool(a, models)
+				a.ModelTierCheckedAt = now()
 			}
 		}
 		if pLower == "codex" {
@@ -2068,6 +2085,53 @@ enqueue:
 	}
 	close(jobs)
 	wg.Wait()
+	// Refresh local loopback model catalogs for non-due accounts whose model
+	// set is missing (e.g. host async discovery was still pending on startup)
+	// or past the short local cache TTL, without touching upstream quota due times.
+	if len(modelOnlyIndices) > 0 && ctx.Err() == nil {
+		modelJobs := make(chan int)
+		var mwg sync.WaitGroup
+		workers := collectionWorkers
+		if len(modelOnlyIndices) < workers {
+			workers = len(modelOnlyIndices)
+		}
+		for worker := 0; worker < workers; worker++ {
+			mwg.Add(1)
+			go func() {
+				defer mwg.Done()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case i, ok := <-modelJobs:
+						if !ok || ctx.Err() != nil {
+							return
+						}
+						func() {
+							defer recoverLog("model catalog worker")
+							a := &accounts[i]
+							mCtx, mCancel := context.WithTimeout(ctx, fetchTimeout)
+							defer mCancel()
+							if models, mErr := client.FetchAuthFileModels(mCtx, *a); mErr == nil && len(models) > 0 {
+								mergeAccountModelPool(a, models)
+								a.ModelTierCheckedAt = now()
+							}
+						}()
+					}
+				}
+			}()
+		}
+	enqueueModels:
+		for _, i := range modelOnlyIndices {
+			select {
+			case <-ctx.Done():
+				break enqueueModels
+			case modelJobs <- i:
+			}
+		}
+		close(modelJobs)
+		mwg.Wait()
+	}
 	if ctx.Err() != nil {
 		truncated = true
 	}
@@ -2632,6 +2696,7 @@ func cloneAccounts(in []quotamonitor.AccountQuota) []quotamonitor.AccountQuota {
 		a.RetryAfter = clonePtr(a.RetryAfter)
 		a.Credits, a.RawSignals = cloneStringMap(a.Credits), cloneStringMap(a.RawSignals)
 		a.ClaudeAbsentWindows = slices.Clone(a.ClaudeAbsentWindows)
+		a.Models = slices.Clone(a.Models)
 		if a.Windows != nil {
 			a.Windows = append([]quotamonitor.QuotaWindow{}, a.Windows...)
 			for j := range a.Windows {

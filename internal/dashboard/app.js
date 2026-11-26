@@ -2236,10 +2236,18 @@ function formatFleetTiers(tiers) {
     if (rem === null) continue;
     var lbl = String(tr.label || tr.tier || '').trim();
     if (!lbl) continue;
+    var meta = [];
+    var accCount = Number(tr.accounts);
+    if (isFinite(accCount) && accCount > 0) meta.push(t('fleet.chipCount', { n: Math.round(accCount) }));
     var winText = formatFleetWindows(tr);
-    parts.push(lbl + ' ' + fmtFleetPercent(rem) + (winText ? ' (' + winText + ')' : ''));
+    if (winText) meta.push(winText);
+    parts.push(lbl + ' ' + fmtFleetPercent(rem) + (meta.length ? ' (' + meta.join(' · ') + ')' : ''));
   }
   return parts.join(' · ');
+}
+function extractAgyPoolTag(label) {
+  var m = /^AGY\s*\((.+)\)\s*·/.exec(String(label || ''));
+  return (m && m[1]) ? m[1].trim() : '';
 }
 function renderFleetAvailability(entries) {
   var el = document.getElementById('fleetAvailability');
@@ -2279,18 +2287,26 @@ function renderFleetAvailability(entries) {
       var agy = agyChips[agyGroup];
       if (!agy) {
         var chipLabel = agyGroup;
+        var poolTag = extractAgyPoolTag(e.label);
         if (agyGroup === 'agy_full') {
-          chipLabel = (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label)
-            ? ('AGY · ' + String(e.tiers[0].label))
-            : 'AGY';
+          if (poolTag) {
+            chipLabel = 'AGY · ' + poolTag;
+          } else {
+            chipLabel = (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label)
+              ? ('AGY · ' + String(e.tiers[0].label))
+              : 'AGY';
+          }
         } else if (agyGroup === 'agy_limited') {
-          chipLabel = (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label)
-            ? ('AGY · ' + String(e.tiers[0].label))
-            : 'AGY · Trial/Free';
+          if (poolTag) {
+            chipLabel = 'AGY · ' + poolTag;
+          } else {
+            chipLabel = (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label)
+              ? ('AGY · ' + String(e.tiers[0].label))
+              : 'AGY · Trial/Free';
+          }
         } else if (agyGroup.indexOf('antigravity_pool_') === 0) {
-          var mPool = /^AGY\s*\(([^)]+)\)/.exec(String(e.label || ''));
-          if (mPool && mPool[1]) {
-            chipLabel = 'AGY · ' + mPool[1].trim();
+          if (poolTag) {
+            chipLabel = 'AGY · ' + poolTag;
           } else if (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label) {
             chipLabel = 'AGY · ' + String(e.tiers[0].label);
           } else {

@@ -2288,4 +2288,25 @@ func TestFetchAuthFileModelsAndTier(t *testing.T) {
 	} else if ae, ok := err.(*APICallError); !ok || ae.Kind != "auth" {
 		t.Fatalf("want APICallError{Kind:auth}, got %#v", err)
 	}
+
+	// CLIProxyAPI v8.1.0 native Claude 5 model IDs classify as full, while
+	// gemini-4-hydrogen-xhigh alone stays lite.
+	if got := ClassifyAntigravityModels([]string{"gemini-3.8-flash-high", "claude-opus-5-5-high"}); got != AntigravityTierFull {
+		t.Fatalf("claude-opus-5-5-high tier = %q, want %q", got, AntigravityTierFull)
+	}
+	if got := ClassifyAntigravityModels([]string{"gemini-3.8-flash-high", "claude-sonnet-5-5-high"}); got != AntigravityTierFull {
+		t.Fatalf("claude-sonnet-5-5-high tier = %q, want %q", got, AntigravityTierFull)
+	}
+	if got := ClassifyAntigravityModels([]string{"gemini-3.8-flash-high", "gemini-4-hydrogen-xhigh", "claude-opus-4-6-thinking"}); got != AntigravityTierLite {
+		t.Fatalf("hydrogen-only tier = %q, want %q", got, AntigravityTierLite)
+	}
+
+	// ParseAuthFilesJSON falls back authFileName to entry.ID when entry.Name is empty.
+	parsed, err := NewAdapter().ParseAuthFilesJSON([]byte(`{"files":[{"id":"antigravity-ultra@example.com.json","provider":"antigravity","auth_index":"9","account":"u@example.com"}]}`))
+	if err != nil || len(parsed) != 1 {
+		t.Fatalf("ParseAuthFilesJSON failed: len=%d err=%v", len(parsed), err)
+	}
+	if tier, err := client.FetchAntigravityModelTier(context.Background(), parsed[0]); err != nil || tier != AntigravityTierFull {
+		t.Fatalf("ID fallback FetchAntigravityModelTier = %q, err = %v, want %q", tier, err, AntigravityTierFull)
+	}
 }

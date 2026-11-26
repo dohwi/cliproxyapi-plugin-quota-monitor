@@ -502,4 +502,56 @@ func TestComputeDynamicModelSetSplitAndMerge(t *testing.T) {
 	if ag3[4].Key != "antigravity_lite_gemini" || ag3[5].Key != "antigravity_lite_claude" {
 		t.Fatalf("ag3 lite keys = %q, %q", ag3[4].Key, ag3[5].Key)
 	}
+	if ag3[0].ModelCount != 4 || ag3[2].ModelCount != 3 || ag3[4].ModelCount != 2 {
+		t.Fatalf("ag3 model counts = [%d, %d, %d], want [4, 3, 2]", ag3[0].ModelCount, ag3[2].ModelCount, ag3[4].ModelCount)
+	}
+
+	// 6. Antigravity pools with identical tier mix (Ultra+Pro in both) disambiguate BOTH Pool 0 and Pool 1 by model count.
+	agSameTiers := Compute([]quotamonitor.AccountQuota{
+		{Provider: "antigravity", PlanType: "ultra", Models: []string{"gemini-4-argon-high", "gemini-4-carbon-high", "gemini-4-neon-xhigh", "claude-opus-5-5-high"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 98), availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100)}},
+		{Provider: "antigravity", PlanType: "pro", Models: []string{"gemini-4-argon-high", "gemini-4-carbon-high", "gemini-4-neon-xhigh", "claude-opus-5-5-high"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 92), availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 100)}},
+		{Provider: "antigravity", PlanType: "ultra", Models: []string{"gemini-4-argon-high", "gemini-4-hydrogen-xhigh", "claude-sonnet-5-5-high"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 70), availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 80)}},
+		{Provider: "antigravity", PlanType: "pro", Models: []string{"gemini-4-argon-high", "gemini-4-hydrogen-xhigh", "claude-sonnet-5-5-high"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 60), availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 50)}},
+	})
+	if len(agSameTiers) != 4 {
+		t.Fatalf("expected 4 AG entries (2 pools x 2 families), got %d: %+v", len(agSameTiers), agSameTiers)
+	}
+	if agSameTiers[0].Key != "antigravity_gemini" || agSameTiers[0].Label != "AGY (AI Ultra/AI Pro (4)) · Gemini" || agSameTiers[0].ModelCount != 4 || agSameTiers[0].Accounts != 2 {
+		t.Fatalf("agSameTiers pool[0] gemini = %+v", agSameTiers[0])
+	}
+	if !strings.HasPrefix(agSameTiers[2].Key, "antigravity_pool_") || agSameTiers[2].Label != "AGY (AI Ultra/AI Pro (3)) · Gemini" || agSameTiers[2].ModelCount != 3 || agSameTiers[2].Accounts != 2 {
+		t.Fatalf("agSameTiers pool[1] gemini = %+v", agSameTiers[2])
+	}
+
+	// 7. ModelTier-only fallback must NOT emit a synthetic ModelCount (e.g. 1000).
+	tierOnly := Compute([]quotamonitor.AccountQuota{
+		{Provider: "antigravity", PlanType: "ultra", ModelTier: "full", Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 90)}},
+		{Provider: "antigravity", PlanType: "pro", ModelTier: "lite", Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 50)}},
+	})
+	for _, e := range tierOnly {
+		if e.ModelCount != 0 {
+			t.Fatalf("tier-only entry %q leaked synthetic ModelCount=%d", e.Key, e.ModelCount)
+		}
+	}
+
+	// 8. Two all-Lite Antigravity pools with distinct model sets must label Pool 0 explicitly instead of bare "AGY · Gemini".
+	agAllLite := Compute([]quotamonitor.AccountQuota{
+		{Provider: "antigravity", PlanType: "pro", Models: []string{"gemini-3.8-flash-high", "gemini-4-hydrogen-xhigh", "claude-opus-4-6-thinking"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 80)}},
+		{Provider: "antigravity", PlanType: "free", Models: []string{"gemini-3.8-flash-high", "gemini-4-hydrogen-xhigh"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 40)}},
+	})
+	if len(agAllLite) != 2 {
+		t.Fatalf("expected 2 all-Lite AG entries, got %d: %+v", len(agAllLite), agAllLite)
+	}
+	if agAllLite[0].Label != "AGY (AI Pro Trial) · Gemini" || agAllLite[0].Short != "AGT" || agAllLite[0].ModelCount != 3 {
+		t.Fatalf("agAllLite[0] = %+v", agAllLite[0])
+	}
+	if agAllLite[1].Label != "AGY (Free) · Gemini" || agAllLite[1].Short != "AGT" || agAllLite[1].ModelCount != 2 {
+		t.Fatalf("agAllLite[1] = %+v", agAllLite[1])
+	}
 }

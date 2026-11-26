@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"quota-monitor/internal/availability"
 	quotamonitor "quota-monitor/internal/quota"
 )
 
@@ -271,6 +272,18 @@ assert(fleetHTML.includes('>AGY (3.8)<'), 'missing AGY (3.8) fleet chip: ' + fle
 assert(fleetHTML.includes('99.3%') && fleetHTML.includes('100%'), 'missing AGY (4) percentages');
 assert(fleetHTML.includes('98.9%') && fleetHTML.includes('0%'), 'missing AGY (3.8) percentages');
 
+// 1b. Fleet availability preserves nested parentheses on disambiguated AGY pool labels (Pool 0 and Pool 1) and shows tier counts in tooltip.
+ctx.renderFleetAvailability([
+  { key: 'antigravity_gemini', label: 'AGY (AI Ultra/AI Pro (15)) · Gemini', remaining_percent: 97, accounts: 5, model_count: 15, tiers: [{ tier: 'ultra', label: 'AI Ultra', remaining_percent: 98, accounts: 2 }, { tier: 'pro', label: 'AI Pro', remaining_percent: 95, accounts: 3 }] },
+  { key: 'antigravity_claude', label: 'AGY (AI Ultra/AI Pro (15)) · Claude/GPT', remaining_percent: 100, accounts: 5, model_count: 15 },
+  { key: 'antigravity_pool_deadbeef_gemini', label: 'AGY (AI Ultra/AI Pro (12)) · Gemini', remaining_percent: 70, accounts: 2, model_count: 12 },
+  { key: 'antigravity_pool_deadbeef_claude', label: 'AGY (AI Ultra/AI Pro (12)) · Claude/GPT', remaining_percent: 80, accounts: 2, model_count: 12 },
+]);
+const nestedHTML = byId.fleetAvailability.innerHTML;
+assert(nestedHTML.includes('>AGY · AI Ultra/AI Pro (15)<'), 'Pool 0 nested-paren label broken: ' + nestedHTML);
+assert(nestedHTML.includes('>AGY · AI Ultra/AI Pro (12)<'), 'Pool 1 nested-paren label broken: ' + nestedHTML);
+assert(nestedHTML.includes('AI Ultra 98% (2개)'), 'tier tooltip missing account count: ' + nestedHTML);
+
 // 2. Provider filter lists antigravity as a single unified provider unit.
 const accs = [
   { account_key: 'k-cl', provider: 'claude', account: 'c@x', status: 'known', endpoint: 'direct', windows: [{ name: 'five-hour', remaining_percent: 50 }] },
@@ -316,5 +329,83 @@ console.log('OK_AGY_TIER_SPLIT');
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "OK_AGY_TIER_SPLIT") {
 		t.Fatalf("dashboard AGY tier split contract failed: %v\n%s", err, out)
+	}
+}
+
+func TestAntigravityStartupEmptyModelsRecoversBeforeQuotaDue(t *testing.T) {
+	reset(t)
+	var modelsReady atomic.Bool
+	var apiCalls atomic.Int32
+	var modelCalls atomic.Int32
+	configureTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/management/auth-files":
+			_, _ = w.Write([]byte(`{"files":[
+				{"name":"ag-ultra.json","provider":"antigravity","auth_index":"1","account":"ultra@example.com"},
+				{"name":"ag-pro.json","provider":"antigravity","auth_index":"2","account":"pro@example.com"},
+				{"name":"ag-disabled.json","provider":"antigravity","auth_index":"3","account":"off@example.com","disabled":true}
+			]}`))
+		case "/management/auth-files/models":
+			modelCalls.Add(1)
+			if !modelsReady.Load() {
+				_, _ = w.Write([]byte(`{"models":[]}`))
+				return
+			}
+			switch r.URL.Query().Get("name") {
+			case "ag-ultra.json":
+				_, _ = w.Write([]byte(`{"models":[{"id":"gemini-4-argon-high"},{"id":"gemini-4-carbon-high"},{"id":"claude-opus-5-5-high"}]}`))
+			case "ag-pro.json":
+				_, _ = w.Write([]byte(`{"models":[{"id":"gemini-3.8-flash-high"},{"id":"gemini-4-hydrogen-xhigh"}]}`))
+			default:
+				t.Errorf("unexpected models lookup for %q (disabled account must not be queried)", r.URL.Query().Get("name"))
+				w.WriteHeader(http.StatusNotFound)
+			}
+		case "/management/api-call":
+			apiCalls.Add(1)
+			_, _ = w.Write([]byte(`{"status_code":200,"body":"{\"groups\":[{\"displayName\":\"Gemini Models\",\"buckets\":[{\"displayName\":\"Five Hour Limit Remaining\",\"bucketId\":\"gemini-5h\",\"window\":\"5h\",\"remainingFraction\":0.95}]},{\"displayName\":\"Claude and GPT models\",\"buckets\":[{\"displayName\":\"Five Hour Limit Remaining\",\"bucketId\":\"3p-5h\",\"window\":\"5h\",\"remainingFraction\":0.8}]}]}"}`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+
+	// 1. Initial collection right after host startup: CLIProxyAPI async model discovery
+	// has not finished yet, so /management/auth-files/models returns [].
+	first := collectAccounts(context.Background(), false)
+	if first.err != nil || len(first.accounts) != 3 {
+		t.Fatalf("first collect: len=%d err=%v", len(first.accounts), first.err)
+	}
+	avail1 := availability.Compute(first.accounts)
+	if len(avail1) != 2 {
+		t.Fatalf("expected 2 merged entries before models ready, got %d: %+v", len(avail1), avail1)
+	}
+	apiAfterFirst := apiCalls.Load()
+
+	// 2. Host finishes async discovery. Expire only cacheTTL (NOT per-account probeDue,
+	// which is 8m–45m in the future) and run a normal non-force collection.
+	modelsReady.Store(true)
+	state.mu.Lock()
+	state.cachedAt = time.Time{}
+	state.mu.Unlock()
+
+	second := collectAccounts(context.Background(), false)
+	if second.err != nil || len(second.accounts) != 3 {
+		t.Fatalf("second collect: len=%d err=%v", len(second.accounts), second.err)
+	}
+	// Upstream quota API must NOT have been re-called while accounts are not due.
+	if got := apiCalls.Load(); got != apiAfterFirst {
+		t.Fatalf("non-due accounts triggered upstream api-call: before=%d after=%d", apiAfterFirst, got)
+	}
+	// Local loopback model refresh must have populated Models and split availability immediately.
+	avail2 := availability.Compute(second.accounts)
+	if len(avail2) != 4 {
+		t.Fatalf("expected 4 split entries after loopback model recovery, got %d: %+v", len(avail2), avail2)
+	}
+	safe := sanitizeAccounts(second.accounts)
+	countsByAcc := map[string]int{}
+	for _, s := range safe {
+		countsByAcc[s.Account] = s.ModelCount
+	}
+	if countsByAcc["u***a@example.com"] != 3 || countsByAcc["p***o@example.com"] != 2 {
+		t.Fatalf("sanitized model_count = %+v, want ultra=3 pro=2", countsByAcc)
 	}
 }

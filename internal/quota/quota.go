@@ -931,6 +931,10 @@ func (a *Adapter) processEntry(entry rawAuthEntry, now time.Time) AccountQuota {
 		}
 	}
 
+	authFileName := strings.TrimSpace(entry.Name)
+	if authFileName == "" {
+		authFileName = strings.TrimSpace(entry.ID)
+	}
 	res := AccountQuota{
 		AccountKey:   accountKey,
 		AuthIndex:    authIndex,
@@ -943,7 +947,7 @@ func (a *Adapter) processEntry(entry rawAuthEntry, now time.Time) AccountQuota {
 		accountID:    extractChatGPTAccountID(entry),
 		FetchedAt:    now,
 		Operational:  op,
-		authFileName: strings.TrimSpace(entry.Name),
+		authFileName: authFileName,
 	}
 
 	if provider == "" {
@@ -3133,7 +3137,8 @@ func isAntigravityFrontierModel(base string) bool {
 	if base == "gemini-4" || strings.HasPrefix(base, "gemini-4-") || strings.HasPrefix(base, "gemini-4.") {
 		return true
 	}
-	if strings.HasPrefix(base, "gemini-claude-opus-5") || strings.HasPrefix(base, "gemini-claude-sonnet-5") {
+	if strings.HasPrefix(base, "claude-opus-5") || strings.HasPrefix(base, "claude-sonnet-5") ||
+		strings.HasPrefix(base, "gemini-claude-opus-5") || strings.HasPrefix(base, "gemini-claude-sonnet-5") {
 		return true
 	}
 	return false
