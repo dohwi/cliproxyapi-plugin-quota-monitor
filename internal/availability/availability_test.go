@@ -432,3 +432,74 @@ func TestComputeDualWindowEdgeCasesAndJSONSerialization(t *testing.T) {
 	assertOptFloat(t, "agFallback.short", agf.ShortRemainingPercent, fptr(80))
 	assertOptFloat(t, "agFallback.weekly", agf.WeeklyRemainingPercent, fptr(30))
 }
+
+func TestComputeDynamicModelSetSplitAndMerge(t *testing.T) {
+	fullCodex := []string{"gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.5-pro"}
+	baseCodex := []string{"gpt-6.2-astra", "gpt-6.2-sol"}
+
+	// 1. Codex Pro 200 has an exclusive model while Pro 100 & Plus share the base set -> auto-splits into 2 pools.
+	split := Compute([]quotamonitor.AccountQuota{
+		{Provider: "codex", PlanType: "pro_200", Models: fullCodex, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 90), availWin("secondary", 10080, 80)}},
+		{Provider: "codex", PlanType: "pro_100", Models: baseCodex, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 50), availWin("secondary", 10080, 40)}},
+		{Provider: "codex", PlanType: "plus", Models: baseCodex, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 20), availWin("secondary", 10080, 10)}},
+	})
+	if len(split) != 2 {
+		t.Fatalf("expected 2 split codex pools, got %d: %+v", len(split), split)
+	}
+	if split[0].Key != "codex" || split[0].Label != "GPT · Pro 200" || split[0].Accounts != 1 || split[0].RemainingPercent != 80 {
+		t.Fatalf("pool[0] = %+v, want codex / GPT · Pro 200 / 1 / 80", split[0])
+	}
+	if !strings.HasPrefix(split[1].Key, "codex_pool_") || split[1].Label != "GPT · Pro 100/Plus" || split[1].Accounts != 2 {
+		t.Fatalf("pool[1] = %+v, want codex_pool_* / GPT · Pro 100/Plus / 2", split[1])
+	}
+
+	// 2. When Pro 100 & Plus receive the same model catalog as Pro 200 (order-independent) -> auto-merges into 1 GPT pool.
+	reordered := []string{"openai/gpt-6.5-pro", "gpt-6.2-sol", "GPT-6.2-ASTRA"}
+	merged := Compute([]quotamonitor.AccountQuota{
+		{Provider: "codex", PlanType: "pro_200", Models: fullCodex, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 90), availWin("secondary", 10080, 80)}},
+		{Provider: "codex", PlanType: "pro_100", Models: reordered, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 50), availWin("secondary", 10080, 40)}},
+	})
+	if len(merged) != 1 || merged[0].Key != "codex" || merged[0].Label != "GPT" || merged[0].Accounts != 2 {
+		t.Fatalf("expected 1 merged GPT pool, got %+v", merged)
+	}
+
+	// 3. Claude Max vs Pro with differing model sets -> auto-splits into Claude · Max and Claude · Pro.
+	claudeSplit := Compute([]quotamonitor.AccountQuota{
+		{Provider: "claude", PlanType: "max", Models: []string{"claude-opus-5.5", "claude-sonnet-5.5", "claude-haiku-5.5"}, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 70)}},
+		{Provider: "claude", PlanType: "pro", Models: []string{"claude-sonnet-5.5", "claude-haiku-5.5"}, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("five-hour", 300, 30)}},
+	})
+	if len(claudeSplit) != 2 || claudeSplit[0].Key != "claude" || claudeSplit[0].Label != "Claude · Max" || !strings.HasPrefix(claudeSplit[1].Key, "claude_pool_") || claudeSplit[1].Label != "Claude · Pro" {
+		t.Fatalf("claudeSplit = %+v", claudeSplit)
+	}
+
+	// 4. Same plan with differing model sets disambiguates cleanly by model count.
+	samePlan := Compute([]quotamonitor.AccountQuota{
+		{Provider: "codex", PlanType: "plus", Models: fullCodex, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 80)}},
+		{Provider: "codex", PlanType: "plus", Models: baseCodex, Status: quotamonitor.StatusKnown, Windows: []quotamonitor.QuotaWindow{availWin("primary", 300, 40)}},
+	})
+	if len(samePlan) != 2 || samePlan[0].Label != "GPT · Plus (3)" || samePlan[1].Label != "GPT · Plus (2)" {
+		t.Fatalf("samePlan disambiguation = %+v", samePlan)
+	}
+
+	// 5. Antigravity spanning 3 distinct model pools (Ultra full, Pro full, Free lite) emits 3 paired pool entries.
+	ag3 := Compute([]quotamonitor.AccountQuota{
+		{Provider: "antigravity", PlanType: "ultra", ModelTier: "full", Models: []string{"gemini-4-argon", "gemini-4-neon", "gemini-4-hydrogen", "gemini-claude-opus-5.5"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 90), availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 95)}},
+		{Provider: "antigravity", PlanType: "pro", ModelTier: "full", Models: []string{"gemini-4-argon", "gemini-4-hydrogen", "gemini-claude-sonnet-5.5"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 60), availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 65)}},
+		{Provider: "antigravity", PlanType: "free", ModelTier: "lite", Models: []string{"gemini-3.8-flash", "gemini-4-hydrogen"}, Status: quotamonitor.StatusKnown,
+			Windows: []quotamonitor.QuotaWindow{availWin("Gemini Models / Five Hour Limit Remaining", 300, 20), availWin("Claude and GPT models / Five Hour Limit Remaining", 300, 10)}},
+	})
+	if len(ag3) != 6 {
+		t.Fatalf("expected 6 AG entries (3 pools x 2 families), got %d: %+v", len(ag3), ag3)
+	}
+	if ag3[0].Key != "antigravity_gemini" || ag3[1].Key != "antigravity_claude" {
+		t.Fatalf("ag3 primary keys = %q, %q", ag3[0].Key, ag3[1].Key)
+	}
+	if !strings.HasPrefix(ag3[2].Key, "antigravity_pool_") || !strings.HasSuffix(ag3[2].Key, "_gemini") || ag3[2].Label != "AGY (AI Pro) · Gemini" {
+		t.Fatalf("ag3 mid pool gemini = %+v", ag3[2])
+	}
+	if ag3[4].Key != "antigravity_lite_gemini" || ag3[5].Key != "antigravity_lite_claude" {
+		t.Fatalf("ag3 lite keys = %q, %q", ag3[4].Key, ag3[5].Key)
+	}
+}

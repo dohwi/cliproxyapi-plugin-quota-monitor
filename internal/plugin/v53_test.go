@@ -108,7 +108,7 @@ assert(resBoth.indexOf('리셋권 5장 보유') !== -1, 'has owned count');
 assert(resBoth.indexOf('현재 적용 가능') === -1, 'applicable count is hidden');
 assert(resBoth.indexOf('└ </span><span class="credit-reset-expiry-text">가장 빠른 만료일: 2026. 10. 4. 오후 3:05:29') !== -1, 'has separate tree-style earliest expiry');
 assert(resBoth.indexOf('적용 가능한 리셋권') === -1, 'applicability tooltip is hidden');
-assert(resBoth.indexOf('API 크레딧</strong> · 잔액 0') !== -1, 'API zero balance remains explicit');
+assert(resBoth.indexOf('<strong class="credit-row-label">API 크레딧</strong><span class="credit-row-value is-muted">잔액 0</span>') !== -1, 'API zero balance remains explicit');
 assert(resBoth.indexOf('class="credit-api-summary"') !== -1, 'API credits remain a separate row');
 assert(resBoth.indexOf('aria-label="리셋권 5장 보유. 가장 빠른 만료일: 2026. 10. 4. 오후 3:05:29. API 크레딧 · 잔액 0"') !== -1, 'accessible summary matches display');
 
@@ -122,7 +122,7 @@ const applicableZero = ctx.renderCreditSummary({
 });
 assert(applicableZero.indexOf('리셋권 2장 보유') !== -1, 'applicable zero preserves owned count');
 assert(applicableZero.indexOf('현재 계정에는 적용 불가') === -1, 'applicable zero text is hidden');
-assert(applicableZero.indexOf('<div class="credit-reset-primary"><strong>리셋권 2장 보유</strong></div>') !== -1, 'owned count is the only primary reset text');
+assert(applicableZero.indexOf('<div class="credit-reset-primary"><strong class="credit-row-label">리셋권</strong><span class="credit-row-value">2장</span></div>') !== -1, 'owned count renders as label/value pair');
 assert(applicableZero.indexOf('가장 빠른 만료일: 2026. 10. 4. 오후 3:05:29') !== -1, 'requested earliest-expiry wording is exact');
 
 const applicableNull = ctx.renderCreditSummary({

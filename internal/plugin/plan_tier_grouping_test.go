@@ -260,6 +260,18 @@ assert(dualFleetHTML.includes('>5시간<') && dualFleetHTML.includes('>100%<') &
 assert(dualFleetHTML.includes('>AGY · AI Ultra<') && dualFleetHTML.includes('>Gemini<') && dualFleetHTML.includes('>90%<') && dualFleetHTML.includes('>Claude/GPT<') && dualFleetHTML.includes('>17%<'), 'expected AGY · AI Ultra matrix rows: ' + dualFleetHTML);
 assert(!dualFleetHTML.includes('주간 90%'), 'expected 5h-only AGY Ultra without fake weekly: ' + dualFleetHTML);
 
+// 5. Dynamically split Codex and Antigravity model pools preserve pool labels, pair AGY families, and render clean counts.
+ctx.renderFleetAvailability([
+  { key: 'codex', label: 'GPT · Pro 200', remaining_percent: 80, short_remaining_percent: 90, weekly_remaining_percent: 80, accounts: 2, tiers: [{ tier: 'pro_200', label: 'Pro 200', remaining_percent: 80, accounts: 2 }] },
+  { key: 'codex_pool_a1b2c3d4', label: 'GPT · Pro 100/Plus', remaining_percent: 40, short_remaining_percent: 50, weekly_remaining_percent: 40, accounts: 3, tiers: [{ tier: 'pro_100', label: 'Pro 100', remaining_percent: 45, accounts: 2 }, { tier: 'plus', label: 'Plus', remaining_percent: 20, accounts: 1 }] },
+  { key: 'antigravity_pool_deadbeef_gemini', label: 'AGY (AI Pro) · Gemini', remaining_percent: 60, short_remaining_percent: 70, weekly_remaining_percent: 60, accounts: 2, tiers: [{ tier: 'pro', label: 'AI Pro', remaining_percent: 60, accounts: 2 }] },
+  { key: 'antigravity_pool_deadbeef_claude', label: 'AGY (AI Pro) · Claude/GPT', remaining_percent: 65, short_remaining_percent: 75, weekly_remaining_percent: 65, accounts: 2, tiers: [{ tier: 'pro', label: 'AI Pro', remaining_percent: 65, accounts: 2 }] }
+]);
+const dynPoolHTML = byId.fleetAvailability.innerHTML;
+assert(dynPoolHTML.includes('>GPT · Pro 200<') && dynPoolHTML.includes('>2개<'), 'expected primary split codex pool label & count: ' + dynPoolHTML);
+assert(dynPoolHTML.includes('>GPT · Pro 100/Plus<') && dynPoolHTML.includes('>3개<'), 'expected secondary split codex pool label & count: ' + dynPoolHTML);
+assert(dynPoolHTML.includes('>AGY · AI Pro<') && dynPoolHTML.includes('>70%<') && dynPoolHTML.includes('>75%<'), 'expected dynamic AGY pool paired into one chip: ' + dynPoolHTML);
+
 console.log('OK_TIER_EP_GROUPING');
 `
 	cmd := nodeDashboardCmd(t, "node", script)

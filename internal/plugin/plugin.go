@@ -923,6 +923,29 @@ func mergeAntigravityModelTier(a *quotamonitor.AccountQuota, fetched string) {
 	a.ModelTierDemoteMisses = 0
 }
 
+// mergeAccountModelPool updates an account's normalized model list (and, for
+// Antigravity, its derived ModelTier with demote-guard protection). Empty or
+// invalid lists are ignored so transient upstream omissions retain last-good data.
+func mergeAccountModelPool(a *quotamonitor.AccountQuota, rawModels []string) {
+	if a == nil {
+		return
+	}
+	norm := quotamonitor.NormalizeModelList(rawModels)
+	if len(norm) == 0 {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(a.Provider), "antigravity") {
+		tier := quotamonitor.ClassifyAntigravityModels(norm)
+		mergeAntigravityModelTier(a, tier)
+		// If the demote guard held a confirmed "full" account against a transient
+		// partial catalog, keep its previously confirmed full model set too.
+		if quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierFull && tier != quotamonitor.AntigravityTierFull {
+			return
+		}
+	}
+	a.Models = norm
+}
+
 func accountUnitKey(a quotamonitor.AccountQuota) string {
 	return strings.ToLower(strings.TrimSpace(a.Provider))
 }
@@ -1889,7 +1912,19 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 		var wins []quotamonitor.QuotaWindow
 		var claudeAbsent []string
 		var err error
-		if strings.EqualFold(a.Provider, "codex") {
+		pLower := strings.ToLower(strings.TrimSpace(a.Provider))
+		if pLower == "antigravity" || pLower == "codex" || pLower == "claude" {
+			modelPoolStale := (len(a.Models) == 0 && (pLower != "antigravity" || a.ModelTier == "")) ||
+				a.ModelTierCheckedAt.IsZero() ||
+				now().Sub(a.ModelTierCheckedAt) >= antigravityModelPoolCacheTTL
+			if force || modelPoolStale {
+				if models, mErr := client.FetchAuthFileModels(probeCtx, *a); mErr == nil && len(models) > 0 {
+					mergeAccountModelPool(a, models)
+					a.ModelTierCheckedAt = now()
+				}
+			}
+		}
+		if pLower == "codex" {
 			var plan string
 			var api *quotamonitor.APICredits
 			var reset *quotamonitor.ResetCredits
@@ -1903,7 +1938,7 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 			if reset != nil {
 				a.ResetCredits = mergeResetCredits(a.ResetCredits, reset)
 			}
-		} else if strings.EqualFold(a.Provider, "claude") {
+		} else if pLower == "claude" {
 			var reset *quotamonitor.ResetCredits
 			wins, claudeAbsent, reset, err = client.FetchClaudeUsageWithWindowPresence(probeCtx, *a)
 			if err == nil {
@@ -1916,17 +1951,8 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 				}
 			}
 		} else {
-			if strings.EqualFold(a.Provider, "antigravity") {
-				modelPoolStale := a.ModelTier == "" || a.ModelTierCheckedAt.IsZero() || now().Sub(a.ModelTierCheckedAt) >= antigravityModelPoolCacheTTL
-				if force || modelPoolStale {
-					if tier, tierErr := client.FetchAntigravityModelTier(probeCtx, *a); tierErr == nil && tier != "" {
-						mergeAntigravityModelTier(a, tier)
-						a.ModelTierCheckedAt = now()
-					}
-				}
-			}
 			wins, err = client.FetchActiveQuota(probeCtx, *a)
-			if err == nil && strings.EqualFold(a.Provider, "antigravity") {
+			if err == nil && pLower == "antigravity" {
 				if plan, planErr := client.FetchAntigravityPlan(probeCtx, *a); planErr == nil && plan != "" {
 					a.PlanType = plan
 				}
@@ -2101,6 +2127,12 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 					a.ModelTierDemoteMisses = p.ModelTierDemoteMisses
 					a.ModelTierCheckedAt = p.ModelTierCheckedAt
 				}
+				if len(p.Models) > 0 && len(a.Models) == 0 {
+					a.Models = append([]string(nil), p.Models...)
+					if a.ModelTierCheckedAt.IsZero() {
+						a.ModelTierCheckedAt = p.ModelTierCheckedAt
+					}
+				}
 				a.APICredits = mergeAPICredits(a.APICredits, p.APICredits)
 				a.ResetCredits = mergeResetCredits(a.ResetCredits, p.ResetCredits)
 				if p.Credits != nil {
@@ -2147,6 +2179,12 @@ func applyLastGoodWindows(accounts, previous []quotamonitor.AccountQuota) []quot
 				a.ModelTier = p.ModelTier
 				a.ModelTierDemoteMisses = p.ModelTierDemoteMisses
 				a.ModelTierCheckedAt = p.ModelTierCheckedAt
+			}
+			if len(a.Models) == 0 && len(p.Models) > 0 {
+				a.Models = append([]string(nil), p.Models...)
+				if a.ModelTierCheckedAt.IsZero() {
+					a.ModelTierCheckedAt = p.ModelTierCheckedAt
+				}
 			}
 			a.APICredits = mergeAPICredits(p.APICredits, a.APICredits)
 			a.ResetCredits = mergeResetCredits(p.ResetCredits, a.ResetCredits)

@@ -149,20 +149,20 @@
     .fleet-chip + .fleet-chip, .fleet-availability.is-grid .fleet-chip + .fleet-chip { border-left: 0; border-top: 1px solid var(--divider); }
   }
   .fleet-chip-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-  .fleet-chip-label { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--filter-label-color); }
+  .fleet-chip-label { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 20px; font-weight: 600; color: var(--filter-label-color); }
   .fleet-chip-icon { flex: 0 0 auto; display: inline-flex; align-items: center; color: var(--text); }
   .fleet-chip-icon svg { display: block; flex: none; }
   .fleet-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fleet-chip-count { flex: 0 0 auto; font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  .fleet-chip-count { flex: 0 0 auto; font-size: 11px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; white-space: nowrap; }
   .fleet-chip-rows { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 36px; }
   .fleet-metric { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .fleet-metric-key { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); white-space: nowrap; }
   .fleet-metric .fleet-chip-value { margin-left: auto; }
-  .fleet-family-row { display: grid; grid-template-columns: minmax(0, 1fr) 74px 70px; align-items: baseline; gap: 8px; }
+  .fleet-family-row { display: grid; grid-template-columns: minmax(0, 1fr) 78px 72px; align-items: baseline; gap: 10px; }
   .fleet-family-row.is-single { grid-template-columns: minmax(0, 1fr) auto; }
   .fleet-family-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 16px; font-weight: 600; color: var(--muted); }
-  .fleet-win-cell { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 4px; white-space: nowrap; }
-  .fleet-win-tag { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); }
+  .fleet-win-cell { display: grid; grid-template-columns: auto 42px; align-items: baseline; justify-content: end; gap: 4px; white-space: nowrap; }
+  .fleet-win-tag { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); text-align: right; }
   .fleet-chip-value { flex: 0 0 auto; font-size: 13px; line-height: 16px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
   .btn { background-color: var(--ctl); color: var(--ctl-fg); border: 1px solid transparent; min-height: var(--btn-h); padding: 4px 12px; font-size: 13px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: background-color 120ms ease-out; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; font-family: inherit; line-height: 20px; }
@@ -498,15 +498,18 @@
   .account-card:has(.quota-pending) .quota-pending { padding-bottom: 0; transform: translateY(1px); }
   .account-card:has(.quota-pending)::after { display: none; }
 
-  /* ---- Credits footer: plain, quiet two-line caption (no pills, no boxes) ---- */
-  .credit-summary { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    margin: 0; padding: 0; min-height: 0; border-top: 0; font-size: 12px; line-height: 16px; color: var(--muted); text-align: center; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
-  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 62px; box-sizing: border-box; justify-content: flex-start; padding: 2px 0 0; }
-  .credit-reset-summary, .credit-api-summary { display: flex; flex-direction: row; align-items: baseline; justify-content: center; flex-wrap: wrap;
-    gap: 0 8px; padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); line-height: 16px; width: auto; max-width: 100%; text-align: center; }
-  .credit-reset-primary { display: inline-flex; }
-  .credit-reset-primary strong, .credit-api-summary strong { font-size: 12px; font-weight: 700; color: var(--text); }
-  .credit-reset-expiry { display: inline-flex; width: auto; padding: 0; color: var(--muted); font-size: 12px; }
+  /* ---- Credits footer: key-value rows aligned with the card's quota rows above ---- */
+  .credit-summary { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 6px;
+    margin: 0; padding: 0; min-height: 0; border-top: 1px solid var(--divider); font-size: 12px; line-height: 16px; color: var(--muted); text-align: left; width: 100%; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 62px; box-sizing: border-box; justify-content: flex-start; padding: 10px 0 0; }
+  .credit-reset-summary { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; flex-wrap: nowrap;
+    gap: 2px; padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); line-height: 16px; width: 100%; max-width: 100%; text-align: left; }
+  .credit-reset-primary, .credit-api-summary { display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; flex-wrap: wrap;
+    gap: 2px 8px; padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); line-height: 16px; width: 100%; max-width: 100%; text-align: left; }
+  .credit-row-label, .credit-reset-primary strong, .credit-api-summary strong { font-size: 12px; font-weight: 600; color: var(--text); }
+  .credit-row-value { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 16px; text-align: right; margin-left: auto; }
+  .credit-row-value.is-muted { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .credit-reset-expiry { display: block; width: 100%; padding: 0; color: var(--muted); font-size: 11px; line-height: 15px; }
   .credit-reset-expiry-tree { display: none; }
   .credit-reset-expiry-text::before { content: ''; }
 
@@ -578,9 +581,9 @@
   .account-card:not([data-provider="antigravity"]) .quota-lock-state { padding: 0; }
   .account-card:has(.quota-pending) .quota-pending { transform: none; padding: 0 8px; }
   .account-card:has(.quota-pending) { padding-bottom: 10px; }
-  /* credits travel with the values: wrap them into the same centred block */
-  .account-card:not([data-provider="antigravity"]):has(.credit-summary) .card-quota { flex: 0 0 auto; margin-top: auto; padding-bottom: 0; }
-  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 0; margin: 0 0 auto; padding: 8px 0 0; justify-content: flex-start; }
+  /* credits sit cleanly under a 1px divider on the same left rail as the quota rows */
+  .account-card:not([data-provider="antigravity"]):has(.credit-summary) .card-quota { flex: 0 0 auto; margin-top: auto; padding-bottom: 10px; }
+  .account-card:not([data-provider="antigravity"]) .credit-summary { min-height: 0; margin: 0 0 auto; padding: 10px 0 0; justify-content: flex-start; }
 
   /* Antigravity: same rule as GPT/Claude. The body (Gemini + Claude/GPT sections) is one block centred in
      the free space under the divider; the tallest antigravity card defines the row height. */

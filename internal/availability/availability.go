@@ -4,6 +4,7 @@ import (
 	"math"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	quotamonitor "quota-monitor/internal/quota"
@@ -332,69 +333,302 @@ func tierInfo(provider, plan string) tierMeta {
 	}
 }
 
-// Compute returns one entry per provider family that has at least
-// one contributing account, in a stable display order.
+type modelPool struct {
+	sig        string
+	modelCount int
+	isLite     bool
+	bestRank   int
+	accounts   []quotamonitor.AccountQuota
+}
+
+func accountModelPoolMeta(provName string, a quotamonitor.AccountQuota) (sig string, modelCount int, isLite bool) {
+	norm := quotamonitor.NormalizeModelList(a.Models)
+	if provName == "antigravity" {
+		if len(norm) > 0 {
+			isLite = quotamonitor.ClassifyAntigravityModels(norm) == quotamonitor.AntigravityTierLite
+		} else {
+			isLite = quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite
+		}
+	}
+	if len(norm) > 0 {
+		return quotamonitor.ModelSetSignature(norm), len(norm), isLite
+	}
+	if provName == "antigravity" {
+		switch quotamonitor.NormalizeAntigravityTier(a.ModelTier) {
+		case quotamonitor.AntigravityTierFull:
+			return "ag:full", 1000, false
+		case quotamonitor.AntigravityTierLite:
+			return "ag:lite", 1, true
+		}
+	}
+	return "", 0, isLite
+}
+
+// partitionProviderPools groups contributing accounts of one provider by their
+// normalized offered model list. When every account offers the same model set
+// (or model catalogs are unknown), a single unified pool is returned. When
+// accounts span 2+ distinct model sets, each distinct set becomes its own pool,
+// ordered richest/highest-tier first.
+func partitionProviderPools(accounts []quotamonitor.AccountQuota, provName string, contributes func(quotamonitor.AccountQuota) bool) ([]modelPool, bool) {
+	bySig := make(map[string]*modelPool)
+	var unknown []quotamonitor.AccountQuota
+	var all []quotamonitor.AccountQuota
+	for _, a := range accounts {
+		if !strings.EqualFold(strings.TrimSpace(a.Provider), provName) {
+			continue
+		}
+		if !contributes(a) {
+			continue
+		}
+		all = append(all, a)
+		sig, cnt, isLite := accountModelPoolMeta(provName, a)
+		if sig == "" {
+			unknown = append(unknown, a)
+			continue
+		}
+		p := bySig[sig]
+		rank := tierInfo(provName, quotamonitor.NormalizePlanType(a.Provider, a.PlanType)).rank
+		if p == nil {
+			p = &modelPool{sig: sig, modelCount: cnt, isLite: isLite, bestRank: rank}
+			bySig[sig] = p
+		} else {
+			if cnt > p.modelCount {
+				p.modelCount = cnt
+			}
+			if rank < p.bestRank {
+				p.bestRank = rank
+			}
+		}
+		p.accounts = append(p.accounts, a)
+	}
+	if len(all) == 0 {
+		return nil, false
+	}
+	if len(bySig) <= 1 {
+		isLite := false
+		modelCount := 0
+		sig := ""
+		for _, p := range bySig {
+			isLite = p.isLite
+			modelCount = p.modelCount
+			sig = p.sig
+		}
+		return []modelPool{{sig: sig, modelCount: modelCount, isLite: isLite, accounts: all}}, false
+	}
+	pools := make([]modelPool, 0, len(bySig))
+	for _, p := range bySig {
+		pools = append(pools, *p)
+	}
+	sort.Slice(pools, func(i, j int) bool {
+		if provName == "antigravity" && pools[i].isLite != pools[j].isLite {
+			return !pools[i].isLite
+		}
+		if pools[i].modelCount != pools[j].modelCount {
+			return pools[i].modelCount > pools[j].modelCount
+		}
+		if pools[i].bestRank != pools[j].bestRank {
+			return pools[i].bestRank < pools[j].bestRank
+		}
+		if len(pools[i].accounts) != len(pools[j].accounts) {
+			return len(pools[i].accounts) > len(pools[j].accounts)
+		}
+		return pools[i].sig < pools[j].sig
+	})
+	if len(unknown) > 0 {
+		pools[0].accounts = append(pools[0].accounts, unknown...)
+	}
+	return pools, true
+}
+
+func poolTierTag(provName string, accounts []quotamonitor.AccountQuota, isLitePool bool) string {
+	type item struct {
+		label string
+		rank  int
+	}
+	seen := make(map[string]item)
+	for _, a := range accounts {
+		plan := quotamonitor.NormalizePlanType(a.Provider, a.PlanType)
+		meta := tierInfo(provName, plan)
+		isLiteAccount := isLitePool || (provName == "antigravity" && quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite)
+		if isLiteAccount && plan == "pro" {
+			meta.label = "AI Pro Trial"
+		}
+		if meta.label == "" {
+			continue
+		}
+		if prev, ok := seen[meta.label]; !ok || meta.rank < prev.rank {
+			seen[meta.label] = item{label: meta.label, rank: meta.rank}
+		}
+	}
+	if len(seen) == 0 {
+		return ""
+	}
+	items := make([]item, 0, len(seen))
+	for _, it := range seen {
+		items = append(items, it)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].rank != items[j].rank {
+			return items[i].rank < items[j].rank
+		}
+		return items[i].label < items[j].label
+	})
+	if len(items) == 1 {
+		return items[0].label
+	}
+	if len(items) == 2 {
+		return items[0].label + "/" + items[1].label
+	}
+	return items[0].label + "+"
+}
+
+func poolHashSuffix(sig string) string {
+	s := strings.TrimPrefix(sig, "ag:")
+	if len(s) > 8 {
+		s = s[:8]
+	}
+	return s
+}
+
+func disambiguatePoolTags(provName string, pools []modelPool) []string {
+	tags := make([]string, len(pools))
+	tagCounts := make(map[string]int, len(pools))
+	for i, p := range pools {
+		tags[i] = poolTierTag(provName, p.accounts, p.isLite)
+		tagCounts[tags[i]]++
+	}
+	for i, p := range pools {
+		t := tags[i]
+		if t != "" && tagCounts[t] == 1 {
+			continue
+		}
+		// Check whether modelCount distinguishes colliding pools with the same tag.
+		uniqueCount := p.modelCount > 0
+		if uniqueCount {
+			for j, other := range pools {
+				if i != j && tags[j] == t && other.modelCount == p.modelCount {
+					uniqueCount = false
+					break
+				}
+			}
+		}
+		if uniqueCount {
+			if t != "" {
+				tags[i] = t + " (" + strconv.Itoa(p.modelCount) + ")"
+			} else {
+				tags[i] = strconv.Itoa(p.modelCount) + " models"
+			}
+		} else {
+			if t != "" {
+				tags[i] = t + " #" + strconv.Itoa(i+1)
+			} else {
+				tags[i] = "Pool " + strconv.Itoa(i+1)
+			}
+		}
+	}
+	return tags
+}
+
+// Compute returns one entry per provider family (auto-split by offered model
+// set when accounts within a provider expose different model catalogs, and
+// auto-merged when they match), in a stable display order.
 func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 	type family struct {
 		key, label, short string
+		provName          string
+		isLitePool        bool
+		poolAccounts      []quotamonitor.AccountQuota
 		value             func(quotamonitor.AccountQuota) (availabilitySample, bool)
 	}
-	provider := func(name string, fn func(quotamonitor.AccountQuota) (availabilitySample, bool)) func(quotamonitor.AccountQuota) (availabilitySample, bool) {
-		return func(a quotamonitor.AccountQuota) (availabilitySample, bool) {
-			if strings.ToLower(strings.TrimSpace(a.Provider)) != name {
-				return availabilitySample{}, false
-			}
-			return fn(a)
-		}
-	}
-	// Only split Antigravity into Full (AGY) vs Lite (AGY (Lite)) when
-	// accounts actually span both model pools. When every account shares the
-	// same model pool, keep a single unified AGY pool.
-	hasAGFull, hasAGLite := false, false
-	for _, a := range accounts {
-		if !strings.EqualFold(strings.TrimSpace(a.Provider), "antigravity") {
-			continue
-		}
-		if !accountCountsTowardAvailability(a, a.Windows) {
-			continue
-		}
-		switch quotamonitor.NormalizeAntigravityTier(a.ModelTier) {
-		case quotamonitor.AntigravityTierFull:
-			hasAGFull = true
-		case quotamonitor.AntigravityTierLite:
-			hasAGLite = true
-		}
-	}
-	splitAGByPool := hasAGFull && hasAGLite
 
-	agPool := func(wantLite bool, familyRe *regexp.Regexp) func(quotamonitor.AccountQuota) (availabilitySample, bool) {
-		return provider("antigravity", func(a quotamonitor.AccountQuota) (availabilitySample, bool) {
-			if splitAGByPool {
-				isLite := quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite
-				if isLite != wantLite {
-					return availabilitySample{}, false
-				}
-			} else if wantLite {
-				return availabilitySample{}, false
-			}
-			return antigravityAvailability(a, familyRe)
+	var families []family
+
+	appendSingleFamilyPools := func(provName, baseKey, baseLabel, baseShort string, sampleFn func(quotamonitor.AccountQuota) (availabilitySample, bool)) {
+		pools, split := partitionProviderPools(accounts, provName, func(a quotamonitor.AccountQuota) bool {
+			_, ok := sampleFn(a)
+			return ok
 		})
+		if len(pools) == 0 {
+			return
+		}
+		if !split {
+			families = append(families, family{
+				key: baseKey, label: baseLabel, short: baseShort,
+				provName: provName, poolAccounts: pools[0].accounts, value: sampleFn,
+			})
+			return
+		}
+		tags := disambiguatePoolTags(provName, pools)
+		for i, p := range pools {
+			key := baseKey
+			if i > 0 {
+				key = baseKey + "_pool_" + poolHashSuffix(p.sig)
+			}
+			label := baseLabel + " · " + tags[i]
+			families = append(families, family{
+				key: key, label: label, short: baseShort,
+				provName: provName, poolAccounts: p.accounts, value: sampleFn,
+			})
+		}
 	}
 
-	families := []family{
-		{"claude", "Claude", "CC", provider("claude", claudeAvailability)},
-		{"codex", "GPT", "GPT", provider("codex", codexAvailability)},
-		{"antigravity_gemini", "AGY · Gemini", "AG", agPool(false, antigravityGeminiPattern)},
-		{"antigravity_claude", "AGY · Claude/GPT", "AG", agPool(false, antigravityClaudePattern)},
-		{"antigravity_lite_gemini", "AGY (Trial/Free) · Gemini", "AGT", agPool(true, antigravityGeminiPattern)},
-		{"antigravity_lite_claude", "AGY (Trial/Free) · Claude/GPT", "AGT", agPool(true, antigravityClaudePattern)},
+	appendSingleFamilyPools("claude", "claude", "Claude", "CC", claudeAvailability)
+	appendSingleFamilyPools("codex", "codex", "GPT", "GPT", codexAvailability)
+
+	agPools, agSplit := partitionProviderPools(accounts, "antigravity", func(a quotamonitor.AccountQuota) bool {
+		return accountCountsTowardAvailability(a, a.Windows)
+	})
+	if len(agPools) > 0 {
+		if !agSplit {
+			families = append(families,
+				family{key: "antigravity_gemini", label: "AGY · Gemini", short: "AG", provName: "antigravity", poolAccounts: agPools[0].accounts, value: func(a quotamonitor.AccountQuota) (availabilitySample, bool) { return antigravityAvailability(a, antigravityGeminiPattern) }},
+				family{key: "antigravity_claude", label: "AGY · Claude/GPT", short: "AG", provName: "antigravity", poolAccounts: agPools[0].accounts, value: func(a quotamonitor.AccountQuota) (availabilitySample, bool) { return antigravityAvailability(a, antigravityClaudePattern) }},
+			)
+		} else {
+			liteCount := 0
+			for _, p := range agPools {
+				if p.isLite {
+					liteCount++
+				}
+			}
+			tags := disambiguatePoolTags("antigravity", agPools)
+			liteKeyUsed := false
+			for i, p := range agPools {
+				var gemKey, claudeKey, gemLabel, claudeLabel, shortCode string
+				isLite := p.isLite
+				if i == 0 {
+					gemKey, claudeKey, shortCode = "antigravity_gemini", "antigravity_claude", "AG"
+					gemLabel, claudeLabel = "AGY · Gemini", "AGY · Claude/GPT"
+				} else if isLite && !liteKeyUsed && (liteCount == 1 || i == len(agPools)-1) {
+					liteKeyUsed = true
+					gemKey, claudeKey, shortCode = "antigravity_lite_gemini", "antigravity_lite_claude", "AGT"
+					gemLabel, claudeLabel = "AGY (Trial/Free) · Gemini", "AGY (Trial/Free) · Claude/GPT"
+				} else {
+					suffix := poolHashSuffix(p.sig)
+					gemKey = "antigravity_pool_" + suffix + "_gemini"
+					claudeKey = "antigravity_pool_" + suffix + "_claude"
+					shortCode = "AG"
+					if isLite {
+						shortCode = "AGT"
+					}
+					gemLabel = "AGY (" + tags[i] + ") · Gemini"
+					claudeLabel = "AGY (" + tags[i] + ") · Claude/GPT"
+				}
+				poolAccs := p.accounts
+				families = append(families,
+					family{key: gemKey, label: gemLabel, short: shortCode, provName: "antigravity", isLitePool: isLite, poolAccounts: poolAccs, value: func(a quotamonitor.AccountQuota) (availabilitySample, bool) { return antigravityAvailability(a, antigravityGeminiPattern) }},
+					family{key: claudeKey, label: claudeLabel, short: shortCode, provName: "antigravity", isLitePool: isLite, poolAccounts: poolAccs, value: func(a quotamonitor.AccountQuota) (availabilitySample, bool) { return antigravityAvailability(a, antigravityClaudePattern) }},
+				)
+			}
+		}
 	}
+
 	entries := make([]Entry, 0, len(families))
 	for _, f := range families {
 		weightedSum, weightTotal, n := 0.0, 0.0, 0
 		shortWeightedSum, shortWeightTotal := 0.0, 0.0
 		weeklyWeightedSum, weeklyWeightTotal := 0.0, 0.0
-		isLitePool := strings.HasPrefix(f.key, "antigravity_lite_")
+		isLitePool := f.isLitePool || strings.HasPrefix(f.key, "antigravity_lite_")
 		type tierAgg struct {
 			tier        string
 			meta        tierMeta
@@ -407,11 +641,11 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 		}
 		byTier := map[string]*tierAgg{}
 		hasKnownTier := false
-		for _, a := range accounts {
+		for _, a := range f.poolAccounts {
 			if s, ok := f.value(a); ok {
 				plan := quotamonitor.NormalizePlanType(a.Provider, a.PlanType)
 				meta := tierInfo(a.Provider, plan)
-				isLiteAccount := isLitePool || quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite
+				isLiteAccount := isLitePool || (f.provName == "antigravity" && quotamonitor.NormalizeAntigravityTier(a.ModelTier) == quotamonitor.AntigravityTierLite)
 				if isLiteAccount && plan == "pro" {
 					meta.label = "AI Pro Trial"
 				}
@@ -491,15 +725,15 @@ func Compute(accounts []quotamonitor.AccountQuota) []Entry {
 					tiers = append(tiers, te)
 				}
 				sort.Slice(tiers, func(i, j int) bool {
-					ri := tierInfo(strings.Split(f.key, "_")[0], tiers[i].Tier).rank
-					rj := tierInfo(strings.Split(f.key, "_")[0], tiers[j].Tier).rank
+					ri := tierInfo(f.provName, tiers[i].Tier).rank
+					rj := tierInfo(f.provName, tiers[j].Tier).rank
 					if ri != rj {
 						return ri < rj
 					}
 					return tiers[i].Tier < tiers[j].Tier
 				})
 				entry.Tiers = tiers
-				if isLitePool && len(tiers) == 1 && tiers[0].Label != "" && tiers[0].Label != "Other" {
+				if strings.HasPrefix(f.key, "antigravity_lite_") && len(tiers) == 1 && tiers[0].Label != "" && tiers[0].Label != "Other" {
 					suffix := "Gemini"
 					if strings.HasSuffix(f.key, "_claude") {
 						suffix = "Claude/GPT"

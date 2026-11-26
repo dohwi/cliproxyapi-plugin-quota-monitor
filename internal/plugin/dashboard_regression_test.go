@@ -19,7 +19,7 @@ func TestDashboardRegressionTokens(t *testing.T) {
 		".quota-lock-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 58px;",
 		".card-heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; }",
 		".card-quota { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; }",
-		".credit-summary { display: flex; flex-direction: column; align-items: center;",
+		".credit-summary { display: flex; flex-direction: column; align-items: stretch;",
 		"staleNoticeBox",
 		"accountStatusLive",
 		"FETCH_TIMEOUT_MS = 16000",
@@ -924,9 +924,9 @@ const accWithBoth = {
   api_credits: { has_credits: false, unlimited: false, balance: 0 }
 };
 const resBoth = ctx.renderCreditSummary(accWithBoth);
-assert(resBoth.indexOf('리셋권 5장 보유') !== -1, 'has owned count');
+assert(resBoth.indexOf('리셋권 5장 보유') !== -1, 'has owned count in aria-label');
 assert(resBoth.indexOf('현재 적용 가능') === -1, 'applicable count is hidden');
-assert(resBoth.indexOf('<div class="credit-reset-primary"><strong>리셋권 5장 보유</strong></div>') !== -1, 'owned text remains the only primary reset text');
+assert(resBoth.indexOf('<div class="credit-reset-primary"><strong class="credit-row-label">리셋권</strong><span class="credit-row-value">5장</span></div>') !== -1, 'reset credits render as label/value pair');
 assert(resBoth.indexOf('<div class="credit-reset-expiry"><span class="credit-reset-expiry-tree" aria-hidden="true">└ </span><span class="credit-reset-expiry-text">가장 빠른 만료일: 2026. 10. 4. 오후 3:05:29</span></div>') !== -1, 'expiry is a separate tree-style helper row');
 assert(resBoth.indexOf('가장 가까운 만료') === -1, 'removed legacy nearest-expiry wording');
 assert(resBoth.indexOf('적용 가능한 리셋권') === -1, 'applicability tooltip is hidden');
@@ -935,7 +935,7 @@ assert(resBoth.indexOf('reset-credit-summary') !== -1, 'reset-credit-summary tok
 assert(typeof ctx.formatResetExpiryKo === 'function', 'formatResetExpiryKo is a function');
 assert(ctx.formatResetExpiryKo('2026-10-04T15:05:29') === '2026. 10. 4. 오후 3:05:29', 'formatResetExpiryKo formats date');
 assert(resBoth.indexOf('class="credit-api-summary"') !== -1, 'API credits use a separate row');
-assert(resBoth.indexOf('API 크레딧</strong> · 잔액 0') !== -1, 'explicit API zero balance');
+assert(resBoth.indexOf('<strong class="credit-row-label">API 크레딧</strong><span class="credit-row-value is-muted">잔액 0</span>') !== -1, 'explicit API zero balance');
 assert(resBoth.indexOf('aria-label="리셋권 5장 보유. 가장 빠른 만료일: 2026. 10. 4. 오후 3:05:29. API 크레딧 · 잔액 0"') !== -1, 'accessible text matches the visible row meanings');
 
 const applicableZero = ctx.renderCreditSummary({
@@ -947,7 +947,7 @@ const applicableZero = ctx.renderCreditSummary({
 });
 assert(applicableZero.indexOf('리셋권 2장 보유') !== -1, 'owned count survives applicable zero');
 assert(applicableZero.indexOf('현재 계정에는 적용 불가') === -1, 'applicable zero is hidden');
-assert(applicableZero.indexOf('<div class="credit-reset-primary"><strong>리셋권 2장 보유</strong></div>') !== -1, 'owned count is the only primary reset text');
+assert(applicableZero.indexOf('<div class="credit-reset-primary"><strong class="credit-row-label">리셋권</strong><span class="credit-row-value">2장</span></div>') !== -1, 'owned count renders as label/value pair');
 assert(applicableZero.indexOf('└ </span><span class="credit-reset-expiry-text">가장 빠른 만료일: 2026. 10. 4. 오후 3:05:29') !== -1, 'tree helper uses requested expiry wording');
 
 const applicableNull = ctx.renderCreditSummary({

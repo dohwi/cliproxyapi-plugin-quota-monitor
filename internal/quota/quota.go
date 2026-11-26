@@ -211,11 +211,16 @@ type AccountQuota struct {
 	// registered auth-file models ("full" when frontier models beyond
 	// gemini-4-hydrogen are registered, "lite" otherwise). Empty when unknown.
 	ModelTier string `json:"model_tier,omitempty"`
+	// Models holds the normalized, sorted, deduplicated model basenames
+	// registered for this auth file in CLIProxyAPI (/management/auth-files/models).
+	// Used by availability pooling to split accounts whose offered model sets
+	// differ (e.g. Pro 200 vs Pro 100) and re-merge them when catalogs align.
+	Models []string `json:"-"`
 	// ModelTierDemoteMisses counts consecutive "lite" probes observed for an
 	// account previously classified as "full" so a single partial model catalog
 	// cannot flap Full to Lite.
 	ModelTierDemoteMisses int `json:"-"`
-	// ModelTierCheckedAt tracks when ModelTier was last resolved from
+	// ModelTierCheckedAt tracks when ModelTier/Models were last resolved from
 	// /management/auth-files/models so the pool classification can be cached.
 	ModelTierCheckedAt time.Time `json:"-"`
 	projectID string `json:"-"`
@@ -3132,6 +3137,53 @@ func isAntigravityFrontierModel(base string) bool {
 		return true
 	}
 	return false
+}
+
+// NormalizeModelList canonicalizes an account's registered model IDs into a
+// sorted, deduplicated slice of lowercase basenames (provider prefix before
+// "/" stripped) bounded by maxAuthFileModels. Returns nil when empty.
+func NormalizeModelList(modelIDs []string) []string {
+	if len(modelIDs) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(modelIDs))
+	out := make([]string, 0, len(modelIDs))
+	for _, raw := range modelIDs {
+		id := strings.ToLower(strings.TrimSpace(raw))
+		if id == "" {
+			continue
+		}
+		if slash := strings.LastIndex(id, "/"); slash >= 0 {
+			id = strings.TrimSpace(id[slash+1:])
+		}
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+		if len(out) >= maxAuthFileModels {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
+}
+
+// ModelSetSignature returns a deterministic 12-character hex digest for an
+// account's normalized model set, or "" when no valid models are present.
+func ModelSetSignature(modelIDs []string) string {
+	norm := NormalizeModelList(modelIDs)
+	if len(norm) == 0 {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(strings.Join(norm, "\n")))
+	return hex.EncodeToString(sum[:6])
 }
 
 // ClassifyAntigravityModels classifies an Antigravity account's registered

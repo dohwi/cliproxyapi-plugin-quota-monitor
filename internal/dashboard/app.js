@@ -337,6 +337,8 @@ var I18N = {
     'q.hintPending': '첫 조회가 끝나면 여기에 표시돼요',
     'ag.name': '안티그래비티',
     'credit.reset': '리셋권 {n}장 보유',
+    'credit.resetLabel': '리셋권',
+    'credit.resetCount': '{n}장',
     'credit.expiry': '가장 빠른 만료일: {d}',
     'credit.api': 'API 크레딧',
     'credit.unlimited': '무제한',
@@ -502,6 +504,8 @@ var I18N = {
     'q.hintPending': 'Shown here after the first check',
     'ag.name': 'Antigravity',
     'credit.reset': 'Reset credits: {n}',
+    'credit.resetLabel': 'Reset credits',
+    'credit.resetCount': '{n}',
     'credit.expiry': 'Earliest expiry: {d}',
     'credit.api': 'API credits',
     'credit.unlimited': 'Unlimited',
@@ -668,6 +672,8 @@ var I18N = {
     'q.hintPending': '首次检测完成后将在此显示',
     'ag.name': 'Antigravity',
     'credit.reset': '重置积分：{n}',
+    'credit.resetLabel': '重置积分',
+    'credit.resetCount': '{n}',
     'credit.expiry': '最早到期：{d}',
     'credit.api': 'API 积分',
     'credit.unlimited': '无限制',
@@ -2192,9 +2198,16 @@ function initFilterControls() {
 // Server labels are shared with the host tab bar and stay untouched; the
 // dashboard localizes known families by key and falls back to the server text.
 function fleetLabel(e) {
-  var key = 'fleet.' + (e && e.key);
+  var rawKey = String((e && e.key) || '');
+  var rawLabel = e && e.label ? String(e.label) : '';
+  // When the server splits a provider into model pools (e.g. "GPT · Pro 200" vs
+  // "GPT · Pro 100"), preserve the server's pool-qualified label.
+  if (rawLabel.indexOf(' · ') !== -1 && (rawKey === 'codex' || rawKey === 'claude' || rawKey.indexOf('_pool_') !== -1)) {
+    return rawLabel;
+  }
+  var key = 'fleet.' + rawKey;
   var text = t(key);
-  return text !== key ? text : ((e && (e.label || e.key)) || '');
+  return text !== key ? text : (rawLabel || rawKey);
 }
 function validFleetPercent(v) {
   if (v === null || v === undefined || v === '') return null;
@@ -2257,7 +2270,11 @@ function renderFleetAvailability(entries) {
     var count = Number(e.accounts) || 0;
     var winSummary = formatFleetWindows(e);
     var tierSummary = formatFleetTiers(e.tiers);
-    var agyGroup = agyGroupByKey[e.key];
+    var entryKey = String(e.key || '');
+    var agyGroup = agyGroupByKey[entryKey];
+    if (!agyGroup && /^antigravity_pool_[a-z0-9]+_(gemini|claude)$/.test(entryKey)) {
+      agyGroup = entryKey.replace(/_(gemini|claude)$/, '');
+    }
     if (agyGroup) {
       var agy = agyChips[agyGroup];
       if (!agy) {
@@ -2270,12 +2287,21 @@ function renderFleetAvailability(entries) {
           chipLabel = (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label)
             ? ('AGY · ' + String(e.tiers[0].label))
             : 'AGY · Trial/Free';
+        } else if (agyGroup.indexOf('antigravity_pool_') === 0) {
+          var mPool = /^AGY\s*\(([^)]+)\)/.exec(String(e.label || ''));
+          if (mPool && mPool[1]) {
+            chipLabel = 'AGY · ' + mPool[1].trim();
+          } else if (Array.isArray(e.tiers) && e.tiers.length === 1 && e.tiers[0] && e.tiers[0].label) {
+            chipLabel = 'AGY · ' + String(e.tiers[0].label);
+          } else {
+            chipLabel = 'AGY';
+          }
         }
         agy = { label: chipLabel, provider: 'antigravity', title: '', families: [], accounts: 0, multiFamily: true };
         agyChips[agyGroup] = agy;
         chips.push(agy);
       }
-      agy.families.push({ name: agyFamilyName(e.key), rem: rem, shortVal: shortVal, weeklyVal: weeklyVal });
+      agy.families.push({ name: agyFamilyName(entryKey), rem: rem, shortVal: shortVal, weeklyVal: weeklyVal });
       agy.accounts = Math.max(agy.accounts, count);
       var detailParts = [];
       if (winSummary) detailParts.push(winSummary);
@@ -2290,7 +2316,7 @@ function renderFleetAvailability(entries) {
     if (tierSummary) baseTitle += ' (' + tierSummary + ')';
     chips.push({
       label: fleetLabel(e),
-      provider: String(e.key || ''),
+      provider: entryKey.replace(/_pool_.*$/, ''),
       title: baseTitle,
       rem: rem,
       shortVal: shortVal,
@@ -2690,9 +2716,10 @@ function renderCreditSummary(acc) {
   var accessibleRows = [];
   var availableCount = reset && reset.available_count != null ? Number(reset.available_count) : null;
   if (availableCount !== null && isFinite(availableCount) && availableCount > 0) {
-    var resetPrimaryLabel = t('credit.reset', { n: formatNum(availableCount) });
+    var countText = formatNum(availableCount);
+    var resetPrimaryLabel = t('credit.reset', { n: countText });
     var resetLabel = resetPrimaryLabel;
-    var resetPrimaryText = '<strong>'+esc(resetPrimaryLabel)+'</strong>';
+    var resetPrimaryText = '<strong class="credit-row-label">'+esc(t('credit.resetLabel'))+'</strong><span class="credit-row-value">'+esc(t('credit.resetCount', { n: countText }))+'</span>';
     var expiryRow = '';
     var expiryText = reset.nearest_expiry ? formatResetExpiry(reset.nearest_expiry) : '—';
     if (expiryText !== '—') {
@@ -2705,18 +2732,24 @@ function renderCreditSummary(acc) {
   }
   if (api) {
     var parts = [];
+    var isZero = false;
     if (api.unlimited === true) {
       parts.push(t('credit.unlimited'));
     } else if (api.balance != null && isFinite(Number(api.balance))) {
+      var balNum = Number(api.balance);
+      isZero = balNum === 0;
       parts.push(t('credit.balance', { n: formatNum(api.balance) }));
     } else if (api.has_credits === true) {
       parts.push(t('credit.available'));
     } else if (api.has_credits === false) {
+      isZero = true;
       parts.push(t('credit.zero'));
     }
     if (parts.length) {
-      var apiLabel = t('credit.api')+' · '+parts.join(' · ');
-      out.push('<div class="credit-api-summary" role="group" aria-label="'+esc(apiLabel)+'"><strong>'+esc(t('credit.api'))+'</strong> · '+esc(parts.join(' · '))+'</div>');
+      var apiVal = parts.join(' · ');
+      var apiLabel = t('credit.api')+' · '+apiVal;
+      var valClass = isZero ? 'credit-row-value is-muted' : 'credit-row-value';
+      out.push('<div class="credit-api-summary" role="group" aria-label="'+esc(apiLabel)+'"><strong class="credit-row-label">'+esc(t('credit.api'))+'</strong><span class="'+valClass+'">'+esc(apiVal)+'</span></div>');
       accessibleRows.push(apiLabel);
     }
   }
