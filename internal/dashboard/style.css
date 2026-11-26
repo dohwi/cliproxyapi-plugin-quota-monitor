@@ -155,11 +155,9 @@
   .fleet-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fleet-chip-count { flex: 0 0 auto; font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); white-space: nowrap; }
   .fleet-chip-rows { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 36px; }
-  .fleet-metric { display: grid; grid-template-columns: 36px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
-  .fleet-metric.is-single { grid-template-columns: minmax(0, 1fr) 44px; }
+  .fleet-metric { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .fleet-metric-key { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--muted); white-space: nowrap; }
-  .fleet-bar { height: 5px; border-radius: 999px; background: var(--divider); overflow: hidden; }
-  .fleet-bar-fill { display: block; height: 100%; min-width: 3px; border-radius: 999px; }
+  .fleet-metric .fleet-chip-value { margin-left: auto; }
   .fleet-family-row { display: grid; grid-template-columns: minmax(0, 1fr) 74px 70px; align-items: baseline; gap: 8px; }
   .fleet-family-row.is-single { grid-template-columns: minmax(0, 1fr) auto; }
   .fleet-family-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 16px; font-weight: 600; color: var(--muted); }

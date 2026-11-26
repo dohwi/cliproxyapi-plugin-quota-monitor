@@ -2302,10 +2302,8 @@ function renderFleetAvailability(entries) {
   if (el.classList && typeof el.classList.toggle === 'function') el.classList.toggle('is-grid', chips.length > 4);
   var renderMetricRow = function(label, val) {
     var tone = remainingTone(val);
-    var fill = val > 0 ? '<span class="fleet-bar-fill" style="width:' + Math.min(100, Math.max(0, val)) + '%;background:' + tone + '"></span>' : '';
-    return '<div class="fleet-metric' + (label ? '' : ' is-single') + '">' +
+    return '<div class="fleet-metric">' +
       (label ? '<span class="fleet-metric-key">' + esc(label) + '</span>' : '') +
-      '<span class="fleet-bar" aria-hidden="true">' + fill + '</span>' +
       '<span class="fleet-chip-value" style="color:' + tone + '">' + esc(fmtFleetPercent(val)) + '</span></div>';
   };
   var html = '';
