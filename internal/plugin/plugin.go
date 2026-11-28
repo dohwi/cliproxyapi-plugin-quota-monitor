@@ -172,8 +172,10 @@ func classifyAccountTier(a quotamonitor.AccountQuota, isCurrent bool) probeTier 
 			remaining := float64(100)
 			if w.RemainingPercent != nil {
 				remaining = *w.RemainingPercent
+			} else if w.UsedPercent != nil {
+				remaining = 100 - *w.UsedPercent
 			}
-			if w.LimitReached != nil && *w.LimitReached {
+			if (w.LimitReached != nil && *w.LimitReached) || (w.Allowed != nil && !*w.Allowed) || (w.UsedPercent != nil && *w.UsedPercent >= 100) {
 				remaining = 0
 			}
 			if remaining <= 0 {
@@ -211,8 +213,10 @@ func classifyAccountTier(a quotamonitor.AccountQuota, isCurrent bool) probeTier 
 			remaining := float64(100)
 			if w.RemainingPercent != nil {
 				remaining = *w.RemainingPercent
+			} else if w.UsedPercent != nil {
+				remaining = 100 - *w.UsedPercent
 			}
-			if w.LimitReached != nil && *w.LimitReached {
+			if (w.LimitReached != nil && *w.LimitReached) || (w.Allowed != nil && !*w.Allowed) || (w.UsedPercent != nil && *w.UsedPercent >= 100) {
 				remaining = 0
 			}
 			if remaining <= 0 {
@@ -1091,11 +1095,16 @@ func isAccountRoutableHealthy(a quotamonitor.AccountQuota) bool {
 		remaining := 100.0
 		if w.RemainingPercent != nil {
 			remaining = *w.RemainingPercent
+		} else if w.UsedPercent != nil {
+			remaining = 100 - *w.UsedPercent
 		}
 		if w.LimitReached != nil && *w.LimitReached {
 			remaining = 0
 		}
 		if w.Allowed != nil && !*w.Allowed {
+			remaining = 0
+		}
+		if w.UsedPercent != nil && *w.UsedPercent >= 100 {
 			remaining = 0
 		}
 		if remaining <= 0 {
@@ -1110,6 +1119,21 @@ func isAccountRoutableHealthy(a quotamonitor.AccountQuota) bool {
 func isClaudeBillingWindow(w quotamonitor.QuotaWindow) bool {
 	name := strings.ToLower(w.Name)
 	return name == "overage" || strings.HasPrefix(name, "overage-") || strings.HasPrefix(name, "overage_") || strings.HasPrefix(name, "overage ")
+}
+
+// isClaudeModelScopedWindow matches model/surface-scoped Claude weekly windows
+// whose exhaustion must not freeze account-wide operational availability.
+func isClaudeModelScopedWindow(w quotamonitor.QuotaWindow) bool {
+	name := strings.ToLower(strings.TrimSpace(w.Name))
+	if !strings.HasPrefix(name, "weekly-") && !strings.HasPrefix(name, "weekly_") && !strings.HasPrefix(name, "seven_day_") {
+		return false
+	}
+	for _, suffix := range []string{"opus", "sonnet", "oauth-apps", "oauth_apps", "cowork", "sessions"} {
+		if strings.HasSuffix(name, "-"+suffix) || strings.HasSuffix(name, "_"+suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func accountUsableForRouting(a quotamonitor.AccountQuota) bool {
@@ -1730,7 +1754,14 @@ func collectAccounts(ctx context.Context, force bool) collectionResult {
 		}
 		for i := range st.last {
 			if st.last[i].AccountKey == account.AccountKey {
-				st.last[i] = cloneAccounts([]quotamonitor.AccountQuota{account})[0]
+				next := cloneAccounts([]quotamonitor.AccountQuota{account})[0]
+				// Preserve current-selection inputs until final commit, matching
+				// publishBaseline, so progressive updates cannot move current badges.
+				next.LastUsedAt = clonePtr(st.last[i].LastUsedAt)
+				if next.Operational != nil && st.last[i].Operational != nil {
+					next.Operational.RecentRequestLatest = clonePtr(st.last[i].Operational.RecentRequestLatest)
+				}
+				st.last[i] = next
 				break
 			}
 		}
@@ -2131,7 +2162,7 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 			}
 		}
 		cancel()
-		if err == nil && (len(wins) > 0 || len(claudeAbsent) > 0) {
+		if err == nil && (quotamonitor.HasMeasuredQuotaWindow(wins) || len(claudeAbsent) > 0) {
 			attempt.LastSuccess = now()
 			anchorWindowResets(wins, attempt.LastSuccess)
 			if strings.EqualFold(a.Provider, "codex") {
@@ -2152,8 +2183,17 @@ func probeAccountsProgressive(ctx context.Context, client *quotamonitor.Client, 
 			if a.Operational != nil {
 				hasAvailableQuota := false
 				isExhausted := false
+				isAG := strings.EqualFold(a.Provider, "antigravity")
+				isClaude := strings.EqualFold(a.Provider, "claude")
+				isCodex := strings.EqualFold(a.Provider, "codex")
 				for _, w := range a.Windows {
-					if strings.EqualFold(a.Provider, "claude") && isClaudeBillingWindow(w) {
+					if isClaude && (isClaudeBillingWindow(w) || isClaudeModelScopedWindow(w)) {
+						continue
+					}
+					if isAG && !strings.Contains(strings.ToLower(w.Name), "gemini") {
+						continue
+					}
+					if isCodex && !quotamonitor.IsCodexAccountWindow(w) {
 						continue
 					}
 					if w.RemainingPercent != nil && *w.RemainingPercent > 0 {
@@ -2688,11 +2728,39 @@ func mergeWindowFieldsByKey(previous, fresh []quotamonitor.QuotaWindow, windowKe
 			if incoming.RemainingPercent != nil {
 				base.RemainingPercent = clonePtr(incoming.RemainingPercent)
 			}
+			incomingObserved := false
+			incomingExhausted := false
+			if incoming.UsedPercent != nil && *incoming.UsedPercent >= 0 && *incoming.UsedPercent <= 100 {
+				incomingObserved = true
+				incomingExhausted = *incoming.UsedPercent >= 100
+			}
+			if incoming.RemainingPercent != nil && *incoming.RemainingPercent >= 0 && *incoming.RemainingPercent <= 100 {
+				incomingObserved = true
+				incomingExhausted = incomingExhausted || *incoming.RemainingPercent <= 0
+			}
+			incomingContradictsRecovery := (incoming.LimitReached != nil && *incoming.LimitReached) || (incoming.Allowed != nil && !*incoming.Allowed)
 			if incoming.LimitReached != nil {
 				base.LimitReached = clonePtr(incoming.LimitReached)
+			} else if incomingObserved && (incomingExhausted || !incomingContradictsRecovery) {
+				// Reconcile stale exhaustion flags when a fresh percentage observation
+				// arrives without repeating explicit flags (e.g. passive recovery).
+				base.LimitReached = clonePtr(&incomingExhausted)
 			}
 			if incoming.Allowed != nil {
 				base.Allowed = clonePtr(incoming.Allowed)
+			} else if incomingObserved && (incomingExhausted || !incomingContradictsRecovery) {
+				allowed := !incomingExhausted
+				base.Allowed = &allowed
+			}
+			if incomingContradictsRecovery {
+				if base.UsedPercent == nil {
+					used := 100.0
+					base.UsedPercent = &used
+				}
+				if base.RemainingPercent == nil {
+					remaining := 0.0
+					base.RemainingPercent = &remaining
+				}
 			}
 			if incoming.LimitName != "" {
 				base.LimitName = incoming.LimitName
@@ -2705,6 +2773,9 @@ func mergeWindowFieldsByKey(previous, fresh []quotamonitor.QuotaWindow, windowKe
 			}
 			if incoming.OverLimitPercent != nil {
 				base.OverLimitPercent = clonePtr(incoming.OverLimitPercent)
+			} else if incomingObserved && !incomingExhausted && !incomingContradictsRecovery {
+				zero := 0.0
+				base.OverLimitPercent = &zero
 			}
 			out[i] = base
 			continue

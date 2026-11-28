@@ -75,6 +75,19 @@ func refreshSingleAccount(key string) (int, map[string]any) {
 	if !success {
 		result.err = errors.New("quota lookup failed")
 		result.category = "account_refresh_failed"
+		if len(accounts) == 1 && accounts[0].Error == "" {
+			// Context expiration before probeJob executed leaves the cloned
+			// account unmarked; mark it stale/error consistently with probeJob.
+			a := &accounts[0]
+			if a.ErrorKind == "" {
+				a.ErrorKind = "active"
+			}
+			if len(a.Windows) > 0 || a.LastSuccessAt != nil {
+				a.Status, a.Stale, a.Error = quotamonitor.StatusStale, true, "quota lookup failed"
+			} else {
+				a.Status, a.Error = quotamonitor.StatusError, "quota lookup failed"
+			}
+		}
 	}
 	if ctx.Err() != nil {
 		setCollectionContextError(&result, ctx.Err())

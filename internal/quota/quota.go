@@ -140,6 +140,30 @@ func normalizeWindows(ws []QuotaWindow) {
 	}
 }
 
+// WindowHasMeasurement reports whether a window carries at least one concrete
+// quota percentage or admission flag rather than duration/reset metadata only.
+func WindowHasMeasurement(w QuotaWindow) bool {
+	return w.UsedPercent != nil || w.RemainingPercent != nil || w.LimitReached != nil || w.Allowed != nil
+}
+
+// HasMeasuredQuotaWindow reports whether any window in the slice carries a
+// concrete quota measurement.
+func HasMeasuredQuotaWindow(windows []QuotaWindow) bool {
+	for _, w := range windows {
+		if WindowHasMeasurement(w) {
+			return true
+		}
+	}
+	return false
+}
+
+func isWindowExhausted(w QuotaWindow) bool {
+	return (w.LimitReached != nil && *w.LimitReached) ||
+		(w.Allowed != nil && !*w.Allowed) ||
+		(w.UsedPercent != nil && *w.UsedPercent >= 100) ||
+		(w.RemainingPercent != nil && *w.RemainingPercent <= 0)
+}
+
 // OperationalStatus captures runtime health, counts, and operational timestamps
 // exposed safely by management auth-files (e.g. v7.2.155) without leaking credentials or tokens.
 type OperationalStatus struct {
@@ -1780,10 +1804,22 @@ func (a *Adapter) parseCodexSignals(res *AccountQuota) {
 		res.Credits = credits
 	}
 	if primary, ok := windowsMap["primary"]; ok {
-		if primary.Allowed == nil && globalAllowed != nil {
+		otherExhausted := false
+		for name, w := range windowsMap {
+			if name == "primary" {
+				continue
+			}
+			tmp := *w
+			normalizeWindow(&tmp)
+			if isWindowExhausted(tmp) {
+				otherExhausted = true
+				break
+			}
+		}
+		if primary.Allowed == nil && globalAllowed != nil && (*globalAllowed || !otherExhausted) {
 			primary.Allowed = globalAllowed
 		}
-		if primary.LimitReached == nil && globalLimitReached != nil {
+		if primary.LimitReached == nil && globalLimitReached != nil && (!*globalLimitReached || !otherExhausted) {
 			primary.LimitReached = globalLimitReached
 		}
 	}
@@ -1955,10 +1991,13 @@ func ParseAntigravityQuota(data []byte) ([]QuotaWindow, error) {
 					u := 100 - r
 					w.RemainingPercent, w.UsedPercent = &r, &u
 				}
-			} else if v := objectValue(b, "remaining_percent"); v != nil {
-				if r, ok := quotaPercent(v); ok {
-					u := 100 - r
-					w.RemainingPercent, w.UsedPercent = &r, &u
+			}
+			if w.RemainingPercent == nil {
+				if v := objectValue(b, "remaining_percent"); v != nil {
+					if r, ok := quotaPercent(v); ok {
+						u := 100 - r
+						w.RemainingPercent, w.UsedPercent = &r, &u
+					}
 				}
 			}
 			if t, ok := quotaTime(objectValue(b, "resetTime", "reset_time")); ok {
@@ -2197,20 +2236,6 @@ func ParseCodexQuota(data []byte) ([]QuotaWindow, error) {
 				w.Allowed = &b
 			}
 		}
-		// WHAM also emits these flags at rate_limit scope. They apply to the
-		// primary window unless a concrete primary_window value overrides them.
-		if pair.name == "primary" {
-			if w.LimitReached == nil {
-				if b, ok := quotaBool(objectValue(container, "limit_reached", "limitReached")); ok {
-					w.LimitReached = &b
-				}
-			}
-			if w.Allowed == nil {
-				if b, ok := quotaBool(objectValue(container, "allowed")); ok {
-					w.Allowed = &b
-				}
-			}
-		}
 		if t, ok := quotaTime(objectValue(m, "reset_at", "reset_time", "resets_at")); ok {
 			w.ResetAt = t
 		}
@@ -2219,6 +2244,32 @@ func ParseCodexQuota(data []byte) ([]QuotaWindow, error) {
 		}
 		normalizeWindow(&w)
 		out = append(out, w)
+	}
+	// WHAM also emits admission flags at rate_limit scope. Apply them to primary
+	// only when primary has no own override and no other window (e.g. exhausted
+	// weekly secondary) already accounts for the account-level block.
+	otherExhausted := false
+	for _, w := range out {
+		if w.Name != "primary" && isWindowExhausted(w) {
+			otherExhausted = true
+			break
+		}
+	}
+	for i := range out {
+		if out[i].Name != "primary" {
+			continue
+		}
+		if out[i].LimitReached == nil {
+			if b, ok := quotaBool(objectValue(container, "limit_reached", "limitReached")); ok && (!b || !otherExhausted) {
+				out[i].LimitReached = &b
+			}
+		}
+		if out[i].Allowed == nil {
+			if b, ok := quotaBool(objectValue(container, "allowed")); ok && (b || !otherExhausted) {
+				out[i].Allowed = &b
+			}
+		}
+		normalizeWindow(&out[i])
 	}
 	return DistinctCodexWindows(out), nil
 }
@@ -2573,17 +2624,22 @@ func (c *Client) APICall(ctx context.Context, authIndex, method, endpoint string
 	return out, nil
 }
 
-// appendMissingWindows appends incoming windows whose names are not present yet.
+// appendMissingWindows appends incoming windows whose names are not present yet,
+// replacing a previously unmeasured placeholder window when incoming carries a
+// real quota measurement.
 func appendMissingWindows(dst, incoming []QuotaWindow) []QuotaWindow {
-	seen := make(map[string]struct{}, len(dst)+len(incoming))
-	for _, w := range dst {
-		seen[w.Name] = struct{}{}
+	seen := make(map[string]int, len(dst)+len(incoming))
+	for i, w := range dst {
+		seen[w.Name] = i
 	}
 	for _, w := range incoming {
-		if _, ok := seen[w.Name]; ok {
+		if idx, ok := seen[w.Name]; ok {
+			if !WindowHasMeasurement(dst[idx]) && WindowHasMeasurement(w) {
+				dst[idx] = w
+			}
 			continue
 		}
-		seen[w.Name] = struct{}{}
+		seen[w.Name] = len(dst)
 		dst = append(dst, w)
 	}
 	return dst
@@ -2595,6 +2651,9 @@ func appendMissingWindows(dst, incoming []QuotaWindow) []QuotaWindow {
 func antigravityFamiliesComplete(ws []QuotaWindow) bool {
 	gemini, third := false, false
 	for _, w := range ws {
+		if !WindowHasMeasurement(w) {
+			continue
+		}
 		n := strings.ToLower(w.Name)
 		if strings.HasPrefix(n, "gemini models") {
 			gemini = true
@@ -2607,6 +2666,9 @@ func antigravityFamiliesComplete(ws []QuotaWindow) bool {
 
 func hasGeminiWindow(ws []QuotaWindow) bool {
 	for _, w := range ws {
+		if !WindowHasMeasurement(w) {
+			continue
+		}
 		if strings.HasPrefix(strings.ToLower(w.Name), "gemini models") || strings.HasPrefix(strings.ToLower(w.Name), "gemini") {
 			return true
 		}
@@ -2636,6 +2698,7 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 		}
 
 		var lastErrKind string
+		var lastStatusCode int
 		var merged []QuotaWindow
 		allAuth := true
 		anyAttempt := 0
@@ -2660,6 +2723,9 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 						allAuth = false
 					}
 					lastErrKind = ae.Kind
+					if ae.StatusCode != 0 {
+						lastStatusCode = ae.StatusCode
+					}
 				} else {
 					allAuth = false
 					lastErrKind = "upstream"
@@ -2672,7 +2738,7 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 				lastErrKind = "parse"
 				continue
 			}
-			if len(windows) == 0 {
+			if !HasMeasuredQuotaWindow(windows) {
 				lastErrKind = "empty"
 				continue
 			}
@@ -2686,7 +2752,7 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 			}
 		}
 		// The summary API no longer returns Gemini; fill it from per-model quota.
-		if overallCtx.Err() == nil && len(merged) > 0 && !hasGeminiWindow(merged) {
+		if overallCtx.Err() == nil && HasMeasuredQuotaWindow(merged) && !hasGeminiWindow(merged) {
 			for _, endpoint := range antigravityUserQuotaURLs {
 				if overallCtx.Err() != nil {
 					break
@@ -2696,19 +2762,23 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 					continue
 				}
 				gw, perr := ParseAntigravityModelQuota([]byte(r.Body))
-				if perr != nil || len(gw) == 0 {
+				if perr != nil || !HasMeasuredQuotaWindow(gw) {
 					continue
 				}
 				merged = appendMissingWindows(merged, gw)
 				break
 			}
 		}
-		if len(merged) > 0 {
+		if HasMeasuredQuotaWindow(merged) {
 			return merged, nil
 		}
 
 		if anyAttempt > 0 && allAuth && lastErrKind == "auth" {
-			return nil, &APICallError{Kind: "auth"}
+			code := lastStatusCode
+			if code == 0 {
+				code = http.StatusUnauthorized
+			}
+			return nil, &APICallError{Kind: "auth", StatusCode: code}
 		}
 		if overallCtx.Err() != nil || lastErrKind == "timeout" {
 			return nil, &APICallError{Kind: "timeout"}
@@ -2719,7 +2789,7 @@ func (c *Client) FetchActiveQuota(ctx context.Context, account AccountQuota) ([]
 		if lastErrKind == "empty" {
 			return nil, &APICallError{Kind: "empty"}
 		}
-		return nil, &APICallError{Kind: "upstream"}
+		return nil, &APICallError{Kind: "upstream", StatusCode: lastStatusCode}
 	}
 	if p == "codex" {
 		windows, _, _, _, err := c.FetchCodexUsage(ctx, account)

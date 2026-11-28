@@ -1004,9 +1004,17 @@ function formatNum(n) {
   return Number(n).toLocaleString(intlLocale(currentLang));
 }
 
+function parseFiniteNumber(v) {
+  if (v === null || v === undefined || typeof v === 'boolean') return null;
+  if (typeof v === 'string' && v.trim() === '') return null;
+  var n = Number(v);
+  return isFinite(n) ? n : null;
+}
+
 function fmtPct(x) {
-  if (x == null || isNaN(x)) return '—';
-  var s = Number(x).toFixed(1);
+  var n = parseFiniteNumber(x);
+  if (n === null) return '—';
+  var s = n.toFixed(1);
   if (s.slice(-2) === '.0') s = s.slice(0, -2);
   return s + '%';
 }
@@ -1141,11 +1149,13 @@ function providerIcon(provider, size) {
 function effectiveUsed(w) {
   if (!w) return null;
   if (w.limit_reached === true || w.allowed === false) return 100;
-  if (w.used_percent !== null && w.used_percent !== undefined && !isNaN(Number(w.used_percent))) {
-    return Math.min(100, Math.max(0, Number(w.used_percent)));
+  var used = parseFiniteNumber(w.used_percent);
+  if (used !== null) {
+    return Math.min(100, Math.max(0, used));
   }
-  if (w.remaining_percent !== null && w.remaining_percent !== undefined && !isNaN(Number(w.remaining_percent))) {
-    return 100 - Math.min(100, Math.max(0, Number(w.remaining_percent)));
+  var rem = parseFiniteNumber(w.remaining_percent);
+  if (rem !== null) {
+    return 100 - Math.min(100, Math.max(0, rem));
   }
   return null;
 }
@@ -1155,7 +1165,7 @@ function getCanonicalStatus(acc) {
   if (!acc) return { key: 'unknown', label: t('st.unknown'), tone: 'chip-unknown' };
   var op = acc.operational || {};
   var pKey = getProviderKey(acc.provider);
-  var windows = pKey === 'codex' ? displayedQuotaWindows(acc) : (Array.isArray(acc.windows) ? acc.windows : []);
+  var windows = (pKey === 'codex' || pKey === 'claude') ? displayedQuotaWindows(acc) : (Array.isArray(acc.windows) ? acc.windows : []);
 
   if (op.disabled === true) return { key: 'disabled', label: t('st.disabled'), tone: 'chip-disabled' };
 
@@ -1390,8 +1400,12 @@ function getAvailabilityState(acc) {
     // Claude exhaustion/failure must not induce unavailable/error on the whole card.
     // If Gemini is exhausted (weekly or 5h), return that state.
     if (quotaState.key === 'unavailable' || quotaState.key === 'limited') return quotaState;
-    // Missing Gemini windows => pending (never fall back to Claude).
-    if (quotaState.key === 'pending') return quotaState;
+    // Missing Gemini windows => pending (never fall back to Claude), unless the
+    // account itself failed lookup with no measured quota.
+    if (quotaState.key === 'pending') {
+      if (canonical.key === 'error') return { key:'error', label:t('st.error') };
+      return quotaState;
+    }
     if (quotaState.key === 'warning') return quotaState;
     if (canonical.key === 'stale') return { key:'stale', label:t('av.delayed') };
     return quotaState; // active
@@ -1401,7 +1415,8 @@ function getAvailabilityState(acc) {
     if (canonical.key === 'stale') return { key:'stale', label:t('av.delayed') };
     return quotaState;
   }
-  if (op.unavailable === true || op.status === 'error' || (acc && acc.status === 'error')) return { key:'unavailable', label:t('av.unavailable') };
+  if (acc && acc.status === 'error') return { key:'error', label:t('st.error') };
+  if (op.unavailable === true || op.status === 'error') return { key:'unavailable', label:t('av.unavailable') };
   if (quotaState.key === 'pending') return quotaState;
   if (canonical.key === 'stale') return { key:'stale', label:t('av.delayed') };
   if (op.status === 'active') return quotaState;
@@ -1612,7 +1627,7 @@ function computeAdaptivePollMs(nextPollHintMs, accounts) {
     var av = getAvailabilityState(acc);
     if (av.key === 'active' || av.key === 'warning') hasActive = true;
     if (av.key === 'limited' || av.key === 'unavailable' || av.key === 'disabled') hasLimited = true;
-    if (av.key === 'unknown' || av.key === 'pending') hasStale = true;
+    if (av.key === 'unknown' || av.key === 'pending' || av.key === 'stale' || av.key === 'error') hasStale = true;
   }
   if (pollMs === null) {
     pollMs = hasCurrent ? POLL_FALLBACK_ACTIVE_MS :
@@ -2037,7 +2052,6 @@ function loadDashboard(isInitial) {
       }
 
       var incomingAccounts = Array.isArray(data.accounts) ? data.accounts : [];
-      if (Array.isArray(data.availability)) { lastFleetEntries = data.availability; renderFleetAvailability(data.availability); }
 
       // Empty startup remains atomic. After the first complete snapshot, an
       // in-progress refresh may expose account-local progressive updates while
@@ -2058,6 +2072,8 @@ function loadDashboard(isInitial) {
         scheduleNextPoll(POLL_IN_PROGRESS_MS);
         return;
       }
+
+      if (Array.isArray(data.availability)) { lastFleetEntries = data.availability; renderFleetAvailability(data.availability); }
 
       if (data.collection_in_progress === true) {
         var savedRenderState = captureRenderState();
@@ -2210,9 +2226,8 @@ function fleetLabel(e) {
   return text !== key ? text : (rawLabel || rawKey);
 }
 function validFleetPercent(v) {
-  if (v === null || v === undefined || v === '') return null;
-  var n = Number(v);
-  return isFinite(n) && n >= 0 && n <= 100 ? n : null;
+  var n = parseFiniteNumber(v);
+  return n !== null && n >= 0 && n <= 100 ? n : null;
 }
 function fmtFleetPercent(v) {
   return String(Math.round(v * 10) / 10) + '%';
@@ -2470,7 +2485,9 @@ function applyFilters() {
 
 function quotaNumber(w) {
   if (!w) return null;
-  if (w.remaining_percent != null && !isNaN(Number(w.remaining_percent))) return Math.max(0, Math.min(100, Number(w.remaining_percent)));
+  if (w.limit_reached === true || w.allowed === false) return 0;
+  var rem = parseFiniteNumber(w.remaining_percent);
+  if (rem !== null) return Math.max(0, Math.min(100, rem));
   var used = effectiveUsed(w);
   return used === null ? null : 100 - used;
 }
@@ -2730,8 +2747,8 @@ function renderCreditSummary(acc) {
   var api = acc && acc.api_credits;
   var out = [];
   var accessibleRows = [];
-  var availableCount = reset && reset.available_count != null ? Number(reset.available_count) : null;
-  if (availableCount !== null && isFinite(availableCount) && availableCount > 0) {
+  var availableCount = reset ? parseFiniteNumber(reset.available_count) : null;
+  if (availableCount !== null && availableCount > 0) {
     var countText = formatNum(availableCount);
     var resetPrimaryLabel = t('credit.reset', { n: countText });
     var resetLabel = resetPrimaryLabel;
@@ -2749,12 +2766,12 @@ function renderCreditSummary(acc) {
   if (api) {
     var parts = [];
     var isZero = false;
+    var balNum = parseFiniteNumber(api.balance);
     if (api.unlimited === true) {
       parts.push(t('credit.unlimited'));
-    } else if (api.balance != null && isFinite(Number(api.balance))) {
-      var balNum = Number(api.balance);
+    } else if (balNum !== null) {
       isZero = balNum === 0;
-      parts.push(t('credit.balance', { n: formatNum(api.balance) }));
+      parts.push(t('credit.balance', { n: formatNum(balNum) }));
     } else if (api.has_credits === true) {
       parts.push(t('credit.available'));
     } else if (api.has_credits === false) {
@@ -2925,6 +2942,7 @@ function renderAccounts(accounts) {
     quotaBody.className = 'card-quota';
     card.appendChild(quotaBody);
     var lockHTML = (pKey === 'codex' || pKey === 'claude') ? renderQuotaLock(acc, availability) : '';
+    var hasMeasuredWindow = windows.some(function(w) { return quotaNumber(w) !== null; });
     if (lockHTML) {
       var lockEl = document.createElement('div');
       lockEl.className = 'quota-group';
@@ -2939,7 +2957,7 @@ function renderAccounts(accounts) {
           quotaBody.appendChild(modelQuotaEl);
         }
       }
-    } else if (windows.length > 0) {
+    } else if (windows.length > 0 && (canon.key !== 'error' || hasMeasuredWindow)) {
       var quotaEl = document.createElement('div');
       quotaEl.innerHTML = renderQuotaGroups(windows, acc.provider, canon);
       if (quotaEl.firstChild) {
